@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="768" viewBox="0 0 256 768">
+<defs>
+ <linearGradient id="silk" x1="0" x2="1"><stop stop-color="#64231e"/><stop offset=".24" stop-color="#a23b2d"/><stop offset=".52" stop-color="#80271f"/><stop offset=".77" stop-color="#a63b2d"/><stop offset="1" stop-color="#65231e"/></linearGradient>
+ <pattern id="weave" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 0h10M0 5h10M0 0v10M5 0v10" stroke="#edac70" opacity=".06" stroke-width="1"/></pattern>
+ <path id="petal" d="M128 370C104 338 97 308 128 280C159 308 152 338 128 370"/>
+</defs>
+<path fill="url(#silk)" d="M0 0h256v734l-128 34L0 734z"/>
+<path fill="url(#weave)" d="M0 0h256v734l-128 34L0 734z"/>
+<path d="M13 0v724l115 31 115-31V0M24 0v715l104 28 104-28V0" fill="none" stroke="#cdaa62" stroke-width="3"/>
+<path d="M29 47h198M29 58h198M29 676h198M29 688h198" fill="none" stroke="#cdaa62" stroke-width="3"/>
+<circle cx="128" cy="370" r="97" fill="none" stroke="#d6b76e" stroke-width="4"/>
+<circle cx="128" cy="370" r="86" fill="none" stroke="#d6b76e" stroke-width="1.5"/>
+<g fill="#ddbf79"><use href="#petal"/><use href="#petal" transform="rotate(45 128 370)"/><use href="#petal" transform="rotate(90 128 370)"/><use href="#petal" transform="rotate(135 128 370)"/><use href="#petal" transform="rotate(180 128 370)"/><use href="#petal" transform="rotate(225 128 370)"/><use href="#petal" transform="rotate(270 128 370)"/><use href="#petal" transform="rotate(315 128 370)"/></g>
+<circle cx="128" cy="370" r="15" fill="#a9432c" stroke="#e6c57f" stroke-width="3"/>
+<g stroke="#d6b76e" fill="none" stroke-width="2"><path d="M92 152l36-36 36 36-36 36zM92 583l36-36 36 36-36 36z"/><path d="M128 88v53M128 608v39"/></g>
+</svg>

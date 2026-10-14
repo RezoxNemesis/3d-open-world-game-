@@ -1,25 +1,31 @@
 # Architecture and production backlog
 
-## Implemented starter
+## Eastern Temple District milestone
 
-`scenes/main.tscn` composes independent world and physics player components. `scripts/main.gd` registers input, presents the HUD and coordinates local saves. `scripts/mobile_controls.gd` maps multi-touch joystick/buttons and camera drag onto the same gameplay controls. Focus loss releases movement. `scripts/player.gd` handles camera-relative movement, jumping, collision, first/third person and fall recovery; the capsule/cloak and walking bob are placeholders.
+`scenes/main.tscn` composes world, physics traveler and input/HUD coordinators. `scripts/world.gd` builds the authored sanctuary, side pavilions, eastern gate, lotus waterfront, stone routes, mountain silhouettes and waterfalls. Original curved-roof Blender/glTF modules replace the first courtyard's primitive architecture. Imported pavilion plinths are offset so visible upper floors match gameplay collision. Pillar collision is aligned separately; the eastern and western exits are open. The eight 0.22 m risers can be walked using a bounded 0.28 m capsule-clearance step probe; higher walls and overhead obstructions remain blocking.
 
-`scripts/world.gd` creates shared rough PBR materials, deterministic courtyard architecture, shallow pool, foliage, rocks and directional shadows. Eight 0.22 m temple steps are reached with jumping; automatic step traversal is not yet implemented. `scripts/region_streamer.gd` owns nine 128 m regions, loads neighboring terrain with one deterministic factory, removes distant regions, and emits load/unload signals. Each region has a 16×16 coarse mesh with collision. The courtyard is a fenced hero region; unrestricted exploration will require removing/adding gates and designing safe routes. Current region generation is synchronous, not a production streaming scheduler.
+`scripts/nature.gd` creates seeded flowering trees, pines and rocks in 32 m MultiMesh groups. Low-triangle petal meshes and smaller distant pavilions control repeat geometry. Eighteen lantern placements share six material MultiMeshes. `assets/models/manifest.json` records exact asset bounds, triangle counts and generator provenance. The art remains an original procedural foundation, with visibly simplified foliage, terrain and characters relative to the concept images.
 
-`save_store.gd` writes a versioned JSON position through a temporary file and rename. Corrupt, oversized, incompatible and invalid coordinates fall back safely. This is positional persistence, not a full quest/world save system.
+`scripts/region_streamer.gd` preserves nine 128 m regions. Each 16×16 grid has walkable collision; globally sampled height gives matching shared edges and deterministic regeneration. Loading a saved distant position builds its neighboring terrain before moving the player. Generation remains synchronous. The district assets remain loaded as a bounded authored scene; distant cliff pavilions are scenic landmarks without authored climbing routes.
 
-## Mobile target
+`scripts/player.gd` implements camera-relative physics movement, walking limbs, jumping, first/third person, spring-arm collision and fall recovery. The original cream/teal traveler has a humanoid silhouette, pack and sheathed sword. `scripts/mobile_controls.gd` maps multi-touch joystick, independent actions and camera swipe. Opening the map freezes movement and releases latched actions; focus loss clears all actions.
 
-Realme P1 Speed, Android, arm64. Compatibility/OpenGL is the validated baseline. Logical landscape resolution 1280×720, Android 3D scale 0.85 and 1024 directional shadow map. Keep a high-quality phone experience through authored art, lighting and measured budgets; these defaults do not promise any frame rate. Desktop Forward+ can be invoked with `godot --rendering-method forward_plus`, but is unverified here and must not silently become the mobile default.
+`scripts/exploration.gd` discovers Cloud Sanctuary, Lotus Overlook and Eastern Gate by reaching them. Main HUD displays real progress and distance. The map draws district positions and supports travel only to discovered waypoints. No unimplemented combat or progression buttons are exposed. `save_store.gd` persists versioned position JSON with corruption/schema/size/coordinate checks. Discovery is session-local; full quest/world persistence is a next increment.
 
-Provisional content budgets: nine regions maximum; no more than 25,000 terrain triangles across active regions; keep decorative meshes without collision unless traversal needs it; one shadow-casting sun and four short-range non-shadow point lights. Tile and foliage instancing, a detail-quality selector and on-phone profiling are next steps. Budget values require device measurement.
+`assets/shaders/` implements paving wear, cloud sky, animated jade water, fine-flow waterfalls and gently moving silk banners using Compatibility features. One sun casts bounded two-split shadows; two short-range non-shadow lights supplement emissive lantern art. `scripts/ambience.gd` plays a quiet original 20-second Vorbis loop of synthesized wind/water, bird motifs and a bell. Audio clipping/looping/import were checked; listening remains unverified.
 
-## Next increments, in order
+## Mobile target and measured budgets
 
-1. Install the debug APK on the target phone; check touch reachability, movement, jump, camera, save/load, memory, heat and frame time. Add adjustable render scale and foliage/shadow quality after measurement.
-2. Replace hero-region primitive art with reviewed Blender/glTF assets, UVs and appropriately licensed PBR textures. Add automatic stair stepping, camera polish and authored player animations.
-3. Add asynchronous region jobs, biome-specific terrain/vegetation, MultiMesh foliage, actual geometric LOD, cliffs and cave interiors. Include cancellation, seams and collision continuity tests.
-4. Add bounded weather, compatible atmosphere/fog, spatial ambient audio, animated water and cinematic camera sequencing with mobile fallbacks.
-5. Introduce NPC/quest interfaces and full versioned world saves only after traversal and streaming are stable.
+Realme P1 Speed, Android ARM64. Godot 4.7.2 Compatibility/OpenGL, logical landscape 1280×720, Android 3D scale 0.85 and 1024 directional shadow map remain the baseline. No sustained phone FPS/heat/memory claim is made from software desktop rendering or headless physics.
 
-Caves, weather, spatial audio, production animation, AI/NPCs and quests are not implemented in this starter. Skill workflows are guidance, not evidence that those systems exist.
+Terrain budget: nine active regions, 4,608 grid triangles in total. Hero pavilion: 19,068 triangles/six materials; distant variant: 2,516/six. Gate: 17,468/five; lantern: 564/six; bridge: 1,432/four; shrine: 7,436/five. Meshes share materials, decorative colliders are omitted, flowers omit shadows, and tiny lanterns/distant pavilion art omit shadows. Repeated content uses batching. Actual per-view counters are archived in `artifacts/district-render-metrics.json`; the figures include the chosen software renderer's passes and do not establish phone speed.
+
+## Next increments
+
+1. Add adjustable render scale and foliage/shadow quality; obtain physical-phone timing and thermal evidence when available while continuing cloud implementation independently.
+2. Author richer hero terrain, dense natural foliage, detailed material normals and character animation. Match the concept's contrast and scale through real render comparisons and explicit resource budgets.
+3. Add cancellable asynchronous region generation, region-owned vegetation/LOD, safe wider routes and reachable mountain temples.
+4. Persist discovery and quest state in a versioned world save; introduce one NPC conversation and a quest with real rewards.
+5. Implement one enemy and a complete combat loop before elemental progression, equipment, dragon traversal, crafting, farming/fishing and aquatic activities from the broader reference roadmap.
+
+Weather, cave interiors, NPCs, combat, dragon riding, crafting and life activities are not implemented in this milestone. The ten images guide visual direction and future systems; they are not game screenshots or evidence that those systems already work.

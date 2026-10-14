@@ -25,3 +25,4 @@ assert image.size == (1280, 720)
 assert max(ImageStat.Stat(image).stddev) > 15, 'Blank or uniform capture'
 print('PASS: nonuniform 1280x720 rendered screenshot')
 CHECK
+python tools/check_render_evidence.py

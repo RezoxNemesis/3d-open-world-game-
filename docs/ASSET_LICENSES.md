@@ -10,4 +10,10 @@
 | Android SDK and Java runtime | Official Google SDK / Debian OpenJDK | SDK license accepted by setup for local development; OpenJDK notices remain installed |
 | Godot fallback font | Engine builtin font | Retain engine third-party license notices in release distribution |
 
-No reference artwork or external game asset pack exists in this repository. The current result is a procedural prototype, not visual parity with a reference or final production artwork. Before adding assets record the source URL, creator, license, permitted usage, modifications and generator inputs here. Store releases need a complete bundled-notice review.
+The owner supplied ten concept images in TempleRealm_10_Images_With_Descriptions_Under20MB.zip. Their license is unspecified; they are used for visual direction and are not bundled as game textures, backgrounds or redistributed source assets. The current result is a procedural prototype, not final visual parity with the references. Store releases need a complete bundled-notice review.
+
+## Original district assets
+
+- `tools/generate_temple_assets.py` (Blender 4.3.2, generator version 1) creates `assets/models/{pavilion,pavilion_far,gate,lantern,bridge,shrine}.glb` and the stone/timber albedo textures. Geometry, UVs, surfaces and texture generation are original MIT project work. Exact counts/bounds are in `assets/models/manifest.json`; six-module Godot import and geometry checks passed. Embedded textures are included in GLBs.
+- `assets/materials/lotus_banner.svg`, all `assets/shaders/*.gdshader`, foliage/terrain and the humanoid traveler are original repository-authored geometry/material/art. No external character or existing game assets were imported.
+- `tools/generate_ambience.py` produces the original seeded 20-second atmosphere, encoded by FFmpeg as `assets/audio/garden.ogg`. Bird and bell notes are mathematically synthesized; no external recordings or melodies. MIT project asset; clipping/RMS/seam metrics are in `artifacts/garden-audio-report.json`.

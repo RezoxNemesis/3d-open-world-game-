@@ -146,4 +146,5 @@ func run() -> void:
 	print("RESULT: %d checks, %d failures" % [checks, failures])
 	scene.queue_free()
 	await process_frame
+	await create_timer(0.15).timeout
 	quit(1 if failures else 0)

@@ -91,7 +91,7 @@ try:
             report['limitation'] = 'Android runtime is BLOCKED on this host; core checks and signed phone APK passed. Continue independent development without claiming Android runtime success.'
         elif outcome != 'PASS':
             raise RuntimeError('Android runtime remains unresolved; host checks and phone build are archived separately')
-    for name in ['TempleRealm-Android-debug.apk', 'apk-sha256.txt', 'temple-courtyard.png', 'emulator-build.json']:
+    for name in ['TempleRealm-Android-debug.apk', 'apk-sha256.txt', 'temple-courtyard.png', 'district-player.png', 'district-sanctuary.png', 'district-lotus.png', 'district-gate.png', 'district-render-metrics.json', 'emulator-build.json']:
         source = root / 'artifacts' / name
         if source.exists():
             shutil.copy2(source, run / name)

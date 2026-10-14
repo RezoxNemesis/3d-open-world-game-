@@ -35,3 +35,15 @@ def matching_block(root, path):
     if record.get('status') == 'BLOCKED' and 0 <= age <= 3600 and record.get('fingerprint') == fingerprint(root):
         return record
     return None
+
+
+def record_foreground_block(root, path, error, window_text, evidence, runtime_log):
+    """Demote only a proven stock ANR obscuring the foreground check, never app failures."""
+    if not isinstance(error, AssertionError) or not str(error).startswith('Android game is not foreground;'):
+        return None
+    if any(marker in runtime_log for marker in ['FATAL EXCEPTION', 'SCRIPT ERROR:', 'ERROR:']):
+        return None
+    try:
+        return record_block(root, path, window_text, evidence)
+    except ValueError:
+        return None

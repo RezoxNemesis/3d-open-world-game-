@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from android_runtime_cache import matching_block, record_block
+import android_runtime_cache as cache
 
 
 class RuntimeCacheTests(unittest.TestCase):
@@ -26,6 +27,28 @@ class RuntimeCacheTests(unittest.TestCase):
     def test_game_anr_cannot_be_demoted_to_a_cached_host_block(self):
         with self.assertRaises(ValueError):
             record_block(self.root, self.cache, 'mCurrentFocus=Application Not Responding: org.templerealm.prototype', 'display dump')
+        self.assertFalse(self.cache.exists())
+
+    def test_proven_system_overlay_is_recorded_as_an_infrastructure_block(self):
+        record = cache.record_foreground_block(self.root, self.cache,
+            AssertionError('Android game is not foreground; inspect emulator system UI/ANR state'),
+            'mCurrentFocus=Application Not Responding: com.android.systemui', 'display dump',
+            'I/godot: TEMPLE_REALM_READY: ready')
+        self.assertEqual(record['status'], 'BLOCKED')
+
+    def test_game_crash_is_not_hidden_by_a_system_overlay(self):
+        record = cache.record_foreground_block(self.root, self.cache,
+            AssertionError('Android game is not foreground; inspect emulator system UI/ANR state'),
+            'mCurrentFocus=Application Not Responding: com.android.systemui', 'display dump',
+            'FATAL EXCEPTION: Godot app')
+        self.assertIsNone(record)
+        self.assertFalse(self.cache.exists())
+
+    def test_unrelated_assertion_is_not_demoted_to_a_host_block(self):
+        record = cache.record_foreground_block(self.root, self.cache,
+            AssertionError('Camera swipe did not change rendered pixels'),
+            'mCurrentFocus=Application Not Responding: com.android.systemui', 'display dump', '')
+        self.assertIsNone(record)
         self.assertFalse(self.cache.exists())
 
 

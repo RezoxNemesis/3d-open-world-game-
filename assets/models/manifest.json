@@ -1,0 +1,120 @@
+{
+  "generator": "tools/generate_temple_assets.py",
+  "generator_version": 1,
+  "blender_version": "4.3.2",
+  "license": "MIT (original project geometry and generated albedo textures)",
+  "source": "Original mathematical generation; uploaded references inform composition and palette",
+  "coordinate_system": "glTF Y-up, meters, centered base pivots",
+  "collision": "Decorative assets; world authors gameplay collision separately",
+  "textures": [
+    "../materials/temple_stone_original.png",
+    "../materials/temple_timber_original.png"
+  ],
+  "assets": {
+    "pavilion": {
+      "file": "pavilion.glb",
+      "triangles": 19068,
+      "mesh_count": 6,
+      "draw_call_materials": 6,
+      "bounds_min_y_up_m": [
+        -6.4264,
+        0.0,
+        -4.7795
+      ],
+      "bounds_max_y_up_m": [
+        6.4264,
+        6.9501,
+        4.79
+      ],
+      "bytes": 845216
+    },
+    "gate": {
+      "file": "gate.glb",
+      "triangles": 17468,
+      "mesh_count": 5,
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -5.0264,
+        0.0,
+        -2.1045
+      ],
+      "bounds_max_y_up_m": [
+        5.0264,
+        6.7601,
+        2.1045
+      ],
+      "bytes": 749956
+    },
+    "lantern": {
+      "file": "lantern.glb",
+      "triangles": 564,
+      "mesh_count": 6,
+      "draw_call_materials": 6,
+      "bounds_min_y_up_m": [
+        -0.3831,
+        0.0,
+        -0.3831
+      ],
+      "bounds_max_y_up_m": [
+        0.3831,
+        1.5,
+        0.3831
+      ],
+      "bytes": 104104
+    },
+    "bridge": {
+      "file": "bridge.glb",
+      "triangles": 1432,
+      "mesh_count": 4,
+      "draw_call_materials": 4,
+      "bounds_min_y_up_m": [
+        -3.1,
+        -0.64,
+        -6.01
+      ],
+      "bounds_max_y_up_m": [
+        3.1,
+        1.48,
+        6.01
+      ],
+      "bytes": 149988
+    },
+    "shrine": {
+      "file": "shrine.glb",
+      "triangles": 7436,
+      "mesh_count": 5,
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -1.6514,
+        0.0,
+        -1.1895
+      ],
+      "bounds_max_y_up_m": [
+        1.6514,
+        3.4401,
+        1.1895
+      ],
+      "bytes": 368300
+    },
+    "pavilion_far": {
+      "file": "pavilion_far.glb",
+      "triangles": 2516,
+      "mesh_count": 6,
+      "draw_call_materials": 6,
+      "bounds_min_y_up_m": [
+        -6.4264,
+        0.0,
+        -4.7795
+      ],
+      "bounds_max_y_up_m": [
+        6.4264,
+        6.9501,
+        4.79
+      ],
+      "bytes": 225552,
+      "lod_of": "pavilion.glb",
+      "simplification_ratio": 0.14,
+      "usage": "Distant skyline only; hero assets retain authored detail"
+    }
+  }
+}

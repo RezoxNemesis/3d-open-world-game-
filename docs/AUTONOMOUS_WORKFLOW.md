@@ -23,3 +23,10 @@ The official adb binary hardcodes `.android` and the emulator console token unde
 Use the existing checkout; no extra worktree is needed. Read the latest cycle result, `docs/TEST_RESULTS.md`, and the scoped production backlog before changing code. Keep tested commits small and preserve user changes. Phone-only access does not block continued cloud work. Realme-specific thermals, GPU compatibility, battery, ergonomics and sustained performance remain unverified without device evidence.
 
 Next production work begins after environment readiness: mobile quality presets and measured content budgets, followed by better hero-region art and streaming improvements. Do not expand setup into unrelated game features.
+
+
+## Eastern Temple District handoff
+
+The authored district, original module/foliage art, humanoid traveler, automatic stair traversal, discovery quest, actual map and distant position restoration are implemented. Latest evidence is in TEST_RESULTS.md. Run the bounded cycle after future meaningful changes; its render stage now verifies and archives five current-source views/metrics. The Android tester automatically records only a fresh, proven stock-SystemUI/launcher ANR obscuring its foreground check; game errors or unrelated assertions remain failures. Cache safeguard tests live in tools/test_runtime_cache.py.
+
+Next in-scope development: richer natural terrain/foliage and material normals with measured budgets, adjustable mobile quality, then persistent discovery and one NPC quest. The ten supplied image descriptions remain a roadmap; unimplemented combat, dragon flight, crafting and life systems should not get fake controls. Continue implementation inside active tasks without waiting for owner phone testing, and retain accurate Android-runtime/phone coverage limits.

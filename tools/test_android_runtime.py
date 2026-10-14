@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import time
 from PIL import Image, ImageChops, ImageStat
+from android_runtime_cache import record_foreground_block
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--serial', help='Use an already-running emulator; do not stop it')
@@ -155,6 +156,16 @@ try:
 except Exception as error:
     if report['status'] == 'RUNNING':
         report['status'] = 'BLOCKED' if isinstance(error, subprocess.TimeoutExpired) else 'FAIL'
+        window = output / 'before.png.window.txt'
+        if window.exists() and window.stat().st_mtime >= report['started_unix']:
+            log_path = output / 'logcat.log'
+            runtime_log = log_path.read_text() if log_path.exists() else ''
+            block = record_foreground_block(root, environment / 'autonomy/android-host-block.json',
+                error, window.read_text(), str(window), runtime_log)
+            if block:
+                report['status'] = 'BLOCKED'
+                report['host_limitation'] = block['reason']
+                report['evidence'] = block['evidence']
     report['error'] = str(error)
     print(report['status'] + ': ' + str(error), flush=True)
 finally:

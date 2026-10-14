@@ -1,6 +1,7 @@
-name: Godot starter checks
+name: Temple Realm gameplay checks
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -30,8 +31,8 @@ jobs:
         run: |
           source tools/common.sh
           checked_godot import --headless --editor --import
-          python tools/gdtools.py lint scripts tests tools/render_capture.gd
-          python tools/gdtools.py format --check scripts tests tools/render_capture.gd
+          python tools/gdtools.py lint scripts tests tools/render_capture.gd tools/startup_smoke.gd
+          python tools/gdtools.py format --check scripts tests tools/render_capture.gd tools/startup_smoke.gd
           tools/start_environment.sh smoke
           tools/run_tests.sh
           python tools/security_scan.py

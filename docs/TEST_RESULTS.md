@@ -1,3 +1,24 @@
+# Verification evidence
+
+## Eastern Temple District — 2026-10-14
+
+The first reference-directed exploration/art milestone is verified below. Earlier setup notes are historical baseline evidence.
+
+- **93 gameplay assertions PASS:** 28 existing movement/jump/save/camera/touch/streaming checks, 48 discovery/map/focus/distant-load checks, eight route/landing/visible-floor/seam checks and nine stair/ceiling/wall checks. Lint, formatting, import and startup smoke also pass with no engine errors.
+- **Six automation safeguards PASS:** unchanged host/app cache reuse, source-change invalidation, refusal to demote a game ANR, recognition of proven stock-SystemUI foreground blocks, refusal to hide a game crash, and refusal to demote unrelated assertions. New classification checks were observed failing before their implementation.
+- **Five actual rendered views PASS:** live gameplay camera with HUD plus sanctuary, lotus, gate and overview at 1280×720. Xvfb/Mesa llvmpipe, Compatibility. Source/asset hashes verify current evidence; views are distinct and were visually reviewed. Player frame: 574 total draw calls and 450,551 triangles across passes, including 244,351 visible triangles. Approximately 75% fewer total triangles than the initial district render; no phone-FPS inference.
+- **Original assets PASS:** six Blender/glTF modules with UVs/materials and finite geometry; hero/far bounds match. Original procedural textures and lotus banner render. Original 20-second Vorbis ambience imports/loops, is repeatable and clip-free; listening is unverified. Native audio cleanup gets a bounded mixing tick in startup/test/capture harnesses, rather than filtering shutdown errors.
+- **Security checks PASS:** no detected known advisories across 42 locked Python packages; source credential-pattern/symlink/setuid checks pass. This is bounded checking, not a comprehensive security guarantee.
+- **Android ARM64 debug APK PASS:** official matching engine/templates; API36 target/min24; v2/v3 signatures verified; no app permissions. APK candidate is approximately29 MiB and is archived per cycle.
+- **Native Android interaction BLOCKED:** a fresh API29 x86_64 software-emulated run booted, installed the ABI-only equivalent APK, launched the scene and emitted its ready marker without captured game errors. Actual diagnostic pixels show the district behind a stock-SystemUI ANR dialog, and Android's window dump identifies that dialog as the current foreground window. The bounded recovery attempt did not clear it within the run. KVM/CPU virtualization are absent. Foreground, camera-swipe and save-touch assertions were not passed or disabled. The initial strict failure report is retained; the corrected host classifier and final auto cycle use the positively demonstrated stock-SystemUI block and return **PARTIAL**, without promoting a full Android last-good result.
+- **Independent review:** fixed visible-floor/collision mismatch (actual model-geometry intersection regression RED→GREEN), distant-load fall-through (real physics RED→GREEN), stair/platform geometry, support collision alignment and repeated-lantern draw workload. Remaining reference-level realism, natural hero terrain/foliage, broader systems and physical Realme FPS/heat/touch coverage remain in development.
+
+Current cycle: `20261014T204543Z-f26756`. Final report: `artifacts/cycles/20261014T204543Z-f26756/result.json`. Signed APK SHA-256: `d82e3afd5063efb6e9e176f2143ecc079b76a3862d853eb06da67628a35b8b70`.
+
+Current evidence: `artifacts/district-autonomous-final.log`, four behavioral test logs, `artifacts/district-render-metrics.json`, five district PNGs, `artifacts/android-runtime/result.json`, `before.png.window.txt`, `logcat.log`, `artifacts/android-systemui-recovery-before.png`, and the source/advisory/export/signature logs. The rejected strict native result is retained under `artifacts/cycles/20261014T203558Z-8e3dc1/`.
+
+---
+
 # Environment acceptance and test evidence
 
 Validated 2026-10-14 in the current Codex cloud instance. User target: Realme P1 Speed Android; the owner has no computer. This report covers environment readiness and a small runnable test project, not a complete production game.
