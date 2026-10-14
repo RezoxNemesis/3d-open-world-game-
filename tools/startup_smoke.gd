@@ -1,4 +1,6 @@
 extends SceneTree
+
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
 ## Own the smoke scene lifecycle so the audio server drains before process shutdown.
 
 
@@ -11,7 +13,5 @@ func run() -> void:
 	root.add_child(scene)
 	for frame in range(180):
 		await process_frame
-	scene.queue_free()
-	await process_frame
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 	quit(0)

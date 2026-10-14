@@ -1,4 +1,6 @@
 extends SceneTree
+
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
 ## Real body motion probes for stairs, tall walls and overhead step clearance.
 
 var checks := 0
@@ -99,6 +101,5 @@ func run() -> void:
 	)
 	check(player.is_on_floor(), "blocked step keeps the player grounded")
 	print("RESULT: %d step checks, %d failures" % [checks, failures])
-	scene.queue_free()
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 	quit(1 if failures else 0)

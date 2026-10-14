@@ -1,4 +1,6 @@
 extends SceneTree
+
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
 ## Finger ownership, analog motion, camera safety and pause-release regressions.
 
 var checks := 0
@@ -140,8 +142,10 @@ func run() -> void:
 	check(player.has_method("set_camera_distance"), "third-person distance is configurable")
 	if player.has_method("set_camera_distance"):
 		player.set_camera_distance(4.5)
+		# Camera damping integrates delta; physics frames guarantee one simulated
+		# second even when a hosted headless renderer runs hundreds of FPS.
 		for i in range(60):
-			await process_frame
+			await physics_frame
 		var spring = player.pivot.get_child(0)
 		check(
 			absf(spring.spring_length - 4.5) < 0.1, "camera distance converges to the selected zoom"
@@ -238,6 +242,5 @@ func run() -> void:
 	)
 	await touch(5, controls.buttons["sprint"].position, false)
 	print("MOBILE_RESULT: %d checks, %d failures" % [checks, failures])
-	scene.queue_free()
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 	quit(1 if failures else 0)

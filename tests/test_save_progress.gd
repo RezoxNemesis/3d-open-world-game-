@@ -1,5 +1,7 @@
 extends SceneTree
 
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
+
 const PATH := "user://progress_upgrade_test.json"
 
 var checks := 0
@@ -121,9 +123,7 @@ func check_main_roundtrip() -> void:
 	check(player.position.is_equal_approx(saved), "bad main save does not move current player")
 	check(scene.exploration.discovered.size() == 2, "bad main save preserves current discovery")
 	DirAccess.remove_absolute(PATH)
-	scene.queue_free()
-	await process_frame
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 
 
 func finish() -> void:

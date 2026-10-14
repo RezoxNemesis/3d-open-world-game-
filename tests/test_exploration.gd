@@ -1,5 +1,7 @@
 extends SceneTree
 
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
+
 var checks := 0
 var failures := 0
 var signal_count := 0
@@ -47,8 +49,7 @@ func run() -> void:
 	var exploration = scene.get_node_or_null("Exploration")
 	check(exploration != null, "main scene owns an exploration quest")
 	if exploration == null:
-		scene.queue_free()
-		await process_frame
+		await SCENE_FIXTURE.dispose_scene(self, scene)
 		finish()
 		return
 	exploration.set_process(false)
@@ -147,9 +148,7 @@ func run() -> void:
 		)
 	check(scene.hud_panel.size.x < 960 - 280, "quest panel leaves room for top action buttons")
 	await check_distant_load(scene, player)
-	scene.queue_free()
-	await process_frame
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 	finish()
 
 

@@ -1,5 +1,7 @@
 extends SceneTree
 
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
+
 var checks := 0
 var failures := 0
 
@@ -95,8 +97,7 @@ func check_settings_overlay() -> void:
 	var mobile = scene.get_node("MobileControls")
 	check(scene.has_method("toggle_settings"), "main exposes functioning settings overlay")
 	if not scene.has_method("toggle_settings"):
-		scene.queue_free()
-		await process_frame
+		await SCENE_FIXTURE.dispose_scene(self, scene)
 		return
 	Input.action_press("move_forward")
 	Input.action_press("sprint")
@@ -149,9 +150,7 @@ func check_settings_overlay() -> void:
 	scene.apply_settings()
 	check(root.msaa_3d == Viewport.MSAA_2X, "balanced smooths geometry edges")
 	DirAccess.remove_absolute(scene.settings_path)
-	scene.queue_free()
-	await process_frame
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 
 
 func finish() -> void:

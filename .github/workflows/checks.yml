@@ -65,13 +65,22 @@ jobs:
         shell: bash
         run: |
           source tools/common.sh
+          check_phase='Godot import'
+          trap 'code=$?; printf "::error title=Validation phase failed::%s (exit %s)\n" "$check_phase" "$code"; exit "$code"' ERR
           checked_godot import --headless --editor --import
+          check_phase='GDScript lint'
           python tools/gdtools.py lint scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/startup_smoke.gd
+          check_phase='GDScript formatting'
           python tools/gdtools.py format --check scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/startup_smoke.gd
+          check_phase='Startup smoke'
           tools/start_environment.sh smoke
+          check_phase='Gameplay behavior tests'
           tools/run_tests.sh
+          check_phase='Runtime-cache safeguards'
           python tools/test_runtime_cache.py
+          check_phase='Java selection tests'
           python tools/test_android_java.py
+          check_phase='Source security scan'
           python tools/security_scan.py
       - name: Android SDK and Godot export settings
         shell: bash

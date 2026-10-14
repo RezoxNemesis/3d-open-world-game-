@@ -1,5 +1,7 @@
 extends SceneTree
 
+const SCENE_FIXTURE := preload("res://tests/scene_fixture.gd")
+
 var checks := 0
 var failures := 0
 
@@ -144,7 +146,5 @@ func run() -> void:
 			"region reload regenerates identical terrain"
 		)
 	print("RESULT: %d checks, %d failures" % [checks, failures])
-	scene.queue_free()
-	await process_frame
-	await create_timer(0.15).timeout
+	await SCENE_FIXTURE.dispose_scene(self, scene)
 	quit(1 if failures else 0)
