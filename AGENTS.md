@@ -9,3 +9,9 @@
 - Pin official stable Godot and matching templates; use inherited TLS/proxy trust and never disclose secrets.
 - Report actual rendering/device coverage. Do not publish, purchase, force-push or delete remote history without authorization.
 - Make recoverable local commits after verified milestones. See `docs/DEVELOPMENT.md` for recovery and backlog.
+
+## Autonomous working preference
+
+The owner requests ordinary implementation decisions, builds, tests, fixes and Git checkpoints without repeated confirmation. Do not wait for phone testing before doing independent work. After a meaningful change, run `tools/autonomous_cycle.sh`; inspect its current report and diagnose failures before retrying. Use the next in-scope item from `docs/ARCHITECTURE.md` during development tasks. Preserve the last-good artifact and record the next step in `docs/AUTONOMOUS_WORKFLOW.md` when handing off.
+
+Work within the active task and platform limits. The cycle is a bounded validator, not an AI worker that continues after a session ends. Use supported corrections and alternatives; never circumvent access controls, disable integrity checks or claim emulator results establish Realme performance. Routine repository work is authorized by the owner; paid services, store publication and destructive history changes remain separate actions.

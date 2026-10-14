@@ -41,3 +41,8 @@ The preinstalled Godot 4.6.3 remains at `/opt/godot/4.6.3`; it is a tool rollbac
 The cloud installation/startup draft is separate from runtime execution. Review and save it in environment settings and publish the environment to snapshot the prepared filesystem. Fresh-task restoration and remote repository integration must be independently verified; no remote branch or store publication is performed by this setup.
 
 Required domains are the existing package-manager preset: github.com, release-assets.githubusercontent.com, raw.githubusercontent.com, pypi.org, files.pythonhosted.org, dl.google.com and security.debian.org. No new credential binding is needed. The Android preset disables one-click USB deployment/device polling; direct APK export remains enabled. Full Gradle/JDK workflows, release keystores and Play Store delivery remain outside this prototype's tested path.
+
+
+## Autonomous environment upgrade
+
+The owner requests routine engineering decisions without repeated permission and without waiting for phone testing. `tools/setup_emulator.sh` installs/pins Android Emulator 37.2.12 and AOSP API29 x86_64 revision 8. `tools/autonomous_cycle.sh` runs the validation/build stages with archived reports; read `docs/AUTONOMOUS_WORKFLOW.md` for strict and auto/fallback outcomes. Android screenshots require foreground, readable-title and ANR checks using Tesseract 5.5.0. The emulator uses authenticated loopback interfaces and workspace-backed caches, with HOME preserved. CPU acceleration is unavailable on the current host; software-emulated checks take minutes and do not establish Realme performance.

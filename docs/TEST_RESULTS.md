@@ -33,3 +33,16 @@ The cloud installation and startup draft was confirmed saved; no new network dom
 ## Evidence locations
 
 Current logs and generated inventories are ignored under `artifacts/`: `setup-repeatability.log`, `validation.log`, `tests.log`, `security-audit.log`, `dependency-audit.json`, `source-inventory.json`, `android-export-check.log`, `apk-signature.log`, `apk-badging.log`, `apk-permissions.log`, `apk-sha256.txt`, `render-check.log` and `render.log`. They describe this run; future agents must rerun affected checks rather than assume old artifacts are current.
+
+
+## Autonomous environment extension
+
+The bounded `tools/autonomous_cycle.sh` workflow was exercised in the current workspace. The latest `auto` run returned **PARTIAL** with gameplay/import/lint, advisory/source security checks, real Mesa rendering, phone APK export, emulator setup and x86_64 emulator build all **PASS**. Gameplay remains **28 checks, zero failures**. Three new runtime-cache safeguard tests **PASS**, including invalidation after a game change and refusal to cache a game ANR as an infrastructure block.
+
+Android Emulator **37.2.12**, AOSP API29 x86_64 revision **8**, and authenticated adb storage are installed and reusable. Native Android boot, APK installation and the game-ready marker executed. The legacy SwiftShader backend failed shader linking; supported ANGLE/SwiftShader rendered the temple scene. **Interactive Android validation remains BLOCKED** because stock Android System UI became unresponsive in software CPU emulation and captured foreground. The corrected Android display dump records `Application Not Responding: com.android.systemui` while the game is the focused application. The official acceleration probe reports that KVM requires CPU virtualization features unavailable on this host.
+
+The first loose ANGLE smoke report returned PASS, but subsequent visual review found a launcher ANR overlay; that result is explicitly rejected by `artifacts/android-runtime-swangle-review/visual-review.json`. The hardened tester requires an actual foreground window from Android's display diagnostics, a readable game title, absence of ANR dialogs, a meaningful camera-swipe image change and creation of an app-local save. It does not substitute signatures, nonblank screenshots or PIDs for gameplay evidence. Android runtime error capture is filtered to Godot and AndroidRuntime tags to avoid excessive system-log transfer. Strict mode rejects unresolved Android runtime checks; auto mode retains the verified phone APK and reports PARTIAL so independent development can continue without waiting for the owner's phone.
+
+No physical Realme, sustained mobile performance or full interactive Android pass is claimed. Emulator checks automatically use CPU acceleration when the official probe reports it available; otherwise software emulation is used. Cached infrastructure limits expire and are invalidated by changed app/host inputs. Processes are temporary, not a persistent AI worker.
+
+Current extension evidence: `artifacts/autonomous-final-check.log`, the latest `artifacts/cycles/*/result.json`, `artifacts/android-runtime/result.json`, `artifacts/android-runtime/before.png.window.txt`, `artifacts/emulator-acceleration.log`, and `/workspace/.temple-realm/autonomy/android-host-block.json`. Earlier failed/blocked probe evidence remains retained separately.

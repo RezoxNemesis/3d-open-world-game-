@@ -1,0 +1,13 @@
+{
+  "emulator": {
+    "version": "37.2.12",
+    "url": "https://dl.google.com/android/repository/emulator-linux_x64-16428233.zip",
+    "sha1": "cd7362ea55dfb86a418958138dc396e74165dd01"
+  },
+  "system_image": {
+    "package": "system-images;android-29;default;x86_64",
+    "revision": 8,
+    "url": "https://dl.google.com/android/repository/sys-img/android/x86_64-29_r08-linux.zip",
+    "sha1": "e4b798d6fcddff90d528d74ef22ce3dd4a2ca798"
+  }
+}
