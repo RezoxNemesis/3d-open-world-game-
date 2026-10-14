@@ -34,6 +34,6 @@
 - [x] HUD/settings (`scripts/main.gd`, `scripts/game_settings.gd`, `tests/test_settings.gd`): add failing persistence/overlay tests, implement validated settings and compact interface, pass settings/map checks.
 - [x] Exploration storage (`scripts/save_store.gd`, `scripts/exploration.gd`, `tests/test_save_progress.gd`): test v1 compatibility, v2 roundtrip/IDs/corruption before implementation; wire main save/load through coordinated interfaces.
 - [x] Integration: wire suites and native test's actual settings-save path; import/lint/startup/tests/security and bounded autonomous cycle, inspect fresh renderer metrics, independent review and fixes.
-- [ ] Delivery: commit verified source, fast-forward/push main, verify successful hosted run head SHA and uploaded artifact; record evidence and provide direct artifact URL.
+- [x] Delivery: commit verified source, fast-forward/push main, verify successful hosted run head SHA and uploaded artifact; record evidence and provide direct artifact URL.
 
 Interfaces: `World.apply_quality(preset: String)`; `MobileControls.configure_controls(sensitivity: float, joystick_scale: float)`; `Player.set_camera_distance(distance: float)`; `Player.rotate_camera(relative: Vector2, look_sensitivity: float = 1.0)`; `SaveStore.save_state(position: Vector3, discovered: Array, path: String) -> bool`; `SaveStore.load_state(path: String, fallback: Vector3) -> Dictionary`; `Exploration.restore_discovered(ids: Variant) -> void`.
