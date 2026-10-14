@@ -23,3 +23,13 @@ mono_crash.*.json
 *.exe
 # Uncomment if your project does not version PCK files as runtime dependencies.
 # *.pck
+
+# Local development tools and generated outputs
+artifacts/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.keystore
+*.jks

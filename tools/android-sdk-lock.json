@@ -1,0 +1,7 @@
+{
+  "revision": "19",
+  "archive": "commandlinetools-linux-13114758_latest.zip",
+  "sha1": "5fdcc763663eefb86a5b8879697aa6088b041e70",
+  "source": "https://dl.google.com/android/repository/repository2-1.xml",
+  "reason": "Version 23 migrated to a CLI that attempts read-only home writes; supported Java SDK manager 19 is pinned for workspace-local installation."
+}
