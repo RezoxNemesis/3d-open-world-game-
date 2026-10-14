@@ -2,6 +2,7 @@ extends Node3D
 ## Authored temple district inside deterministic, bounded streamed terrain.
 
 const SEED := 73109
+const WATER_SHADER := preload("res://assets/shaders/jade_water.gdshader")
 var rng := RandomNumberGenerator.new()
 var stone: ShaderMaterial
 var pale_stone: StandardMaterial3D
@@ -10,6 +11,9 @@ var dark_stone: StandardMaterial3D
 var moss: StandardMaterial3D
 var gold: StandardMaterial3D
 var terrain_noise := FastNoiseLite.new()
+var terrain_surface: ShaderMaterial
+var quality_preset := "balanced"
+var nature: Node3D
 var modules: Dictionary = {}
 var lantern_transforms: Array[Transform3D] = []
 
@@ -30,7 +34,9 @@ func _ready() -> void:
 	pale_stone = material(Color("acac92"))
 	red_wood = material(Color("7b3026"))
 	dark_stone = material(Color("596253"))
-	moss = material(Color("596d4d"))
+	moss = material(Color("566848"))
+	terrain_surface = ShaderMaterial.new()
+	terrain_surface.shader = preload("res://assets/shaders/terrain_ground.gdshader")
 	gold = material(Color("c6a765"), 0.38)
 	for label in ["pavilion", "pavilion_far", "gate", "lantern", "bridge", "shrine"]:
 		var path := "res://assets/models/%s.glb" % label
@@ -48,6 +54,7 @@ func _ready() -> void:
 	var ambience := preload("res://scripts/ambience.gd").new()
 	ambience.name = "GardenAmbience"
 	add_child(ambience)
+	apply_quality(quality_preset)
 
 
 func solid(
@@ -145,13 +152,13 @@ func setup_sky() -> void:
 	sky.sky_material = sky_material
 	settings.sky = sky
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("b7c8ce")
-	settings.ambient_light_energy = 0.32
+	settings.ambient_light_color = Color("b5cbd2")
+	settings.ambient_light_energy = 0.42
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	settings.tonemap_exposure = 1.0
 	settings.fog_enabled = true
-	settings.fog_light_color = Color("a9c4c2")
-	settings.fog_density = 0.0010
+	settings.fog_light_color = Color("bdd1c9")
+	settings.fog_density = 0.0014
 	settings.fog_sky_affect = 0.05
 	environment.environment = settings
 	add_child(environment)
@@ -159,7 +166,7 @@ func setup_sky() -> void:
 	sun.name = "AfternoonSun"
 	sun.rotation_degrees = Vector3(-39, -48, 0)
 	sun.light_color = Color("ffe5ba")
-	sun.light_energy = 0.78
+	sun.light_energy = 0.85
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 65
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
@@ -243,7 +250,7 @@ func build_temple() -> void:
 
 func water_surface(location: Vector3, size_value: Vector2, falling: bool = false) -> MeshInstance3D:
 	var shader := ShaderMaterial.new()
-	shader.shader = preload("res://assets/shaders/jade_water.gdshader")
+	shader.shader = WATER_SHADER
 	shader.set_shader_parameter("falling", falling)
 	var plane := PlaneMesh.new()
 	plane.size = size_value
@@ -268,8 +275,8 @@ func build_lotus_garden() -> void:
 	module_at("pavilion", Vector3(-34, 0, -17), 0.65)
 	block(Vector3(10, 0.8, 7), Vector3(-34, -0.4, -17), stone)
 	build_lotus(Vector3(-34, -0.35, 0), 36)
-	build_waterfall(Vector3(-45, 0, -30), 18, 4.2)
-	build_cliff(Vector3(-47, 0, -32), Vector2(10, 7), 20)
+	build_waterfall(Vector3(-45, 0, -22.5), 18, 4.2)
+	build_cliff(Vector3(-47, 20, -32), Vector2(10, 7), 20)
 	module_at("shrine", Vector3(-47, 20, -32), 0.85)
 
 
@@ -358,52 +365,178 @@ func build_lotus(origin: Vector3, count: int) -> void:
 
 
 func build_waterfall(origin: Vector3, height: float, width: float) -> void:
-	water_surface(origin + Vector3(0, height / 2, 0.2), Vector2(width, height), true)
-	water_surface(origin + Vector3(0, height, -2), Vector2(width, 4))
-	var foam := material(Color("dae9dc"))
-	for i in range(6):
+	var shader := ShaderMaterial.new()
+	shader.shader = WATER_SHADER
+	shader.set_shader_parameter("falling", true)
+	var stream := SurfaceTool.new()
+	stream.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for row in range(12):
+		for column in range(4):
+			for offset in [
+				Vector2i(0, 0),
+				Vector2i(0, 1),
+				Vector2i(1, 0),
+				Vector2i(1, 0),
+				Vector2i(0, 1),
+				Vector2i(1, 1)
+			]:
+				var uv := Vector2(float(column + offset.x) / 4.0, float(row + offset.y) / 12.0)
+				stream.set_uv(uv)
+				stream.set_normal(Vector3.FORWARD)
+				stream.add_vertex(
+					Vector3(
+						(uv.x - 0.5) * width * (0.92 + sin(uv.y * 11.0) * 0.07),
+						uv.y * height,
+						-uv.y * 2.8 + sin(uv.y * 6.0) * 0.25
+					)
+				)
+	var falling := solid(stream.commit(), origin, shader, false)
+	falling.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var basin_shader := ShaderMaterial.new()
+	basin_shader.shader = WATER_SHADER
+	var basin := CylinderMesh.new()
+	basin.top_radius = width * 0.90
+	basin.bottom_radius = width * 0.90
+	basin.height = 0.04
+	basin.radial_segments = 24
+	var pool := solid(basin, origin + Vector3(0, -0.12, 1.0), basin_shader, false)
+	pool.scale.z = 0.72
+	pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var boulder_mesh := SphereMesh.new()
+	boulder_mesh.radius = 1.0
+	boulder_mesh.height = 1.6
+	boulder_mesh.radial_segments = 9
+	boulder_mesh.rings = 4
+	var boulders := MultiMesh.new()
+	boulders.transform_format = MultiMesh.TRANSFORM_3D
+	boulders.use_colors = true
+	boulders.mesh = boulder_mesh
+	boulders.instance_count = 10
+	for index in range(10):
+		var angle := index * TAU / 10
+		var size_value := rng.randf_range(0.55, 1.05)
+		boulders.set_instance_transform(
+			index,
+			Transform3D(
+				Basis(Vector3.UP, angle).scaled(Vector3(size_value, size_value * 0.72, size_value)),
+				origin + Vector3(cos(angle) * width * 0.82, -0.10, sin(angle) * width * 0.57 + 1.0)
+			)
+		)
+		boulders.set_instance_color(index, Color("4e6659").lerp(Color("87907a"), rng.randf()))
+	var bank := MultiMeshInstance3D.new()
+	bank.multimesh = boulders
+	var wet_rock := material(Color.WHITE)
+	wet_rock.vertex_color_use_as_albedo = true
+	wet_rock.vertex_color_is_srgb = true
+	wet_rock.roughness = 0.62
+	bank.material_override = wet_rock
+	bank.visibility_range_end = 160
+	add_child(bank)
+	var foam := material(Color("d0e1d0"))
+	for i in range(3):
 		var mist := SphereMesh.new()
-		mist.radius = rng.randf_range(0.5, 1.2)
-		mist.height = 0.12
-		mist.radial_segments = 12
+		mist.radius = rng.randf_range(0.4, 0.8)
+		mist.height = 0.05
+		mist.radial_segments = 10
 		mist.rings = 3
-		solid(mist, origin + Vector3(rng.randf_range(-width / 2, width / 2), 0.1, 0.4), foam, false)
+		var splash := solid(
+			mist, origin + Vector3(rng.randf_range(-width / 3, width / 3), -0.03, 0.3), foam, false
+		)
+		splash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func cliff_vertex(
+	level: int, sector: int, width: Vector2, height: float, spire: bool, phase: float = 0.0
+) -> Vector3:
+	var t := float(level) / 14.0
+	var angle := sector * TAU / 20.0
+	var shoulder := (
+		1.0
+		+ 0.027 * sin(t * 17.0 + phase)
+		+ 0.020 * sin(t * 37.0 + phase * 2.4)
+		+ 0.010 * sin(t * 67.0 - phase)
+	)
+	var taper := 1.0 + pow(1.0 - t, 2.0) * 0.36
+	if spire:
+		# Karst pillars retain steep upper shoulders and an uneven crown, rather than a cone.
+		taper = lerpf(1.55, 0.67, smoothstep(0.0, 0.88, t))
+		if t > 0.90:
+			taper *= lerpf(1.0, 0.62, (t - 0.90) / 0.10)
+	var fluting := (
+		0.95
+		+ sin(angle * 5.0 + phase) * 0.07
+		+ sin(angle * 9.0 + phase * 2.0) * 0.055
+		+ sin(angle * 13.0 + 0.3) * 0.025
+	)
+	var lean := Vector2(
+		(sin(t * 2.2 + phase) - sin(phase)) * width.x * 0.16,
+		(sin(t * 2.9 - phase) + sin(phase)) * width.y * 0.12
+	)
+	var crown := sin(angle * 3.0 + phase) * height * 0.028 * pow(t, 8.0) if spire else 0.0
+	return Vector3(
+		cos(angle) * width.x * fluting * shoulder * taper + lean.x,
+		t * height - height + crown,
+		sin(angle) * width.y * fluting * shoulder * taper + lean.y
+	)
 
 
 func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = false) -> void:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segments := 12
-	for ring in range(7):
-		for sector in range(segments):
+	var phase := top.x * 0.37 + top.z * 0.19
+	for ring in range(14):
+		for sector in range(20):
 			var corners: Array[Vector3] = []
 			for offset in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
-				var level: int = ring + offset.y
-				var angle: float = (sector + offset.x) * TAU / segments
-				var modulation := 0.88 + 0.13 * sin(angle * 5 + level * 1.7)
-				var factor := 1.0 + pow(float(7 - level) / 7, 2) * 0.38
-				if spire:
-					factor = 0.12 + pow(float(7 - level) / 7, 0.8) * 1.8
 				corners.append(
-					Vector3(
-						cos(angle) * width.x * modulation * factor,
-						float(level) * height / 7 - height,
-						sin(angle) * width.y * modulation * factor
-					)
+					cliff_vertex(ring + offset.y, sector + offset.x, width, height, spire, phase)
 				)
 			for index in [0, 2, 1, 1, 2, 3]:
-				surface.set_color(
-					Color("677369").lerp(Color("b9bda8"), float(ring) / 12 + rng.randf() * 0.12)
+				var level := float(ring) / 14.0
+				var mossiness := sin(sector * 1.7 + ring * 0.9) * 0.5 + 0.5
+				var color := Color("777c70").lerp(Color("b7b7a2"), level * 0.65)
+				color = color.lerp(Color("526c56"), mossiness * (0.12 + level * 0.16))
+				surface.set_color(color)
+				var vertex_level := ring + (1 if index >= 2 else 0)
+				var vertex_sector := sector + (1 if index % 2 else 0)
+				var along_ring := (
+					cliff_vertex(vertex_level, vertex_sector + 1, width, height, spire, phase)
+					- cliff_vertex(vertex_level, vertex_sector - 1, width, height, spire, phase)
 				)
+				var upward := (
+					cliff_vertex(
+						mini(vertex_level + 1, 14), vertex_sector, width, height, spire, phase
+					)
+					- cliff_vertex(
+						maxi(vertex_level - 1, 0), vertex_sector, width, height, spire, phase
+					)
+				)
+				surface.set_normal(upward.cross(along_ring).normalized())
 				surface.add_vertex(corners[index])
-	surface.generate_normals()
+	# Close the uneven crown so flying cameras never see an open tube.
+	for sector in range(20):
+		for point in [
+			Vector3(0, 0, 0),
+			cliff_vertex(14, sector + 1, width, height, spire, phase),
+			cliff_vertex(14, sector, width, height, spire, phase)
+		]:
+			surface.set_color(Color("7a8767"))
+			surface.set_normal(Vector3.UP)
+			surface.add_vertex(point)
 	var cliff_material := material(Color.WHITE)
 	cliff_material.vertex_color_use_as_albedo = true
 	cliff_material.vertex_color_is_srgb = true
-	cliff_material.albedo_texture = preload("res://assets/materials/temple_stone_original.png")
+	cliff_material.albedo_texture = preload("res://assets/materials/karst_rock_original.png")
 	cliff_material.uv1_triplanar = true
 	cliff_material.uv1_world_triplanar = true
-	cliff_material.uv1_scale = Vector3.ONE * 0.18
+	cliff_material.uv1_scale = Vector3(0.18, 0.10, 0.18)
+	cliff_material.normal_enabled = true
+	cliff_material.normal_texture = preload("res://assets/materials/karst_rock_original_normal.png")
+	cliff_material.normal_scale = 0.75
+	cliff_material.roughness_texture = preload(
+		"res://assets/materials/karst_rock_original_roughness.png"
+	)
+	cliff_material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 	solid(surface.commit(), top, cliff_material, false)
 
 
@@ -417,19 +550,35 @@ func build_region(key: Vector2i) -> Node3D:
 	var region := Node3D.new()
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for x in range(16):
-		for z in range(16):
+	for x in range(32):
+		for z in range(32):
 			var corners: Array[Vector3] = []
 			for offset in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-				var px: float = key.x * 128 - 64 + (x + offset.x) * 8
-				var pz: float = key.y * 128 - 64 + (z + offset.y) * 8
+				var px: float = key.x * 128 - 64 + (x + offset.x) * 4
+				var pz: float = key.y * 128 - 64 + (z + offset.y) * 4
 				corners.append(Vector3(px, terrain_height(px, pz), pz))
 			for index in [0, 1, 2, 1, 3, 2]:
-				surface.add_vertex(corners[index])
-	surface.generate_normals()
+				var point := corners[index]
+				# Shared world-space derivatives prevent flat facets and region lighting seams.
+				var normal := (
+					Vector3(
+						(
+							terrain_height(point.x - 0.5, point.z)
+							- terrain_height(point.x + 0.5, point.z)
+						),
+						1.0,
+						(
+							terrain_height(point.x, point.z - 0.5)
+							- terrain_height(point.x, point.z + 0.5)
+						)
+					)
+					. normalized()
+				)
+				surface.set_normal(normal)
+				surface.add_vertex(point)
 	var terrain := MeshInstance3D.new()
 	terrain.mesh = surface.commit()
-	terrain.material_override = moss
+	terrain.material_override = terrain_surface
 	region.add_child(terrain)
 	terrain.create_trimesh_collision()
 	return region
@@ -442,7 +591,10 @@ func build_landscape() -> void:
 	regions.target = get_parent().get_node("Player")
 	add_child(regions)
 	regions.update_regions(Vector3.ZERO)
-	preload("res://scripts/nature.gd").new().populate(self, SEED)
+	nature = Node3D.new()
+	nature.name = "GardenNature"
+	add_child(nature)
+	preload("res://scripts/nature.gd").new().populate(nature, SEED, terrain_height)
 	for i in range(18):
 		var x := -180 + i * 22
 		var height := rng.randf_range(34, 82)
@@ -452,5 +604,35 @@ func build_landscape() -> void:
 			height + 4,
 			true
 		)
-	build_waterfall(Vector3(-64, 0, -54), 26, 4.5)
-	build_waterfall(Vector3(68, 0, -76), 37, 3.5)
+	build_waterfall(Vector3(-64, 0, -49.0), 21, 4.5)
+	build_waterfall(Vector3(68, 0, -71.3), 30, 3.5)
+
+
+func apply_quality(preset: String) -> void:
+	var selected := preset.to_lower()
+	if selected == "quality":
+		selected = "high"
+	if selected not in ["performance", "balanced", "high"]:
+		selected = "balanced"
+	quality_preset = selected
+	var low := selected == "performance"
+	var high := selected == "high"
+	var sun := get_node_or_null("AfternoonSun") as DirectionalLight3D
+	if sun != null:
+		sun.shadow_enabled = not low
+		sun.directional_shadow_max_distance = 65.0 if high else 45.0
+	if nature == null:
+		return
+	var density := 1.0 if high else (0.42 if low else 0.72)
+	for item in nature.get_children():
+		if item is MultiMeshInstance3D:
+			if item.get_meta("density_scaled", false):
+				item.multimesh.visible_instance_count = maxi(
+					1, floori(item.multimesh.instance_count * density)
+				)
+			var near_cover: bool = item.get_meta("near_cover", false)
+			item.visibility_range_end = (
+				(58.0 if low else (95.0 if high else 75.0))
+				if near_cover
+				else (110.0 if low else (210.0 if high else 160.0))
+			)

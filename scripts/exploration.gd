@@ -12,6 +12,16 @@ var landmarks: Array[Dictionary] = [
 var discovered: Dictionary = {}
 
 
+func restore_discovered(ids: Variant) -> void:
+	discovered.clear()
+	if ids is Array:
+		for id in ids:
+			for landmark in landmarks:
+				if id is String and id == landmark.id:
+					discovered[id] = true
+	changed.emit()
+
+
 func visit(position: Vector3) -> void:
 	for landmark in landmarks:
 		var point: Vector3 = landmark.position

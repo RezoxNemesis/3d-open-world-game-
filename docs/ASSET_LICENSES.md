@@ -14,6 +14,9 @@ The owner supplied ten concept images in TempleRealm_10_Images_With_Descriptions
 
 ## Original district assets
 
-- `tools/generate_temple_assets.py` (Blender 4.3.2, generator version 1) creates `assets/models/{pavilion,pavilion_far,gate,lantern,bridge,shrine}.glb` and the stone/timber albedo textures. Geometry, UVs, surfaces and texture generation are original MIT project work. Exact counts/bounds are in `assets/models/manifest.json`; six-module Godot import and geometry checks passed. Embedded textures are included in GLBs.
+- `tools/generate_temple_assets.py` (Blender 4.3.2, generator version 2) creates `assets/models/{pavilion,pavilion_far,gate,lantern,bridge,shrine}.glb` and original limestone, vermilion timber and teal ceramic maps: 512px albedo, 256px normals and 128px roughness. Geometry, UVs, tangents, surfaces and texture generation are original MIT project work. Exact counts/bounds are in `assets/models/manifest.json`; geometry budgets, dimensions and material counts are preserved. Embedded textures are included in GLBs; Godot extracts per-model copies during import.
 - `assets/materials/lotus_banner.svg`, all `assets/shaders/*.gdshader`, foliage/terrain and the humanoid traveler are original repository-authored geometry/material/art. No external character or existing game assets were imported.
 - `tools/generate_ambience.py` produces the original seeded 20-second atmosphere, encoded by FFmpeg as `assets/audio/garden.ogg`. Bird and bell notes are mathematically synthesized; no external recordings or melodies. MIT project asset; clipping/RMS/seam metrics are in `artifacts/garden-audio-report.json`.
+- `tools/generate_karst_texture.py` produces seeded seamless limestone crag maps for scenery: 512px albedo, 256px normals and 128px roughness. Original MIT project art; no photographic/reference image pixels are used.
+
+The owner's two screenshots and compressed Android gameplay recording in `TempleRealm_Screenshots_and_Gameplay_Under20MB.zip` guide the mobile upgrade. They are not shipped game assets. New meadow/foliage shaders, layered cliffs, vegetation and traveler refinements are original repository work.

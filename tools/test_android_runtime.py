@@ -8,6 +8,7 @@ import subprocess
 import time
 from PIL import Image, ImageChops, ImageStat
 from android_runtime_cache import record_foreground_block
+from android_label_ocr import locate_label
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--serial', help='Use an already-running emulator; do not stop it')
@@ -48,6 +49,14 @@ def screenshot(name):
     assert "RESPONDING" not in ocr, 'Android ANR dialog obscures the game'
     assert 'TEMPLE' in ocr and 'REALM' in ocr, 'Android capture does not show the readable game HUD; wait for stable frames or diagnose rendering'
     return image
+
+def tap_label(name, label):
+    """Tap the label actually visible in the Android framebuffer, not old fixed coordinates."""
+    image = screenshot(name)
+    match = locate_label(image, label, output, name)
+    report.setdefault('ui_label_checks', []).append({'label': label, **match})
+    adb('shell', 'input', 'tap', *(str(round(value)) for value in match['center']), timeout=60)
+    time.sleep(2)
 
 (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 
@@ -138,13 +147,14 @@ try:
     assert difference > 2, f'Camera swipe did not change rendered pixels: {difference}'
     report['checks'].append('Android camera swipe changed the rendered viewpoint')
     # Exercise independent on-screen jump and persistence controls; host tests verify state semantics.
-    adb('shell', 'input', 'tap', str(width - 100), str(height - 100), timeout=60)
-    adb('shell', 'input', 'tap', str(width - 80), '60', timeout=60)
-    time.sleep(2)
+    tap_label('before-jump.png', 'JUMP')
+    tap_label('before-settings.png', 'SETTINGS')
+    tap_label('before-save.png', 'SAVE')
     saved = adb('shell', 'run-as', 'org.templerealm.prototype', 'find', 'files', '-name', 'save.json', timeout=60)
     assert saved.endswith('save.json'), 'Android SAVE control did not create its app-local save file'
     report['checks'].append('Android SAVE control created an app-local save file')
-    adb('shell', 'input', 'tap', str(width - 160), '60', timeout=60)
+    tap_label('before-load.png', 'LOAD')
+    tap_label('before-close.png', 'CLOSE')
     assert adb('shell', 'pidof', 'org.templerealm.prototype'), 'App crashed after touch interactions'
     screenshot('after-controls.png')
     report['checks'].append('Jump/save/load touch sequence completed without process exit')

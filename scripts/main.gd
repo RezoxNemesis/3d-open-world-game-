@@ -5,6 +5,8 @@ const PALE := Color("e4e8df")
 const MUTED := Color("aab9b5")
 
 var storage = preload("res://scripts/save_store.gd").new()
+var settings = preload("res://scripts/game_settings.gd").new()
+var settings_path := "user://settings.json"
 var exploration: Node
 var status: Label
 var objective: Label
@@ -15,6 +17,15 @@ var map_overlay: Control
 var map_panel: PanelContainer
 var map_diagram: Control
 var map_buttons: Dictionary = {}
+var settings_overlay: Control
+var settings_panel: PanelContainer
+var quality_buttons: Dictionary = {}
+var settings_sliders: Dictionary = {}
+var setting_values: Dictionary = {}
+var quality_description: Label
+var settings_notice: Label
+var settings_save_time := 0.0
+var settings_dirty := false
 var notice_time := 0.0
 var hud_time := 0.0
 
@@ -76,7 +87,9 @@ func _enter_tree() -> void:
 		"toggle_view": [],
 		"save_game": [],
 		"load_game": [],
-		"map_game": [KEY_M]
+		"map_game": [KEY_M],
+		"settings_game": [KEY_ESCAPE],
+		"sprint": [KEY_SHIFT]
 	}
 	for action in bindings:
 		if not InputMap.has_action(action):
@@ -107,25 +120,21 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 5)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_panel.add_child(box)
-	var title := make_label("—  TEMPLE REALM", 25, GOLD)
+	var title := make_label("TEMPLE REALM  ·  JOURNEY", 19, GOLD)
 	box.add_child(title)
-	location = make_label("EASTERN TEMPLE DISTRICT", 12, MUTED)
+	location = make_label("TEMPLE COURTYARD", 14, MUTED)
 	box.add_child(location)
-	var separator := HSeparator.new()
-	var line := StyleBoxLine.new()
-	line.color = Color(GOLD, 0.42)
-	line.thickness = 1
-	separator.add_theme_stylebox_override("separator", line)
-	box.add_child(separator)
-	box.add_child(make_label("THE GATE BEYOND THE CLOUDS", 13, GOLD))
-	objective = make_label("", 18, PALE)
+	objective = make_label("", 19, PALE)
 	box.add_child(objective)
-	status = make_label("", 13, MUTED)
+	status = make_label("", 15, MUTED)
 	box.add_child(status)
-	notice = make_label("", 13, GOLD)
+	notice = make_label("", 16, GOLD)
 	box.add_child(notice)
 	notice.hide()
 	build_map(canvas)
+	settings.load_settings(settings_path)
+	_build_settings(canvas)
+	apply_settings()
 	get_viewport().size_changed.connect(resize_hud)
 	resize_hud()
 	update_hud()
@@ -136,14 +145,14 @@ func _ready() -> void:
 
 func panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.045, 0.075, 0.085, 0.86)
-	style.border_color = Color(GOLD, 0.55)
+	style.bg_color = Color(0.035, 0.095, 0.095, 0.83)
+	style.border_color = Color(GOLD, 0.48)
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(9)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 14
-	style.content_margin_bottom = 12
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 12
+	style.content_margin_bottom = 10
 	return style
 
 
@@ -182,7 +191,7 @@ func build_map(canvas: CanvasLayer) -> void:
 	close.pressed.connect(toggle_map)
 	header.add_child(close)
 	box.add_child(
-		make_label("Walk to discover landmarks. Discovered waypoints allow travel.", 14, MUTED)
+		make_label("Discover landmarks on foot, then tap a waypoint to travel.", 17, MUTED)
 	)
 	map_diagram = DistrictDiagram.new()
 	map_diagram.custom_minimum_size = Vector2(560, 240)
@@ -193,14 +202,183 @@ func build_map(canvas: CanvasLayer) -> void:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(148, 48)
 		button.pressed.connect(travel_from_map.bind(str(landmark.id)))
-		button.add_theme_font_size_override("font_size", 13)
+		button.add_theme_font_size_override("font_size", 16)
 		style_button(button)
 		map_diagram.add_child(button)
 		map_buttons[landmark.id] = button
-	box.add_child(
-		make_label("●  Your position     —  Courtyard paths     M / MAP  to close", 13, MUTED)
-	)
+	box.add_child(make_label("●  Your position     —  Courtyard paths", 16, MUTED))
 	map_overlay.hide()
+
+
+func _build_settings(canvas: CanvasLayer) -> void:
+	settings_overlay = Control.new()
+	settings_overlay.name = "JourneySettings"
+	canvas.add_child(settings_overlay)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.01, 0.025, 0.03, 0.80)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_overlay.add_child(backdrop)
+	settings_panel = PanelContainer.new()
+	settings_panel.add_theme_stylebox_override("panel", panel_style())
+	settings_overlay.add_child(settings_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	settings_panel.add_child(box)
+	var header := HBoxContainer.new()
+	box.add_child(header)
+	var title := make_label("TEMPLE REALM · SETTINGS", 23, GOLD)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close := Button.new()
+	close.text = "CLOSE  ×"
+	close.custom_minimum_size = Vector2(116, 48)
+	style_button(close)
+	close.pressed.connect(toggle_settings)
+	header.add_child(close)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 13)
+	scroll.add_child(content)
+	content.add_child(make_label("VISUAL QUALITY", 17, GOLD))
+	var qualities := HBoxContainer.new()
+	qualities.add_theme_constant_override("separation", 10)
+	content.add_child(qualities)
+	for preset in ["performance", "balanced", "high"]:
+		var button := Button.new()
+		button.text = str(preset).capitalize()
+		button.custom_minimum_size = Vector2(140, 48)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 19)
+		style_button(button)
+		button.pressed.connect(_change_quality.bind(preset))
+		qualities.add_child(button)
+		quality_buttons[preset] = button
+	quality_description = make_label("", 16, MUTED)
+	quality_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(quality_description)
+	_build_setting_slider(content, "sensitivity", "Look sensitivity", 0.4, 2.0, 0.05)
+	_build_setting_slider(content, "joystick_scale", "Movement pad size", 0.75, 1.4, 0.05)
+	_build_setting_slider(content, "camera_distance", "Camera distance", 3.5, 8.0, 0.25)
+	var utilities := HBoxContainer.new()
+	utilities.add_theme_constant_override("separation", 12)
+	box.add_child(utilities)
+	for item in [["SAVE", save_game], ["LOAD", load_game], ["RESET", _reset_settings]]:
+		var button := Button.new()
+		button.text = item[0]
+		button.custom_minimum_size = Vector2(160, 48)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 16)
+		style_button(button)
+		button.pressed.connect(item[1])
+		utilities.add_child(button)
+	content.add_child(make_label("Hold RUN to sprint · Swipe the right side to look", 16, MUTED))
+	settings_notice = make_label("", 17, GOLD)
+	box.add_child(settings_notice)
+	settings_overlay.hide()
+
+
+func _build_setting_slider(
+	box: VBoxContainer, key: String, title: String, low: float, high: float, step: float
+) -> void:
+	var heading := HBoxContainer.new()
+	box.add_child(heading)
+	var label := make_label(title, 18, PALE)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(label)
+	var value := make_label("", 18, GOLD)
+	heading.add_child(value)
+	setting_values[key] = value
+	var slider := HSlider.new()
+	slider.min_value = low
+	slider.max_value = high
+	slider.step = step
+	slider.custom_minimum_size = Vector2(0, 48)
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color("2c4544")
+	track.set_corner_radius_all(4)
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
+	slider.add_theme_stylebox_override("slider", track)
+	var fill := track.duplicate() as StyleBoxFlat
+	fill.bg_color = Color(GOLD, 0.72)
+	slider.add_theme_stylebox_override("grabber_area", fill)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.65, 0.78, 0.88, 1.0])
+	gradient.colors = PackedColorArray([PALE, PALE, GOLD, Color(GOLD, 0.0), Color(GOLD, 0.0)])
+	var grabber := GradientTexture2D.new()
+	grabber.gradient = gradient
+	grabber.width = 36
+	grabber.height = 36
+	grabber.fill = GradientTexture2D.FILL_RADIAL
+	grabber.fill_from = Vector2(0.5, 0.5)
+	grabber.fill_to = Vector2(1.0, 0.5)
+	slider.add_theme_icon_override("grabber", grabber)
+	slider.add_theme_icon_override("grabber_highlight", grabber)
+	slider.value_changed.connect(_change_setting.bind(key))
+	box.add_child(slider)
+	settings_sliders[key] = slider
+
+
+func _change_quality(preset: String) -> void:
+	_change_setting(preset, "quality")
+
+
+func _change_setting(value: Variant, key: String) -> void:
+	if settings.set_value(key, value):
+		settings_dirty = true
+		settings_save_time = 0.7
+		apply_settings()
+
+
+func _reset_settings() -> void:
+	settings.reset_defaults()
+	settings_dirty = true
+	apply_settings()
+	_save_settings_if_dirty()
+	show_notice("Settings reset")
+
+
+func apply_settings() -> void:
+	var preset: String = settings.values.quality
+	get_viewport().scaling_3d_scale = {"performance": 0.70, "balanced": 0.85, "high": 1.0}[preset]
+	get_viewport().msaa_3d = {
+		"performance": Viewport.MSAA_DISABLED,
+		"balanced": Viewport.MSAA_2X,
+		"high": Viewport.MSAA_4X
+	}[preset]
+	get_viewport().positional_shadow_atlas_size = 1024 if preset == "high" else 512
+	get_node("World").apply_quality(preset)
+	get_node("MobileControls").configure_controls(
+		settings.values.sensitivity, settings.values.joystick_scale
+	)
+	get_node("Player").set_camera_distance(settings.values.camera_distance)
+	for key in settings_sliders:
+		settings_sliders[key].set_value_no_signal(settings.values[key])
+		setting_values[key].text = (
+			"%.1f m" % settings.values[key]
+			if key == "camera_distance"
+			else "%.2f×" % settings.values[key]
+		)
+	for key in quality_buttons:
+		quality_buttons[key].modulate = PALE if key == preset else Color(0.65, 0.76, 0.73)
+		quality_buttons[key].text = ("●  " if key == preset else "") + str(key).capitalize()
+	quality_description.text = {
+		"performance": "Lighter scenery and fewer shadows favor smoother play.",
+		"balanced": "Balanced scenery and shadows. A good starting point for mobile.",
+		"high": "Full scenery, longer shadows and sharper rendering. Uses more power."
+	}[preset]
+
+
+func _save_settings_if_dirty() -> void:
+	if settings_dirty:
+		settings_dirty = not settings.save_settings(settings_path)
+		if settings_dirty:
+			show_notice("Could not save settings")
 
 
 func style_button(button: Button) -> void:
@@ -226,27 +404,40 @@ func style_button(button: Button) -> void:
 
 func resize_hud() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
-	hud_panel.position = Vector2(22, 22)
-	hud_panel.custom_minimum_size = Vector2(minf(382, viewport_size.x - 310), 0)
+	var safe := Rect2(Vector2.ZERO, viewport_size)
+	if OS.has_feature("mobile"):
+		var physical := Vector2(DisplayServer.window_get_size())
+		if physical.x > 0 and physical.y > 0:
+			var screen_safe := DisplayServer.get_display_safe_area()
+			var scale := viewport_size / physical
+			safe = Rect2(Vector2(screen_safe.position) * scale, Vector2(screen_safe.size) * scale)
+			if safe.size.x <= 0 or safe.size.y <= 0:
+				safe = Rect2(Vector2.ZERO, viewport_size)
+	hud_panel.position = safe.position + Vector2(22, 22)
+	hud_panel.custom_minimum_size = Vector2(minf(356, safe.size.x - 310), 0)
 	hud_panel.size = Vector2.ZERO
 	map_overlay.size = viewport_size
-	var panel_size := Vector2(minf(900, viewport_size.x - 64), minf(540, viewport_size.y - 56))
-	map_panel.position = (viewport_size - panel_size) * 0.5
+	var panel_size := Vector2(minf(900, safe.size.x - 64), minf(540, safe.size.y - 56))
+	map_panel.position = safe.position + (safe.size - panel_size) * 0.5
 	map_panel.size = panel_size
+	settings_overlay.size = viewport_size
+	var setting_size := Vector2(minf(860, safe.size.x - 48), minf(590, safe.size.y - 48))
+	settings_panel.position = safe.position + (safe.size - setting_size) * 0.5
+	settings_panel.size = setting_size
 	update_map.call_deferred()
 
 
 func update_hud() -> void:
 	var player := get_node("Player") as CharacterBody3D
 	objective.text = exploration.current_objective()
-	location.text = "EASTERN TEMPLE DISTRICT  •  COURTYARD"
+	location.text = "TEMPLE COURTYARD"
 	for landmark in exploration.landmarks:
 		var point: Vector3 = landmark.position
 		if (
 			Vector2(player.position.x, player.position.z).distance_to(Vector2(point.x, point.z))
 			< 10
 		):
-			location.text = "EASTERN TEMPLE DISTRICT  •  " + str(landmark.name).to_upper()
+			location.text = str(landmark.name).to_upper()
 			break
 	var next_distance := -1.0
 	for landmark in exploration.landmarks:
@@ -281,13 +472,31 @@ func update_map() -> void:
 
 func toggle_map() -> void:
 	map_overlay.visible = not map_overlay.visible
+	if map_overlay.visible:
+		settings_overlay.hide()
+		_save_settings_if_dirty()
+		update_map()
+	_sync_overlay_state()
+
+
+func toggle_settings() -> void:
+	settings_overlay.visible = not settings_overlay.visible
+	if settings_overlay.visible:
+		map_overlay.hide()
+	else:
+		_save_settings_if_dirty()
+	_sync_overlay_state()
+
+
+func _sync_overlay_state() -> void:
+	var overlay_open := map_overlay.visible or settings_overlay.visible
 	var mobile := get_node("MobileControls")
 	mobile.release_all_actions()
-	mobile.visible = not map_overlay.visible
-	get_node("Player").set_physics_process(not map_overlay.visible)
-	if map_overlay.visible:
+	mobile.visible = not overlay_open
+	hud_panel.visible = not overlay_open
+	get_node("Player").set_physics_process(not overlay_open)
+	if overlay_open:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		update_map()
 
 
 func travel_from_map(id: String) -> void:
@@ -300,22 +509,33 @@ func travel_from_map(id: String) -> void:
 func show_notice(message: String) -> void:
 	notice.text = message
 	notice.show()
+	settings_notice.text = message
 	notice_time = 3.0
 
 
-func save_game() -> void:
+func save_game(path: String = "user://save.json") -> void:
 	show_notice(
-		"Saved locally" if storage.save_position(get_node("Player").position) else "Save failed"
+		(
+			"Journey saved locally"
+			if storage.save_state(get_node("Player").position, exploration.discovered.keys(), path)
+			else "Save failed"
+		)
 	)
 
 
 func load_game(path: String = "user://save.json") -> void:
 	var player := get_node("Player") as CharacterBody3D
-	var restored_point: Vector3 = storage.load_position(path)
+	var state: Dictionary = storage.load_state(path)
+	if not state.valid:
+		show_notice("No valid local journey found")
+		return
+	var restored_point: Vector3 = state.position
 	get_node("World/Regions").update_regions(restored_point)
 	player.position = restored_point
 	player.velocity = Vector3.ZERO
-	show_notice("Local save loaded")
+	exploration.restore_discovered(state.discovered)
+	update_hud()
+	show_notice("Journey loaded")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -324,8 +544,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			save_game()
 		elif event.keycode == KEY_F9:
 			load_game()
-		elif event.keycode == KEY_ESCAPE and map_overlay.visible:
-			toggle_map()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and settings_dirty:
+		_save_settings_if_dirty()
+
+
+func _exit_tree() -> void:
+	if settings_dirty:
+		_save_settings_if_dirty()
 
 
 func _process(delta: float) -> void:
@@ -336,6 +564,15 @@ func _process(delta: float) -> void:
 		load_game()
 	if Input.is_action_just_pressed("map_game") and Input.is_action_pressed("map_game"):
 		toggle_map()
+	if Input.is_action_just_pressed("settings_game") and Input.is_action_pressed("settings_game"):
+		if map_overlay.visible:
+			toggle_map()
+		else:
+			toggle_settings()
+	if settings_dirty:
+		settings_save_time -= delta
+		if settings_save_time <= 0:
+			_save_settings_if_dirty()
 	hud_time -= delta
 	if hud_time <= 0:
 		update_hud()
@@ -344,3 +581,4 @@ func _process(delta: float) -> void:
 		notice_time -= delta
 		if notice_time <= 0:
 			notice.hide()
+			settings_notice.text = ""

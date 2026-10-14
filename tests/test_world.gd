@@ -1,5 +1,7 @@
 extends SceneTree
 
+const NATURE := preload("res://scripts/nature.gd")
+
 var checks := 0
 var failures := 0
 
@@ -96,6 +98,81 @@ func run() -> void:
 		check(
 			seam_count > 16 and seam_matches, "adjacent streamed terrain shares exact seam heights"
 		)
+	var canopy: StaticBody3D = world.get_node("GardenNature").find_child(
+		"CanopyCameraBlocker", true, false
+	)
+	var canopy_ray := PhysicsRayQueryParameters3D.create(
+		canopy.global_position + Vector3.FORWARD * 5, canopy.global_position, 2
+	)
+	var camera_hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(canopy_ray)
+	check(not camera_hit.is_empty(), "camera collision detects the visible flowering canopy")
+	canopy_ray.collision_mask = 1
+	var walking_hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(canopy_ray)
+	check(
+		walking_hit.is_empty() or walking_hit.collider != canopy,
+		"flowering canopy does not become an invisible avatar barrier"
+	)
+	var routes_clear := true
+	for item in world.get_node("GardenNature").get_children():
+		if item is MultiMeshInstance3D and item.get_meta("near_cover", false):
+			var origins: PackedVector3Array = item.get_meta("instance_origins")
+			for point in origins:
+				var central := absf(point.x) < 8 and point.z > -25 and point.z < 23
+				var eastern := absf(point.z + 4) < 5 and point.x > 16 and point.x < 48
+				var western := absf(point.z - 1) < 5 and point.x < -17 and point.x > -47
+				routes_clear = routes_clear and not (central or eastern or western)
+	check(routes_clear, "ground-plant placement preserves all three authored walking routes")
+	var branch_start := Vector3(1.0, 2.0, 3.0)
+	var branch_end := Vector3(3.4, 5.8, 1.3)
+	var branch: Transform3D = NATURE.new().branch_transform(branch_start, branch_end, 0.15)
+	check(
+		(
+			(branch * Vector3(0, -0.5, 0)).distance_to(branch_start) < 0.0001
+			and (branch * Vector3(0, 0.5, 0)).distance_to(branch_end) < 0.0001
+		),
+		"rendered angled branch cylinder endpoints match the authored fork"
+	)
+	var replica := Node3D.new()
+	NATURE.new().populate(replica, world.SEED, world.terrain_height)
+	var original_batches: Array = []
+	var replica_batches: Array = []
+	for item in world.get_node("GardenNature").get_children():
+		if item is MultiMeshInstance3D:
+			original_batches.append(item.get_meta("instance_origins"))
+	for item in replica.get_children():
+		if item is MultiMeshInstance3D:
+			replica_batches.append(item.get_meta("instance_origins"))
+	check(
+		original_batches == replica_batches,
+		"same seed recreates identical bounded garden placement"
+	)
+	replica.free()
+	check(world.has_method("apply_quality"), "quality presets can be switched during gameplay")
+	if world.has_method("apply_quality"):
+		var floor_before: float = player.position.y
+		var sun: DirectionalLight3D = world.get_node("AfternoonSun")
+		var cover: MultiMeshInstance3D = world.get_node("GardenNature").find_child(
+			"MeadowGrass", true, false
+		)
+		world.apply_quality("high")
+		var detailed_count := cover.multimesh.visible_instance_count
+		world.apply_quality("performance")
+		check(
+			not sun.shadow_enabled and cover.multimesh.visible_instance_count < detailed_count,
+			"performance preset reduces actual foliage and shadow work"
+		)
+		for i in range(60):
+			await physics_frame
+		check(
+			player.is_on_floor() and absf(player.position.y - floor_before) < 0.01,
+			"quality changes preserve the loaded walkable floor"
+		)
+		world.apply_quality("high")
+		check(
+			sun.shadow_enabled and cover.multimesh.visible_instance_count == detailed_count,
+			"higher quality restores foliage without regenerating or accumulating instances"
+		)
+		world.apply_quality("balanced")
 	print("WORLD_RESULT: %d checks, %d failures" % [checks, failures])
 	scene.queue_free()
 	await process_frame

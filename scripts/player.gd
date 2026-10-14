@@ -2,18 +2,27 @@ extends CharacterBody3D
 ## Camera-relative movement with real physics and an original walking traveler.
 
 const SPEED := 5.0
+const SPRINT_SPEED := 8.0
+const MIN_PITCH := -0.80
+const MAX_PITCH := 0.08
 const JUMP_SPEED := 6.5
 const STEP_HEIGHT := 0.28
 const BODY_RADIUS := 0.35
 var pivot: Node3D
 var camera: Camera3D
+var spring_arm: SpringArm3D
+var camera_distance := 5.4
+var sprint_enabled := false
 var model: Node3D
 var yaw := 0.0
-var pitch := -0.20
+var pitch := -0.28
 var first_person := false
 var step_time := 0.0
 var arms: Array[Node3D] = []
 var legs: Array[Node3D] = []
+var knees: Array[Node3D] = []
+var elbows: Array[Node3D] = []
+var coat_tails: Array[Node3D] = []
 var gait_weight := 0.0
 
 
@@ -31,18 +40,19 @@ func _ready() -> void:
 	add_child(model)
 	build_traveler()
 	pivot = Node3D.new()
-	pivot.position.y = 1.5
+	pivot.position.y = 1.55
 	add_child(pivot)
-	var arm := SpringArm3D.new()
-	arm.spring_length = 6.0
-	arm.margin = 0.25
-	arm.add_excluded_object(get_rid())
-	pivot.add_child(arm)
+	spring_arm = SpringArm3D.new()
+	spring_arm.spring_length = camera_distance
+	spring_arm.margin = 0.22
+	spring_arm.collision_mask = 3
+	spring_arm.add_excluded_object(get_rid())
+	pivot.add_child(spring_arm)
 	camera = Camera3D.new()
 	camera.current = true
-	camera.fov = 68
+	camera.fov = 66
 	camera.near = 0.1
-	arm.add_child(camera)
+	spring_arm.add_child(camera)
 	update_camera()
 
 
@@ -56,10 +66,14 @@ func build_traveler() -> void:
 	var hair := make_material("25231e")
 	var gold := make_material("b5934a", 0.65)
 	var steel := make_material("76878b", 0.55)
-	add_piece(model, make_cylinder(0.18, 0.22, 0.45), cream, Vector3(0, 1.14, 0))
-	add_piece(model, make_cylinder(0.21, 0.28, 0.29), cream, Vector3(0, 0.8, 0))
-	add_piece(model, make_box(Vector3(0.28, 0.51, 0.055)), teal, Vector3(0, 1.06, -0.19))
-	add_piece(model, make_box(Vector3(0.23, 0.22, 0.045)), teal, Vector3(0, 0.76, -0.245))
+	var torso := add_piece(model, make_capsule(0.225, 0.51), cream, Vector3(0, 1.12, 0))
+	torso.scale.z = 0.75
+	var lower_tunic := add_piece(
+		model, make_cylinder(0.205, 0.245, 0.29), teal, Vector3(0, 0.805, 0)
+	)
+	lower_tunic.scale.z = 0.78
+	add_piece(model, make_box(Vector3(0.11, 0.43, 0.025)), teal, Vector3(-0.07, 1.1, -0.175))
+	add_piece(model, make_box(Vector3(0.09, 0.26, 0.025)), gold, Vector3(-0.07, 0.785, -0.195))
 	add_piece(model, make_cylinder(0.225, 0.23, 0.065), leather, Vector3(0, 0.935, 0))
 	add_piece(model, make_box(Vector3(0.075, 0.075, 0.025)), gold, Vector3(0, 0.935, -0.237))
 	var sash := add_piece(
@@ -78,11 +92,11 @@ func build_traveler() -> void:
 	for side in [-1.0, 1.0]:
 		add_piece(model, eye_mesh, hair, Vector3(side * 0.049, 1.563, -0.131))
 	# Matching limbs share their mesh resources and materials.
-	var sleeve_mesh := make_cylinder(0.095, 0.077, 0.28)
-	var forearm_mesh := make_cylinder(0.06, 0.044, 0.19)
+	var sleeve_mesh := make_capsule(0.082, 0.29)
+	var forearm_mesh := make_capsule(0.049, 0.21)
 	var hand_mesh := make_sphere(0.048, 0.11)
-	var trouser_mesh := make_cylinder(0.098, 0.075, 0.35)
-	var boot_mesh := make_cylinder(0.081, 0.086, 0.26)
+	var trouser_mesh := make_capsule(0.088, 0.36)
+	var boot_mesh := make_capsule(0.077, 0.29)
 	var foot_mesh := make_sphere(0.088, 0.11)
 	for side in [-1.0, 1.0]:
 		var arm := Node3D.new()
@@ -91,24 +105,41 @@ func build_traveler() -> void:
 		model.add_child(arm)
 		arms.append(arm)
 		add_piece(arm, sleeve_mesh, cream, Vector3(0, -0.125, 0))
-		add_piece(arm, forearm_mesh, skin, Vector3(0, -0.355, 0))
-		add_piece(arm, hand_mesh, skin, Vector3(0, -0.49, 0))
-		add_piece(arm, make_cylinder(0.058, 0.058, 0.04), leather, Vector3(0, -0.427, 0))
+		var elbow := Node3D.new()
+		elbow.position.y = -0.27
+		arm.add_child(elbow)
+		elbows.append(elbow)
+		add_piece(elbow, forearm_mesh, skin, Vector3(0, -0.10, 0))
+		add_piece(elbow, hand_mesh, skin, Vector3(0, -0.225, 0))
+		add_piece(elbow, make_cylinder(0.055, 0.055, 0.06), teal, Vector3(0, -0.16, 0))
 		var leg := Node3D.new()
 		leg.name = "LegLeft" if side < 0 else "LegRight"
 		leg.position = Vector3(side * 0.125, 0.7, 0)
 		model.add_child(leg)
 		legs.append(leg)
 		add_piece(leg, trouser_mesh, dark_cloth, Vector3(0, -0.165, 0))
-		add_piece(leg, boot_mesh, leather, Vector3(0, -0.445, 0))
-		var foot := add_piece(leg, foot_mesh, leather, Vector3(0, -0.635, -0.043))
-		foot.scale.z = 1.5
+		var knee := Node3D.new()
+		knee.position.y = -0.32
+		leg.add_child(knee)
+		knees.append(knee)
+		add_piece(knee, boot_mesh, leather, Vector3(0, -0.15, 0))
+		var foot := add_piece(knee, foot_mesh, leather, Vector3(0, -0.315, -0.055))
+		foot.scale.z = 1.55
+		var tail := Node3D.new()
+		tail.position = Vector3(side * 0.16, 0.89, 0.12)
+		model.add_child(tail)
+		coat_tails.append(tail)
+		add_piece(tail, make_box(Vector3(0.13, 0.30, 0.025)), cream, Vector3(0, -0.135, 0))
 	# A compact travel pack and sheathed blade keep the rear silhouette readable.
-	add_piece(model, make_box(Vector3(0.28, 0.33, 0.16)), leather, Vector3(0, 1.17, 0.235))
+	add_piece(model, make_box(Vector3(0.255, 0.30, 0.115)), leather, Vector3(0, 1.17, 0.225))
 	var bedroll := add_piece(
 		model, make_cylinder(0.085, 0.085, 0.36), cream, Vector3(0, 1.35, 0.245)
 	)
 	bedroll.rotation.z = PI / 2
+	for side in [-1.0, 1.0]:
+		add_piece(
+			model, make_box(Vector3(0.025, 0.30, 0.13)), gold, Vector3(side * 0.08, 1.17, 0.23)
+		)
 	var blade := Node3D.new()
 	blade.position = Vector3(0.18, 1.01, 0.23)
 	blade.rotation.z = -0.32
@@ -131,7 +162,16 @@ func make_cylinder(top: float, bottom: float, height: float) -> CylinderMesh:
 	mesh.top_radius = top
 	mesh.bottom_radius = bottom
 	mesh.height = height
-	mesh.radial_segments = 12
+	mesh.radial_segments = 20
+	return mesh
+
+
+func make_capsule(radius: float, height: float) -> CapsuleMesh:
+	var mesh := CapsuleMesh.new()
+	mesh.radius = radius
+	mesh.height = height
+	mesh.radial_segments = 16
+	mesh.rings = 4
 	return mesh
 
 
@@ -160,59 +200,102 @@ func add_piece(parent: Node3D, mesh: Mesh, material: Material, at: Vector3) -> M
 
 
 func update_camera() -> void:
+	# Legacy callers (loading and explicit view changes) need an immediate reset.
+	pitch = clampf(pitch, MIN_PITCH, MAX_PITCH)
 	pivot.rotation = Vector3(pitch, yaw, 0)
-	var arm := pivot.get_child(0) as SpringArm3D
-	arm.spring_length = 0.0 if first_person else 6.0
+	spring_arm.spring_length = 0.0 if first_person else camera_distance
 	model.visible = not first_person
 
 
+func set_camera_distance(distance: float) -> void:
+	camera_distance = clampf(distance, 3.5, 8.0)
+
+
+func set_sprint_enabled(enabled: bool) -> void:
+	sprint_enabled = enabled
+
+
+func rotate_camera(relative: Vector2, look_sensitivity := 1.0) -> void:
+	yaw -= relative.x * 0.0035 * clampf(look_sensitivity, 0.4, 2.0)
+	pitch = clampf(pitch - relative.y * 0.0035 * look_sensitivity, MIN_PITCH, MAX_PITCH)
+
+
+func _process(delta: float) -> void:
+	var weight := 1.0 - exp(-14.0 * delta)
+	pivot.rotation.x = lerpf(pivot.rotation.x, pitch, weight)
+	pivot.rotation.y = lerp_angle(pivot.rotation.y, yaw, weight)
+	spring_arm.spring_length = lerpf(
+		spring_arm.spring_length, 0.0 if first_person else camera_distance, weight
+	)
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if event is InputEventMouseButton and event.pressed and not OS.has_feature("android"):
+		# Android can synthesize a mouse event from touch; that must not capture it.
+		if event.device != -1 and event.button_index == MOUSE_BUTTON_LEFT:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			set_camera_distance(camera_distance - 0.5)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			set_camera_distance(camera_distance + 0.5)
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif event.keycode == KEY_V:
 			first_person = not first_person
 			update_camera()
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		yaw -= event.relative.x * 0.003
-		pitch = clampf(pitch - event.relative.y * 0.003, -1.0, 0.35)
-		update_camera()
+	if (
+		event is InputEventMouseMotion
+		and event.device != -1
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	):
+		rotate_camera(event.relative, 0.86)
 
 
 func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_view"):
 		first_person = not first_person
 		update_camera()
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	# The joystick already applies its own radial dead zone. A second default
+	# InputMap dead zone would discard light thumb movement and snap to running.
+	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward", 0.0)
 	var direction := Vector3(input.x, 0, input.y).rotated(Vector3.UP, yaw)
-	velocity.x = direction.x * SPEED
-	velocity.z = direction.z * SPEED
+	var running := (
+		sprint_enabled or (InputMap.has_action("sprint") and Input.is_action_pressed("sprint"))
+	)
+	var speed := SPRINT_SPEED if running else SPEED
+	var acceleration := 38.0 if direction.length() > 0 else 50.0
+	velocity.x = move_toward(velocity.x, direction.x * speed, acceleration * delta)
+	velocity.z = move_toward(velocity.z, direction.z * speed, acceleration * delta)
 	if not is_on_floor():
 		velocity.y -= 18.0 * delta
 	elif Input.is_action_just_pressed("jump"):
 		velocity.y = JUMP_SPEED
-	var stepped := try_step(direction * SPEED * delta)
+	var stepped := try_step(Vector3(velocity.x, 0, velocity.z) * delta)
 	var snap_distance := floor_snap_length
 	if stepped:
 		# Keep this lift for one frame; snapping to the old floor would undo the step.
 		floor_snap_length = 0.0
 	move_and_slide()
 	floor_snap_length = snap_distance
-	if direction.length() > 0.1:
+	var walking := direction.length() > 0.05 and is_on_floor()
+	if direction.length() > 0.05:
 		model.rotation.y = lerp_angle(
-			model.rotation.y, atan2(-direction.x, -direction.z), delta * 12
+			model.rotation.y, atan2(-direction.x, -direction.z), 1.0 - exp(-12.0 * delta)
 		)
-		step_time += delta * 8.0
-	var walking := direction.length() > 0.1 and is_on_floor()
-	gait_weight = move_toward(gait_weight, 1.0 if walking else 0.0, delta * 8)
-	model.position.y = absf(sin(step_time)) * 0.025 * gait_weight
+		step_time += delta * (10.0 if running else 7.5) * maxf(0.3, direction.length())
+	gait_weight = move_toward(
+		gait_weight, minf(direction.length(), 1.0) if walking else 0.0, delta * 8
+	)
+	model.position.y = absf(sin(step_time)) * (0.032 if running else 0.018) * gait_weight
 	for i in range(legs.size()):
 		var stride := sin(step_time + i * PI) * gait_weight
-		legs[i].rotation.x = stride * 0.38
-		arms[i].rotation.x = -stride * 0.3
-		arms[i].rotation.z = 0.055 if i == 0 else -0.055
+		legs[i].rotation.x = stride * (0.48 if running else 0.34)
+		knees[i].rotation.x = maxf(0.0, -stride) * 0.42
+		arms[i].rotation.x = -stride * (0.40 if running else 0.25)
+		arms[i].rotation.z = 0.045 if i == 0 else -0.045
+		elbows[i].rotation.x = -0.16 - absf(stride) * 0.18
+		coat_tails[i].rotation.x = -0.08 - absf(stride) * 0.14
 	if position.y < -15:
 		position = Vector3(0, 2, 12)
 		velocity = Vector3.ZERO

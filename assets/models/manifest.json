@@ -1,15 +1,42 @@
 {
   "generator": "tools/generate_temple_assets.py",
-  "generator_version": 1,
+  "generator_version": 2,
   "blender_version": "4.3.2",
-  "license": "MIT (original project geometry and generated albedo textures)",
+  "license": "MIT (original project geometry and generated PBR textures)",
   "source": "Original mathematical generation; uploaded references inform composition and palette",
   "coordinate_system": "glTF Y-up, meters, centered base pivots",
   "collision": "Decorative assets; world authors gameplay collision separately",
   "textures": [
     "../materials/temple_stone_original.png",
-    "../materials/temple_timber_original.png"
+    "../materials/temple_stone_original_normal.png",
+    "../materials/temple_stone_original_roughness.png",
+    "../materials/temple_timber_original.png",
+    "../materials/temple_timber_original_normal.png",
+    "../materials/temple_timber_original_roughness.png",
+    "../materials/temple_roof_original.png",
+    "../materials/temple_roof_original_normal.png",
+    "../materials/temple_roof_original_roughness.png"
   ],
+  "surfaces": {
+    "limestone": {
+      "albedo_size": 512,
+      "normal_size": 256,
+      "roughness_metallic_size": 128,
+      "normal_strength": 0.65
+    },
+    "vermilion_lacquer": {
+      "albedo_size": 512,
+      "normal_size": 256,
+      "roughness_metallic_size": 128,
+      "normal_strength": 0.65
+    },
+    "teal_ceramic": {
+      "albedo_size": 512,
+      "normal_size": 256,
+      "roughness_metallic_size": 128,
+      "normal_strength": 0.65
+    }
+  },
   "assets": {
     "pavilion": {
       "file": "pavilion.glb",
@@ -26,7 +53,7 @@
         6.9501,
         4.79
       ],
-      "bytes": 845216
+      "bytes": 1967928
     },
     "gate": {
       "file": "gate.glb",
@@ -43,7 +70,7 @@
         6.7601,
         2.1045
       ],
-      "bytes": 749956
+      "bytes": 1830228
     },
     "lantern": {
       "file": "lantern.glb",
@@ -60,7 +87,7 @@
         1.5,
         0.3831
       ],
-      "bytes": 104104
+      "bytes": 847116
     },
     "bridge": {
       "file": "bridge.glb",
@@ -77,7 +104,7 @@
         1.48,
         6.01
       ],
-      "bytes": 149988
+      "bytes": 671764
     },
     "shrine": {
       "file": "shrine.glb",
@@ -94,7 +121,7 @@
         3.4401,
         1.1895
       ],
-      "bytes": 368300
+      "bytes": 1240640
     },
     "pavilion_far": {
       "file": "pavilion_far.glb",
@@ -111,7 +138,7 @@
         6.9501,
         4.79
       ],
-      "bytes": 225552,
+      "bytes": 1056540,
       "lod_of": "pavilion.glb",
       "simplification_ratio": 0.14,
       "usage": "Distant skyline only; hero assets retain authored detail"

@@ -8,6 +8,7 @@ The visual reference informs the palette and curved roof silhouette only.
 
 import json
 import math
+import struct
 from pathlib import Path
 
 import bpy
@@ -19,29 +20,49 @@ TEXTURES = ROOT / "assets" / "materials"
 PI = math.pi
 
 
-def texture_image(name, kind, size=192):
-    """Small original seamless albedo textures, embedded into each GLB."""
+def surface_sample(kind, u, v):
+    """Periodic original surface fields: albedo, meter-scale relief, roughness.
+
+    Integer-frequency harmonics wrap at the UV boundary. Relief is intentionally
+    subtle: normals supply grain while the existing silhouette carries detail.
+    """
+    fine = (math.sin(2 * PI * (43 * u + 37 * v))
+            + .65 * math.cos(2 * PI * (71 * u - 29 * v))) * .5
+    broad = (math.sin(2 * PI * (3 * u + 2 * v))
+             + .55 * math.cos(2 * PI * (7 * u - 5 * v))) * .5
+    if kind == "stone":
+        mineral = .016 * fine + .026 * broad
+        warp = .11 * math.sin(2 * PI * (3 * u + 2 * v))
+        vein = abs(math.sin(2 * PI * (2 * u + v + warp))) ** 45
+        speckle = max(0.0, fine - .54) ** 2
+        color = (.66 + mineral - vein * .044 - speckle * .12,
+                 .666 + mineral - vein * .04 - speckle * .105,
+                 .627 + mineral - vein * .034 - speckle * .08)
+        height = fine * .0011 + broad * .002 - vein * .0016
+        roughness = .87 + .035 * broad + vein * .035
+    elif kind == "timber":
+        flowing = 2 * PI * (19 * u + .11 * math.sin(2 * PI * v)
+                            + .038 * math.sin(2 * PI * (3 * u + 2 * v)))
+        grain = math.sin(flowing) * .019 + math.cos(2 * flowing) * .009
+        wear = .024 * broad + .005 * fine
+        color = (.475 + grain + wear, .091 + grain * .34 + wear * .32,
+                 .056 + grain * .2 + wear * .19)
+        height = math.sin(flowing) * .00065 + fine * .0001
+        roughness = .4 + grain * .9 + broad * .055
+    else:
+        # Flowing ceramic glaze, without a second grid fighting the roof ribs.
+        glaze = .024 * broad + .006 * fine
+        color = (.216 + glaze * .72, .302 + glaze, .305 + glaze * 1.04)
+        height = broad * .0009 + fine * .00012
+        roughness = .285 + .037 * broad + .009 * fine
+    return tuple(max(.005, min(.99, c)) for c in color), height, roughness
+
+
+def write_texture(name, size, pixels, data=False):
     image = bpy.data.images.new(name, width=size, height=size, alpha=False)
-    pixels = []
-    for y in range(size):
-        for x in range(size):
-            u, v = x / size, y / size
-            if kind == "stone":
-                grain = (
-                    0.033 * math.sin(2 * PI * (13 * u + 7 * v))
-                    + 0.021 * math.cos(2 * PI * (19 * u - 11 * v))
-                    + 0.013 * math.sin(2 * PI * (43 * u + 37 * v))
-                )
-                vein = abs(math.sin(2 * PI * (2 * u + v))) ** 30 * 0.026
-                base = (0.64, 0.625, 0.55)
-                pixels.extend((*[c + grain - vein for c in base], 1.0))
-            else:
-                grain = (
-                    0.026 * math.sin(2 * PI * (23 * u + math.sin(2 * PI * v)))
-                    + 0.012 * math.sin(2 * PI * (47 * u - 2 * v))
-                )
-                pixels.extend((0.34 + grain, 0.07 + grain * 0.4, 0.046 + grain * 0.3, 1.0))
-    image.pixels = pixels
+    if data:
+        image.colorspace_settings.name = "Non-Color"
+    image.pixels.foreach_set(pixels)
     image.filepath_raw = str(TEXTURES / f"{name}.png")
     image.file_format = "PNG"
     image.save()
@@ -49,7 +70,39 @@ def texture_image(name, kind, size=192):
     return image
 
 
-def material(name, color, metallic=0.0, roughness=0.65, image=None, glow=False):
+def surface_textures(name, kind):
+    """512px albedo, 256px tangent normal, 128px packed roughness/metallic.
+
+    Three small reusable surfaces keep the phone texture budget bounded; no
+    photos, external artwork, or additional material draw surfaces are used.
+    """
+    maps = {}
+    for channel, size in (("albedo", 512), ("normal", 256), ("roughness", 128)):
+        pixels = []
+        for y in range(size):
+            for x in range(size):
+                u, v = x / size, y / size
+                color, _, roughness = surface_sample(kind, u, v)
+                if channel == "albedo":
+                    value = color
+                elif channel == "normal":
+                    delta = 1 / size
+                    dx = (surface_sample(kind, u + delta, v)[1]
+                          - surface_sample(kind, u - delta, v)[1]) / (2 * delta)
+                    dy = (surface_sample(kind, u, v + delta)[1]
+                          - surface_sample(kind, u, v - delta)[1]) / (2 * delta)
+                    normal = Vector((-dx, -dy, 1.0)).normalized()
+                    value = tuple(component * .5 + .5 for component in normal)
+                else:
+                    # glTF uses green for roughness and blue for metallic.
+                    value = (1.0, roughness, .08 if kind == "roof" else 0.0)
+                pixels.extend((*value, 1.0))
+        suffix = "" if channel == "albedo" else f"_{channel}"
+        maps[channel] = write_texture(name + suffix, size, pixels, data=channel != "albedo")
+    return maps
+
+
+def material(name, color, metallic=0.0, roughness=0.65, surface=None, glow=False):
     mat = bpy.data.materials.new(name)
     mat.diffuse_color = (*color, 1.0)
     mat.use_nodes = True
@@ -57,10 +110,22 @@ def material(name, color, metallic=0.0, roughness=0.65, image=None, glow=False):
     shader.inputs["Base Color"].default_value = (*color, 1.0)
     shader.inputs["Roughness"].default_value = roughness
     shader.inputs["Metallic"].default_value = metallic
-    if image:
+    if surface:
         node = mat.node_tree.nodes.new("ShaderNodeTexImage")
-        node.image = image
+        node.image = surface["albedo"]
         mat.node_tree.links.new(node.outputs["Color"], shader.inputs["Base Color"])
+        normal_texture = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        normal_texture.image = surface["normal"]
+        normal = mat.node_tree.nodes.new("ShaderNodeNormalMap")
+        normal.inputs["Strength"].default_value = .65
+        mat.node_tree.links.new(normal_texture.outputs["Color"], normal.inputs["Color"])
+        mat.node_tree.links.new(normal.outputs["Normal"], shader.inputs["Normal"])
+        packed = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        packed.image = surface["roughness"]
+        split = mat.node_tree.nodes.new("ShaderNodeSeparateColor")
+        mat.node_tree.links.new(packed.outputs["Color"], split.inputs["Color"])
+        mat.node_tree.links.new(split.outputs["Green"], shader.inputs["Roughness"])
+        mat.node_tree.links.new(split.outputs["Blue"], shader.inputs["Metallic"])
     if glow:
         shader.inputs["Emission Color"].default_value = (*color, 1.0)
         shader.inputs["Emission Strength"].default_value = 0.55
@@ -78,7 +143,7 @@ class Geometry:
         offset = len(data["vertices"])
         data["vertices"].extend(tuple(v) for v in vertices)
         data["faces"].extend(tuple(offset + i for i in face) for face in faces)
-        data["smooth"].extend([smooth] * len(faces))
+        data["smooth"].extend(smooth if isinstance(smooth, list) else [smooth] * len(faces))
 
     def box(self, mat, center, size):
         x, y, z = center
@@ -108,7 +173,9 @@ class Geometry:
         faces = [tuple(reversed(range(segments))), tuple(range(segments, segments * 2))]
         faces.extend((i, (i + 1) % segments, (i + 1) % segments + segments, i + segments)
                      for i in range(segments))
-        self.add(mat, vertices, faces, smooth=True)
+        # Flat end caps keep the shaft/coin edge crisp instead of rounding its
+        # shading into the cap; only the curved wall interpolates its normals.
+        self.add(mat, vertices, faces, smooth=[False, False] + [True] * segments)
 
     def tube(self, mat, points, radius, segments=6):
         points = [Vector(point) for point in points]
@@ -128,7 +195,8 @@ class Geometry:
                               (i + 1) * segments + (j + 1) % segments,
                               (i + 1) * segments + j))
         faces.append(tuple(range((len(points) - 1) * segments, len(points) * segments)))
-        self.add(mat, vertices, faces, smooth=True)
+        self.add(mat, vertices, faces,
+                 smooth=[False] + [True] * (len(faces) - 2) + [False])
 
     def ellipsoid(self, mat, center, radii, segments=10, rings=5):
         vertices = []
@@ -154,6 +222,7 @@ class Geometry:
             mesh.from_pydata(data["vertices"], [], data["faces"])
             mesh.materials.append(mat)
             mesh.update()
+            assert all(math.isfinite(c) for vertex in mesh.vertices for c in vertex.co)
             uv = mesh.uv_layers.new(name="SurfaceMeters")
             for poly, smooth in zip(mesh.polygons, data["smooth"]):
                 poly.use_smooth = smooth
@@ -442,6 +511,18 @@ def export_asset(name, geo, simplify_ratio=None):
             # components. Validate before counting and exporting the final mesh.
             obj.data.validate(clean_customdata=False)
             obj.data.update()
+    # Explicit triangles allow Blender to calculate glTF tangent vectors on
+    # cylinder caps and mixed polygon sizes. This preserves the triangle budget
+    # while exporting a reliable tangent basis for the new normal maps.
+    for obj in objects:
+        modifier = obj.modifiers.new("Export tangent triangulation", "TRIANGULATE")
+        modifier.keep_custom_normals = True
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated = obj.evaluated_get(depsgraph)
+        triangulated = bpy.data.meshes.new_from_object(
+            evaluated, preserve_all_data_layers=True, depsgraph=depsgraph)
+        obj.modifiers.clear()
+        obj.data = triangulated
     triangles = sum(len(face.vertices) - 2 for obj in objects for face in obj.data.polygons)
     for obj in objects:
         obj.select_set(True)
@@ -450,7 +531,25 @@ def export_asset(name, geo, simplify_ratio=None):
                              export_format="GLB", use_selection=True,
                              export_yup=True, export_apply=True,
                              export_materials="EXPORT", export_texcoords=True,
-                             export_normals=True, export_cameras=False, export_lights=False)
+                             export_normals=True, export_tangents=True,
+                             export_cameras=False, export_lights=False)
+    # Verify the serialized result as well as Blender's source mesh. Missing
+    # tangent bases otherwise appear only as an exporter warning and silently
+    # discard the intended relief on some runtime importers.
+    payload = (DESTINATION / f"{name}.glb").read_bytes()
+    json_length, json_kind = struct.unpack_from("<II", payload, 12)
+    assert json_kind == 0x4E4F534A
+    exported = json.loads(payload[20:20 + json_length])
+    normal_materials = {index for index, mat in enumerate(exported["materials"])
+                        if "normalTexture" in mat}
+    serialized_triangles = 0
+    for mesh in exported["meshes"]:
+        for primitive in mesh["primitives"]:
+            serialized_triangles += exported["accessors"][primitive["indices"]]["count"] // 3
+            if primitive["material"] in normal_materials:
+                assert {"NORMAL", "TANGENT", "TEXCOORD_0"} <= set(primitive["attributes"])
+    assert serialized_triangles == triangles
+    assert all("uri" not in image for image in exported["images"])
     # GLTF uses (X, Z, -Y); list extents in the runtime's Y-up coordinates.
     runtime_min = [minimum[0], minimum[2], -maximum[1]]
     runtime_max = [maximum[0], maximum[2], -minimum[1]]
@@ -472,15 +571,16 @@ def main():
     TEXTURES.mkdir(parents=True, exist_ok=True)
     bpy.context.scene.unit_settings.system = "METRIC"
     bpy.context.scene.unit_settings.scale_length = 1.0
-    stone = texture_image("temple_stone_original", "stone")
-    timber = texture_image("temple_timber_original", "timber")
+    stone = surface_textures("temple_stone_original", "stone")
+    timber = surface_textures("temple_timber_original", "timber")
+    roof = surface_textures("temple_roof_original", "roof")
     mats = {
-        "stone": material("Temple_Worn_Pale_Stone", (.6, .59, .51), roughness=.92, image=stone),
-        "timber": material("Temple_Red_Timber", (.33, .065, .04), roughness=.59, image=timber),
-        "gold": material("Temple_Antique_Gold", (.59, .37, .095), metallic=.63, roughness=.38),
-        "slate": material("Temple_Charcoal_Glazed_Tiles", (.038, .077, .105), metallic=.12, roughness=.43),
+        "stone": material("Temple_Worn_Pale_Stone", (.66, .666, .627), surface=stone),
+        "timber": material("Temple_Red_Timber", (.475, .091, .056), surface=timber),
+        "gold": material("Temple_Antique_Gold", (.67, .43, .12), metallic=.72, roughness=.32),
+        "slate": material("Temple_Charcoal_Glazed_Tiles", (.216, .302, .305), surface=roof),
         "shadow": material("Temple_Dark_Ridge_and_Iron", (.018, .031, .035), roughness=.65),
-        "cream": material("Temple_Warm_Paper", (.69, .58, .38), roughness=.9),
+        "cream": material("Temple_Warm_Paper", (.74, .66, .49), roughness=.9),
         "glow": material("Temple_Lantern_Warm_Light", (1.0, .59, .13), roughness=.65, glow=True),
     }
     assets = {name: export_asset(name, generator(mats)) for name, generator in (
@@ -488,12 +588,17 @@ def main():
         ("bridge", bridge), ("shrine", shrine))}
     assets["pavilion_far"] = export_asset("pavilion_far", pavilion(mats), simplify_ratio=.14)
     manifest = {"generator": "tools/generate_temple_assets.py",
-                "generator_version": 1, "blender_version": bpy.app.version_string,
-                "license": "MIT (original project geometry and generated albedo textures)",
+                "generator_version": 2, "blender_version": bpy.app.version_string,
+                "license": "MIT (original project geometry and generated PBR textures)",
                 "source": "Original mathematical generation; uploaded references inform composition and palette",
                 "coordinate_system": "glTF Y-up, meters, centered base pivots",
                 "collision": "Decorative assets; world authors gameplay collision separately",
-                "textures": ["../materials/temple_stone_original.png", "../materials/temple_timber_original.png"],
+                "textures": [f"../materials/{image.name}.png"
+                             for surface in (stone, timber, roof) for image in surface.values()],
+                "surfaces": {name: {"albedo_size": 512, "normal_size": 256,
+                                     "roughness_metallic_size": 128,
+                                     "normal_strength": .65}
+                             for name in ("limestone", "vermilion_lacquer", "teal_ceramic")},
                 "assets": assets}
     (DESTINATION / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
