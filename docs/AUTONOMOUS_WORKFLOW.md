@@ -32,6 +32,8 @@ Give the actual `artifact-url` returned by the successful `actions/upload-artifa
 
 GitHub requires sign-in to download workflow artifacts. Downloads are ZIP files: extract the ZIP in Android Files and open `TempleRealm-Android-debug.apk`. Artifacts expire after 30 days. Debug signing identity is reused through a narrow workflow cache where available; if the signing cache is lost or the owner has a differently signed prototype, Android requires uninstalling that version first, which removes local saves.
 
+Latest verified delivery: [TempleRealm-Android-debug-3-1](https://github.com/RezoxNemesis/3d-open-world-game-/actions/runs/38639292803/artifacts/11928514962),28.9MB, from successful run38639292803 at source5bea4564a326bba97ee2f70ee890378c913aac53. Replace this handoff link with the next successfully uploaded artifact when delivering an updated build.
+
 
 ## Eastern Temple District handoff
 
