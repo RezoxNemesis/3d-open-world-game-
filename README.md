@@ -6,6 +6,6 @@ The playable slice is the Eastern Temple District: original curved-roof red/gold
 
 On phone: left joystick moves; swipe the right side to look; JUMP jumps; VIEW changes camera; SAVE and LOAD manage local position; MAP shows landmarks and discovered-only travel. Landscape orientation. Keyboard controls remain available for cloud tests (WASD/arrows, Space, V, F5/F9, M).
 
-Cloud setup: `tools/setup_environment.sh`. Validate: `tools/validate_environment.sh`. Build APK: `tools/export_android.sh`. The generated APK is `artifacts/TempleRealm-Android-debug.apk`; download it from the cloud task and install on your Android phone. A debug build is for testing, not store distribution.
+Cloud setup: `tools/setup_environment.sh`. Validate: `tools/validate_environment.sh`. Build APK: `tools/export_android.sh`. The local APK is `artifacts/TempleRealm-Android-debug.apk`. Delivery uses the GitHub Actions **Temple Realm Android APK** workflow: sign into GitHub, download its APK artifact ZIP, extract it on Android, and open the APK. The workflow summary contains the actual artifact download link. A debug build is for testing, not store distribution.
 
 See [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [test evidence](docs/TEST_RESULTS.md), [security](docs/SECURITY.md) and [asset licenses](docs/ASSET_LICENSES.md). Six workflows are discoverable in `.agents/skills/`.

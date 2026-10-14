@@ -1,24 +1,59 @@
-name: Temple Realm gameplay checks
+name: Temple Realm Android APK
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: godot-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  headless:
+  android-apk:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
     env:
-      TEMPLE_ENV_ROOT: ${{ runner.temp }}/temple-realm
+      WITH_EXPORT_TEMPLATES: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
+      - name: Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Declare writable build paths
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          root = Path(os.environ['RUNNER_TEMP']) / 'temple-realm'
+          with Path(os.environ['GITHUB_ENV']).open('a') as output:
+              output.write('TEMPLE_ENV_ROOT=' + str(root) + '\n')
+          PY
+      - name: Verified tool download cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ${{ runner.temp }}/temple-realm/cache
+            ${{ runner.temp }}/temple-realm/android/sdk
+          key: temple-tools-${{ runner.os }}-${{ hashFiles('tools/engine-lock.json', 'tools/android-sdk-lock.json', 'tools/requirements.lock') }}
+      - name: Retain debug signing identity between builds
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/temple-realm/android/debug.keystore
+          key: temple-android-debug-signing-v1
+      - name: Required command-line utilities
+        shell: bash
+        run: |
+          if ! command -v rg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes ripgrep
+          fi
       - name: Verified engine and hashed Python tools
         shell: bash
         run: |
@@ -35,4 +70,64 @@ jobs:
           python tools/gdtools.py format --check scripts tests tools/render_capture.gd tools/startup_smoke.gd
           tools/start_environment.sh smoke
           tools/run_tests.sh
+          python tools/test_runtime_cache.py
+          python tools/test_android_java.py
           python tools/security_scan.py
+      - name: Android SDK and Godot export settings
+        shell: bash
+        run: |
+          source tools/common.sh
+          python tools/install_android.py
+      - name: Build and verify Android ARM64 APK
+        shell: bash
+        run: tools/export_android.sh
+      - name: Artifact installation instructions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          text = (
+              'Temple Realm — Android debug build\n\n'
+              '1. Download this GitHub Actions artifact while signed into GitHub.\n'
+              '2. Extract the downloaded ZIP using your Android Files app.\n'
+              '3. Open TempleRealm-Android-debug.apk and allow installation if Android asks.\n\n'
+              'Target: Android ARM64, Android 7/API24 or newer.\n'
+              'This is a debug testing build, not a Play Store release.\n'
+              'If a previous build has a different debug signature, Android requires uninstalling it first; uninstalling removes local saves.\n'
+              'Workflow artifacts expire after 30 days; a new successful build provides a new artifact.\n\n'
+              'Source commit: ' + os.environ['GITHUB_SHA'] + '\n'
+              'The checksum, signature and package reports are included.\n'
+          )
+          Path('artifacts/INSTALL-ON-ANDROID.txt').write_text(text)
+          PY
+      - name: Upload downloadable APK artifact
+        id: apk
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: TempleRealm-Android-debug-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            artifacts/TempleRealm-Android-debug.apk
+            artifacts/INSTALL-ON-ANDROID.txt
+            artifacts/apk-sha256.txt
+            artifacts/apk-signature.log
+            artifacts/apk-badging.log
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Publish artifact download link in workflow summary
+        env:
+          APK_ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          url = os.environ['APK_ARTIFACT_URL']
+          if not url:
+              raise SystemExit('Artifact upload did not return a download URL')
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write('## Temple Realm Android APK\n\n')
+              summary.write('[Download the APK artifact](' + url + ')\n\n')
+              summary.write('Sign into GitHub, download the ZIP, extract it, and open the APK on Android. Artifact retention: 30 days.\n')
+          PY

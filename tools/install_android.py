@@ -6,8 +6,17 @@ from pathlib import Path
 import subprocess
 import zipfile
 
+from android_java import resolve_java21
+
 root = Path(os.environ['TEMPLE_ENV_ROOT'])
 lock = json.loads(Path('tools/android-sdk-lock.json').read_text())
+java = resolve_java21()
+settings = Path(os.environ['XDG_CONFIG_HOME']) / 'godot' / 'editor_settings-4.7.tres'
+if not settings.is_file():
+    raise RuntimeError(
+        'Godot 4.7 editor settings are missing. Run the headless editor import '
+        'with the configured XDG_CONFIG_HOME before installing Android tools.'
+    )
 archive = root / 'cache' / lock['archive']
 if not archive.exists():
     part = archive.with_suffix('.part')
@@ -29,17 +38,15 @@ if not manager.exists():
             if 'bin' in relative.parts:
                 out.chmod(0o755)
 sdk_env = os.environ.copy()
+sdk_env['JAVA_HOME'] = str(java)
 sdk_env['ANDROID_USER_HOME'] = str(root / 'android' / 'user')
 Path(sdk_env['ANDROID_USER_HOME']).mkdir(parents=True, exist_ok=True)
 subprocess.run([str(manager), '--sdk_root=' + str(sdk), '--licenses'], env=sdk_env, input='y\n' * 100, text=True, check=True)
 subprocess.run([str(manager), '--sdk_root=' + str(sdk), 'platform-tools', 'platforms;android-36', 'build-tools;36.0.0'], env=sdk_env, check=True)
-java = Path('/usr/lib/jvm/java-21-openjdk-amd64')
-assert (java / 'bin' / 'java').exists(), 'Java 21 runtime required'
 # Conventional, replaceable debug-only key. Never use it for store distribution.
 key = root / 'android' / 'debug.keystore'
 if not key.exists():
-    subprocess.run([str(java / 'bin' / 'keytool'), '-genkeypair', '-keystore', str(key), '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Temple Realm,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], check=True)
-settings = Path(os.environ['XDG_CONFIG_HOME']) / 'godot' / 'editor_settings-4.7.tres'
+    subprocess.run([str(java / 'bin' / 'keytool'), '-genkeypair', '-keystore', str(key), '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Temple Realm,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], env=sdk_env, check=True)
 text = settings.read_text()
 values = {'export/android/java_sdk_path': str(java), 'export/android/android_sdk_path': str(sdk), 'export/android/debug_keystore': str(key)}
 for name, value in values.items():

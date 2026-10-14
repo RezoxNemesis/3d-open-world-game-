@@ -1,5 +1,11 @@
 # Verification evidence
 
+## GitHub Actions APK delivery follow-up
+
+The owner requires a GitHub Actions-built APK uploaded as a workflow artifact. Earlier raw repository/download-branch delivery is superseded. The workflow now imports/checks the game, installs matching export templates, Java21 and Android36 tooling, builds/verifies ARM64 debug APK, uploads APK/checksum/signature/install instructions, and writes the actual artifact URL in the run summary. Artifact retention is30days and download requires GitHub sign-in; extract the ZIP on Android.
+
+The two earlier hosted runs failed workflow validation before any job: job-level `runner.temp` was not a permitted context. Build-root configuration now uses `RUNNER_TEMP` in a step and `GITHUB_ENV`. Fresh actionlint1.7.7 passes, action pins independently match upstreamv4 tags, and embedded Bash/Python syntax checks pass. Six portable-Java tests, six cache safeguards and all93 gameplay checks pass. Actual local Android setup/export/signature verification passes after portable Java21 selection. Hosted artifact execution is pending and must be confirmed before claiming delivery.
+
 ## Eastern Temple District — 2026-10-14
 
 The first reference-directed exploration/art milestone is verified below. Earlier setup notes are historical baseline evidence.
