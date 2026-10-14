@@ -24,6 +24,14 @@ Use the existing checkout; no extra worktree is needed. Read the latest cycle re
 
 Next production work begins after environment readiness: mobile quality presets and measured content budgets, followed by better hero-region art and streaming improvements. Do not expand setup into unrelated game features.
 
+## Direct GitHub downloads
+
+The owner requires a direct GitHub download link for every APK and other downloadable deliverable. Use a GitHub release-asset URL when supported. If release API access is unavailable, an authorized dedicated download branch and immutable-commit raw URL are a supported alternative. Keep binaries separate from the game's main source tree and preserve remote history. Never bypass network policy or authorization to obtain a link.
+
+Before sharing, fetch the actual URL and verify a successful response and matching SHA-256 against the tested local artifact. Share the direct file URL and approximate size, rather than a workspace path, repository folder or build log.
+
+Current verified APK: `https://raw.githubusercontent.com/RezoxNemesis/3d-open-world-game-/b66509bb5759e310b7c6e21e9786136bb06f09bf/TempleRealm-Android-debug.apk` (approximately29 MiB; SHA-256 `d82e3afd5063efb6e9e176f2143ecc079b76a3862d853eb06da67628a35b8b70`). Game source: `b139c9f89fa4ba00abb41a741bc71b5c9ec73328`; download branch: `downloads/temple-realm-b139c9f`.
+
 
 ## Eastern Temple District handoff
 

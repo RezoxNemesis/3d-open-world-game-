@@ -2,6 +2,7 @@
 
 - Use the existing isolated checkout; do not create a worktree unless requested.
 - Android and touch are primary; the owner only has a Realme P1 Speed phone. Build APKs in cloud.
+- Always provide direct GitHub download URLs for APKs and other downloadable deliverables. Verify the download and its checksum; workspace paths are not the owner's download links. See `docs/AUTONOMOUS_WORKFLOW.md` for delivery.
 - Read `docs/DEVELOPMENT.md` and `docs/TEST_RESULTS.md` before changes.
 - Run `tools/setup_environment.sh`, then `tools/validate_environment.sh` and `tools/security_audit.sh`.
 - Keep changes small, add real behavior tests, and preserve assets and user changes.
