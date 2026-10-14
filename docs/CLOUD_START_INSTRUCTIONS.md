@@ -1,0 +1,11 @@
+# Saved cloud startup instructions
+
+Prepare the Android-first Temple Realm workflow for the mobile-only owner (Realme P1 Speed).
+Use the existing isolated checkout at /workspace/3d-open-world-game-; do not create a Git worktree unless explicitly requested. Read AGENTS.md, docs/DEVELOPMENT.md and docs/TEST_RESULTS.md, and preserve existing user changes.
+In each new shell, cd /workspace/3d-open-world-game- and source tools/common.sh to activate /workspace/.temple-realm/bin/godot and the pinned Python venv plus writable XDG/SDK caches. Preserve inherited proxy and TLS trust; never print credential values or repurpose HOME.
+Retained dependencies and export templates are under /workspace/.temple-realm. Check godot --version is 4.7.2.stable.official.ed1daf0bf. If tooling or templates are missing, run tools/setup_environment.sh; do not substitute the preinstalled 4.6.3 silently.
+Run tools/validate_environment.sh to import, lint, verify startup and execute the real gameplay/touch/streaming tests. Success requires a positive test count, zero failures and no engine errors. Run tools/security_audit.sh for source-pattern and current Python advisory checks.
+Build a phone-downloadable debug APK using tools/export_android.sh; it verifies signing, package identity, arm64 architecture and permissions, writing artifacts/TempleRealm-Android-debug.apk. No release signing identity or store publication is configured. Phone performance requires physical testing.
+For actual visual checks run tools/render_environment.sh. It launches a temporary Xvfb with TCP disabled, renders with Mesa llvmpipe, writes artifacts/temple-courtyard.png and stops its own process. These are software-rendered pixels, not GPU or physical Android evidence. Do not create localhost preview links.
+There is no background service that must stay running. tools/start_environment.sh smoke verifies the bounded headless main scene; editor/game modes need a display. Processes do not survive snapshots, so start only what the task needs.
+Use .agents/skills for the six specialized workflows. Keep Android Compatibility/touch controls primary; report pass/fail/skipped/unverified honestly. Desktop Forward+, full Gradle/JDK workflows, store signing and real-device profiling are unverified. Continue production work from docs/ARCHITECTURE.md after setup readiness is established.
