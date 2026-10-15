@@ -1,0 +1,311 @@
+TEMPLE REALM — PORTABLE CODEX ENVIRONMENT SETUP
+Prepared 15 October 2026 for a mobile-only owner using a Realme P1 Speed.
+
+HOW TO USE THIS FILE
+
+Upload the entire ZIP to the other Codex account, then send:
+
+"Set up the Temple Realm cloud development environment using START_HERE.txt in
+this ZIP. Reproduce the supplied versions and project source, run the readiness
+checks, and save the setup/start instructions in this account. Continue useful
+independent setup without waiting for my phone. Report any host or access limits."
+
+The ZIP includes setup/start instructions, observed tool versions, official
+download locks, the exact 420-file project source snapshot and SHA256 manifests.
+It contains no GitHub credentials, Android keys, console tokens or live processes.
+The instructions below are a setup request template and project context. The
+receiving conversation's user instructions and platform access rules still apply.
+
+WHAT CAN BE REPRODUCED
+
+The tested Godot/Android development workflow, project files, pinned dependencies,
+validation commands and automation can be recreated. This is a source/setup
+bundle, not a machine image or an account-configuration import. Host hardware,
+available RAM/disk, platform permissions, GitHub authorization and snapshot
+publication belong to the receiving account. A file cannot transfer those.
+
+Exact baseline repository:
+  https://github.com/RezoxNemesis/3d-open-world-game-
+  source commit: 705fcc73ae05d650a675550b3a4fc27fc9692df8
+  tested game/build commit: 5f987de07f2e8ad85829e5243562b2a74285b0c3
+  baseline branch: main
+  expected checkout: /workspace/3d-open-world-game-
+  retained tool root: /workspace/.temple-realm
+
+The baseline commit adds only documentation to the tested game commit. All 273
+application input hashes match. The ZIP's repository/ directory contains the
+baseline's public tracked files, not .git, caches, uploaded references or ignored
+test artifacts. source-files.sha256 verifies every included project file.
+
+1. SELECT THE PROJECT AND PRESERVE EXISTING WORK
+
+Use the receiving task's existing isolated checkout if it has this repository.
+Do not create a Git worktree unless the user explicitly requests one. Inspect
+AGENTS.md, docs/DEVELOPMENT.md, docs/TEST_RESULTS.md and git status first.
+
+For a fresh connected environment, select RezoxNemesis/3d-open-world-game- at the
+full baseline commit above. If main has advanced, preserve the newer work; do not
+reset or overwrite it merely to import this bundle. Report source differences.
+
+If there is no checkout yet, clone the repository using the receiving account's
+normal GitHub integration into /workspace/3d-open-world-game-. Alternatively, the
+included repository/ snapshot can be copied into that EMPTY path for local setup
+and validation. The snapshot is a plain source copy, not a Git repository; use a
+proper connected checkout before commits, pushes or GitHub Actions delivery.
+Never overwrite a nonempty project with the snapshot.
+
+Keep this ZIP outside the checkout when extracting. Its repository/ subdirectory
+is an offline fallback/reference, not a second worktree to create inside the
+existing project.
+
+If the receiving platform already mounts this repository at another path, use
+that checkout. Adapt the copied INSTALL_ENVIRONMENT.sh and START_INSTRUCTIONS.md
+cd commands to its actual path before saving/running them; do not change tracked
+project code or create a duplicate checkout just to match a hardcoded directory.
+Use a writable TEMPLE_ENV_ROOT override if required, and record the path change.
+
+2. CHECK THE BASE MACHINE BEFORE INSTALLATION
+
+Required platform: Linux x86_64, Bash, writable workspace/cache directories and
+working HTTPS through the platform's normal proxy and CA trust.
+
+Original observed base: Debian GNU/Linux 13, glibc 2.41, four CPU quota, 32 GiB
+memory limit. No /dev/kvm was available. Retained tools occupied about 17 GiB;
+this includes caches and is not a measured fresh-install minimum. Allow ample
+writable disk for SDKs, export templates, emulator images and test captures.
+
+Required Python: 3.12 with venv support; original exact version was 3.12.14.
+IMPORTANT: Debian 13's ordinary apt python3 is 3.13, which does not satisfy this
+project's Python 3.12 wheel lock. Select a supported Python 3.12 installation on
+PATH before running setup. The original account's private /opt interpreter path
+is not a portable path and must not be assumed to exist here. Recreate the venv;
+do not copy the original account's venv or change its interpreter symlinks.
+
+Required Android Java: major 21, with executable java AND keytool. Observed build
+version was OpenJDK 21.0.12.1. The project resolves JAVA_HOME, JAVA_HOME_21_X64,
+the PATH Java and a Debian Java21 fallback. A different default Java is acceptable
+only if the project's resolver selects a working Java21 installation.
+
+Base commands checked or used by the workflow:
+  git bash gcc make jq ffmpeg blender curl dpkg-deb rg timeout flock tesseract
+  plus ordinary coreutils, Python3.12/venv and Java21/keytool.
+
+Original base versions included Git 2.52.0, GCC 14.2, Make 4.4.1, jq 1.7,
+FFmpeg 7.1.5, Blender 4.3.2 and Tesseract 5.5.0 with English OCR data.
+observed-toolchain.json records the exact observed package revisions.
+
+The setup script checks base tools; it does not install an entire Linux base.
+Supply missing prerequisites through the platform's supported base image or
+verified package manager before proceeding. Do not silently substitute Python
+3.13, an older Godot, unchecked binaries or an incompatible graphics stack.
+
+Xvfb is extracted from a checksum-pinned Debian package. Its native dependencies
+must already resolve. The original machine had Mesa 25.0.7 llvmpipe and X11
+libraries. Xvfb needs glibc >=2.38, matching xserver-common, libaudit1, libgl1,
+libnettle8t64, libpixman-1-0, libselinux1, libsystemd0, libunwind8, libxau6,
+libxdmcp6 and libxfont2. xauth, xkb-data and x11-xkb-utils were also present.
+Inspect ldd output for Godot, extracted Xvfb and the emulator if startup fails.
+
+3. RESTORE THE PINNED TOOLCHAIN
+
+Active engine: Godot 4.7.2.stable.official.ed1daf0bf, with matching 4.7.2 export
+templates. The optional preinstalled Godot 4.6.3 was not the active engine.
+Engine/template downloads have official SHA512 locks in locks/engine-lock.json.
+
+Python dependencies: 42 exact-version/hash-locked wheels in requirements.lock.
+They include gdtoolkit 4.5.0, CMake 4.4.4, Ninja 1.13.2, Pillow 12.3.0 and
+pip-audit 2.10.1. Keep --require-hashes and --only-binary=:all: installation.
+
+Android SDK:
+  command-line tools 19 (active; checksum pinned)
+  platform-tools 37.0.1 (observed)
+  Android platform 36, revision 2 (observed)
+  build-tools 36.0.0
+  Android Emulator 37.2.12 (checksum pinned)
+  system-images;android-29;default;x86_64 revision 8 (checksum pinned)
+  AVD: TempleRealm_API29, pixel_2 profile
+
+Command-line tools 23 were retained on the original disk but were not used:
+their home-directory writes were incompatible with that host. Recreating the
+active tools19 workflow is the requirement, not reinstalling an unused fallback.
+
+sdkmanager installs rolling platform-tools/current available platform revisions;
+the installer does not freeze every base-package or SDK metadata revision.
+Compare observed-toolchain.json after installation and report differences. An
+exact toolchain-version comparison is stronger than simply claiming byte-for-byte
+machine reproduction. Obtain any required older package only from an official,
+verified source; never alter checksums or disable verification to make it match.
+
+4. NETWORK, CREDENTIALS AND LOCAL ANDROID STORAGE
+
+The original cloud policy was enforced restricted HTTP access with the
+package_managers preset, no VPN, no added secret bindings and no added custom
+runtime variables. Essential download hosts were github.com,
+release-assets.githubusercontent.com, raw.githubusercontent.com, pypi.org,
+files.pythonhosted.org, dl.google.com and security.debian.org.
+
+Inspect the receiving environment's own status/network-policy file and required
+credential readiness. Preserve its inherited proxy, TLS CA trust and HOME. Do not
+copy this account's proxy bindings, bypass a denied destination or replace an
+unknown allowlist. Resolve actual access denials through supported configuration.
+GitHub API access was unavailable on the original host; normal GitHub pages,
+raw files and scoped HTTPS Git operations worked. Do not assume the other account
+has the same policy or permissions.
+
+Use the receiving account's GitHub integration normally. git ls-remote is a
+read-only access check, not proof of push permission. An unset GH_TOKEN or a gh
+login prompt does not prove the platform's Git proxy lacks authentication.
+Never ask for credential values in chat or export another account's bindings.
+
+The installers generate fresh local Android debug/ADB/console identities. Existing
+GitHub Actions signing-cache continuity is separate; a new local debug key changes
+APK signatures and hashes. An APK signed by a different key may require resolving
+installation/signing continuity before it can replace a phone's existing build.
+
+Official emulator/adb tools use these home paths:
+  $HOME/.android
+  $HOME/.emulator_console_auth_token
+The project creates missing links to private workspace storage under
+$TEMPLE_ENV_ROOT/android/user. Preserve preexisting paths and user data. If those
+paths conflict or HOME is unwritable, use the platform's supported initialization
+or narrowly scoped filesystem flow. Never replace HOME, copy original console
+tokens/ADB keys, disable emulator authentication or overwrite existing Android data.
+
+5. RUN THE INSTALLATION AND READINESS CHECKS
+
+After the base prerequisites are satisfied and the source is at the selected
+checkout, INSTALL_ENVIRONMENT.sh is the exact previously saved install recipe:
+
+  cd /workspace/3d-open-world-game-
+  tools/setup_environment.sh
+  tools/setup_emulator.sh
+  tools/validate_environment.sh
+  tools/security_audit.sh
+  tools/export_android.sh
+  source tools/common.sh
+  python tools/test_runtime_cache.py
+
+Run it with Bash, retaining actual exit codes. Then verify Java selection and real
+rendering:
+
+  cd /workspace/3d-open-world-game-
+  source tools/common.sh
+  python tools/test_android_java.py
+  tools/render_environment.sh
+
+In EVERY new shell, activate the project this way:
+
+  cd /workspace/3d-open-world-game-
+  source tools/common.sh
+
+common.sh selects the pinned Godot/venv and writable XDG/SDK/cache paths. It does
+not export ANDROID_SDK_ROOT; use the project SDK scripts, or explicitly select
+$TEMPLE_ENV_ROOT/android/sdk for an Android CLI command that requires that path.
+Never repurpose HOME. Preserve existing files and inspect git status before/after.
+
+Readiness requires a successful import/startup, lint/format checks, positive real
+test counts, zero unexpected engine errors, advisory/source scan, a valid signed
+ARM64 APK and actual nonblank renderer evidence. No dummy headless image counts
+as a render. Source-pattern checks and vulnerability scans have limited scope.
+
+Baseline evidence: 872 gameplay assertions across 26 suites, 18 serialized-asset
+tests, six cache tests, six Java tests and six skill metadata checks passed.
+41 real desktop stills and two fixed-time gameplay videos were reviewed. These
+are historical source-baseline results, not a pass for the receiving machine.
+Run the commands there and record its actual results and package differences.
+
+6. AUTONOMOUS VALIDATION AND ANDROID LIMITS
+
+An initial native attempt does not require changing the game. After the install,
+Java and rendering checks above, run this focused source-matched smoke test:
+
+  cd /workspace/3d-open-world-game-
+  source tools/common.sh
+  python tools/build_emulator_apk.py
+  python -u tools/test_android_runtime.py
+
+The runtime checker returns 0 for PASS, 2 for BLOCKED and 1 for FAIL. Preserve and
+report that outcome. It owns/cleans its emulator and isolated adb server. Diagnose
+errors before a bounded retry; a blocked native check is not a full Android pass.
+
+Use tools/autonomous_cycle.sh --runtime auto after a meaningful game change. It
+runs gameplay, security, real rendering, the signed phone APK, emulator setup,
+a separate source-matched x86_64 emulator APK and bounded native runtime checks.
+The phone build stays ARM64; the emulator build changes only the export ABI.
+
+auto can report PARTIAL for a proven host-only runtime block. Application failures
+remain failures. --runtime required keeps native validation strict. --runtime skip
+is an explicit partial host-only check, not full Android validation. Preserve the
+foreground, readable-HUD, camera-input and app-local-save assertions.
+
+On the original host, the final cycle 20261015T040818Z-3c4414 passed all six
+core/build stages. Android boot, APK install and the game-ready marker passed;
+interactive screenshot/touch validation was BLOCKED by a fresh stock
+com.android.systemui ANR owning the foreground. No KVM/CPU virtualization was
+available. This is a host observation, not a new-machine failure to copy.
+
+On the receiving host, run the official acceleration probe. Use KVM if genuinely
+provided; otherwise use the supported software path and record its limits. A
+package install cannot create CPU virtualization that the host does not expose.
+No old host-block cache, screenshot, save, emulator snapshot or running process
+is included. Start a fresh bounded attempt and report its actual outcome.
+
+The original host's software renderer/video playback does not establish Realme
+FPS, thermals, mobile GPU compatibility or physical touch ergonomics. Emulator
+and adb processes are temporary and must be cleaned up. There is no background
+service or AI worker that survives the end of a Codex session.
+
+7. SAVE THE RECEIVING ACCOUNT'S REUSABLE CONFIGURATION
+
+Read START_INSTRUCTIONS.md and environment-config.json. The JSON is portable data
+for Codex, not a documented one-click import format. Save its complete tested
+install_script/start_skill through the receiving environment's supported draft
+workflow when available. If only environment settings are available, the files
+provide the fields to enter there. Preserve unrelated settings and existing
+network/secret requirements. This bundle adds no secret values or secret binding.
+
+Saving a draft, executing a script, publishing a filesystem snapshot and verifying
+a later task are separate steps. Claim only the steps actually completed in the
+receiving account. This ZIP does not save or publish that account's configuration
+by itself. No configuration/account/instance ID from the original account is used.
+
+8. PROJECT STATE AND MOBILE DELIVERY
+
+The original project is Android-first Godot Compatibility/OpenGL. It includes a
+two-room furnished home, scholar/shrine interiors, five discoveries and real
+walkable routes, flight, charged LEAP, SPEED, three destructible crags, version5
+saves and mobile controls. The world has 2,061,008 additional highest-detail
+architectural triangles with distance/quality scaling. It remains stylized.
+
+The owner prefers ordinary engineering choices and cloud tests without repeated
+questions or waiting for phone feedback. Apply the active task's authorization;
+do not treat these preferences as credentials or permission to bypass controls.
+Environment setup does not automatically authorize unrelated game changes.
+
+Future APKs must come from a successful GitHub Actions build and its uploaded
+workflow artifact. Verify the exact source, successful export/upload and actual
+artifact ID/link. Do not substitute a workspace path or raw repository APK.
+
+Last verified APK build: 5f987de07f2e8ad85829e5243562b2a74285b0c3
+  run: 38679064762; job: 116239213014
+  artifact: TempleRealm-Android-debug-8-1; ID: 11946667860; 39.3 MB
+  https://github.com/RezoxNemesis/3d-open-world-game-/actions/runs/38679064762/artifacts/11946667860
+  archive SHA256:
+  c4f5d78b48b6a3898de97c3136c8c36e8fc95f13b9a06f24e54d764f30f85de1
+
+GitHub sign-in is required for workflow artifact downloads. Extract the downloaded
+ZIP in Android Files and open the APK. Artifact retention is 30 days; this link is
+historical and may expire. Its public metadata was verified, not authenticated ZIP
+bytes. The local APK is not included in this environment setup ZIP.
+
+Source design references uploaded in the original conversation and its ignored
+test captures are not included. The original project assets and its six local
+.agents/skills workflows are included under repository/. Cloud plugins, model
+settings and private account configuration are not transferable through this file.
+
+FINISHING REPORT FOR THE RECEIVING CODEX
+
+Report installed versions and deviations, actual readiness tests, signed APK and
+renderer results, native PASS/FAIL/BLOCKED, saved setup/start fields and remaining
+host/account requirements. Do not claim an identical machine, published snapshot,
+new-device performance or indefinitely running automation without actual evidence.
