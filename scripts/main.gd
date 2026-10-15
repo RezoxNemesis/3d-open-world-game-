@@ -7,6 +7,12 @@ const MUTED := Color("aab9b5")
 var storage = preload("res://scripts/save_store.gd").new()
 var settings = preload("res://scripts/game_settings.gd").new()
 var settings_path := "user://settings.json"
+var journey_path := "user://save.json"
+var autosave_enabled := OS.has_feature("android")
+var checkpoint: Node
+var activities: Node
+var powers: Node
+var power_controls: Control
 var exploration: Node
 var quest: Node
 var quest_ui: Control
@@ -27,6 +33,7 @@ var settings_sliders: Dictionary = {}
 var setting_values: Dictionary = {}
 var quality_description: Label
 var settings_notice: Label
+var sprint_assist_toggle: CheckButton
 var settings_save_time := 0.0
 var settings_dirty := false
 var notice_time := 0.0
@@ -79,6 +86,13 @@ class DistrictDiagram:
 			4.0,
 			true
 		)
+		draw_line(
+			project(Vector3(-30, 0, 1)),
+			project(Vector3(-32, 6, -42)),
+			Color(0.78, 0.65, 0.39, 0.30),
+			4.0,
+			true
+		)
 		var player := project(player_position)
 		draw_circle(player, 11, Color(0.83, 0.71, 0.47, 0.25))
 		draw_circle(player, 5, Color("f8df9f"))
@@ -122,7 +136,7 @@ func _ready() -> void:
 	exploration = preload("res://scripts/exploration.gd").new()
 	exploration.name = "Exploration"
 	add_child(exploration)
-	exploration.changed.connect(update_hud)
+	exploration.changed.connect(_progress_changed)
 	var mobile = preload("res://scripts/mobile_controls.gd").new()
 	mobile.name = "MobileControls"
 	add_child(mobile)
@@ -159,15 +173,30 @@ func _ready() -> void:
 	quest.name = "LanternQuest"
 	add_child(quest)
 	quest.setup(get_node("Player"), get_node("World"))
-	quest.changed.connect(update_hud)
+	quest.changed.connect(_progress_changed)
+	activities = preload("res://scripts/world_activities.gd").new()
+	add_child(activities)
+	activities.setup(get_node("Player"), get_node("World"), quest)
+	activities.changed.connect(_progress_changed)
+	powers = preload("res://scripts/hero_powers.gd").new()
+	add_child(powers)
+	powers.setup(get_node("Player"), get_node("World"))
+	powers.changed.connect(_progress_changed)
+	power_controls = preload("res://scripts/hero_power_controls.gd").new()
+	canvas.add_child(power_controls)
+	power_controls.setup(self, powers)
 	quest_ui = preload("res://scripts/quest_interface.gd").new()
 	canvas.add_child(quest_ui)
-	quest_ui.setup(self, quest, exploration, get_node("Player"))
+	quest_ui.setup(self, quest, exploration, get_node("Player"), activities)
 	quest_ui.overlay_changed.connect(_quest_overlay_changed)
 	apply_settings()
 	get_viewport().size_changed.connect(resize_hud)
 	resize_hud()
 	update_hud()
+	checkpoint = preload("res://scripts/journey_checkpoint.gd").new()
+	add_child(checkpoint)
+	checkpoint.setup(self, journey_path, autosave_enabled)
+	checkpoint.start()
 	print(
 		"TEMPLE_REALM_READY: connected temple district, exploration quest and mobile HUD initialized"
 	)
@@ -293,10 +322,28 @@ func _build_settings(canvas: CanvasLayer) -> void:
 	_build_setting_slider(content, "sensitivity", "Look sensitivity", 0.4, 2.0, 0.05)
 	_build_setting_slider(content, "joystick_scale", "Movement pad size", 0.75, 1.4, 0.05)
 	_build_setting_slider(content, "camera_distance", "Camera distance", 3.5, 8.0, 0.25)
+	sprint_assist_toggle = CheckButton.new()
+	sprint_assist_toggle.text = "Sprint at the edge of the movement pad"
+	sprint_assist_toggle.custom_minimum_size.y = 48
+	sprint_assist_toggle.add_theme_font_size_override("font_size", 17)
+	sprint_assist_toggle.toggled.connect(_change_setting.bind("sprint_assist"))
+	content.add_child(sprint_assist_toggle)
+	var restore_crags := Button.new()
+	restore_crags.name = "RestoreMountainCrags"
+	restore_crags.text = "RESTORE MOUNTAIN CRAGS"
+	restore_crags.custom_minimum_size.y = 48
+	style_button(restore_crags)
+	restore_crags.pressed.connect(_restore_crags)
+	content.add_child(restore_crags)
 	var utilities := HBoxContainer.new()
 	utilities.add_theme_constant_override("separation", 12)
 	box.add_child(utilities)
-	for item in [["SAVE", save_game], ["LOAD", load_game], ["RESET", _reset_settings]]:
+	for item in [
+		["SAVE", save_game],
+		["LOAD", load_game],
+		["JOURNAL", _open_journal],
+		["RESET", _reset_settings]
+	]:
 		var button := Button.new()
 		button.text = item[0]
 		button.custom_minimum_size = Vector2(160, 48)
@@ -384,8 +431,9 @@ func apply_settings() -> void:
 	get_viewport().positional_shadow_atlas_size = 1024 if preset == "high" else 512
 	get_node("World").apply_quality(preset)
 	get_node("MobileControls").configure_controls(
-		settings.values.sensitivity, settings.values.joystick_scale
+		settings.values.sensitivity, settings.values.joystick_scale, settings.values.sprint_assist
 	)
+	sprint_assist_toggle.set_pressed_no_signal(settings.values.sprint_assist)
 	get_node("Player").set_camera_distance(settings.values.camera_distance)
 	for key in settings_sliders:
 		settings_sliders[key].set_value_no_signal(settings.values[key])
@@ -456,6 +504,8 @@ func resize_hud() -> void:
 	settings_panel.size = setting_size
 	if is_instance_valid(quest_ui):
 		quest_ui.resize(safe, viewport_size)
+	if is_instance_valid(power_controls):
+		power_controls.resize(safe, viewport_size)
 	update_map.call_deferred()
 
 
@@ -463,7 +513,7 @@ func update_hud() -> void:
 	var player := get_node("Player") as CharacterBody3D
 	objective.text = exploration.current_objective()
 	if is_instance_valid(quest):
-		story_objective.text = quest.summary()
+		story_objective.text = quest.summary() if quest.stage < 3 else activities.summary()
 	if is_instance_valid(quest_ui):
 		quest_ui.refresh()
 	location.text = "TEMPLE COURTYARD"
@@ -545,6 +595,8 @@ func _sync_overlay_state() -> void:
 	var mobile := get_node("MobileControls")
 	mobile.release_all_actions()
 	mobile.visible = not overlay_open
+	power_controls.release_all_actions()
+	power_controls.visible = not overlay_open
 	hud_panel.visible = not overlay_open
 	get_node("Player").set_physics_process(not overlay_open)
 	if overlay_open:
@@ -565,32 +617,67 @@ func show_notice(message: String) -> void:
 	notice_time = 3.0
 
 
+func write_journey(position: Vector3, path: String) -> bool:
+	return storage.save_state(
+		position,
+		exploration.discovered.keys(),
+		path,
+		quest.stage,
+		activities.snapshot(),
+		powers.snapshot()
+	)
+
+
 func save_game(path: String = "user://save.json") -> void:
 	show_notice(
 		(
 			"Journey saved locally"
-			if storage.save_state(
-				get_node("Player").position, exploration.discovered.keys(), path, quest.stage
-			)
+			if write_journey(get_node("Player").position, path)
 			else "Save failed"
 		)
 	)
 
 
-func load_game(path: String = "user://save.json") -> void:
+func load_game(path: String = "user://save.json", quiet: bool = false) -> bool:
 	var player := get_node("Player") as CharacterBody3D
 	var state: Dictionary = storage.load_state(path)
 	if not state.valid:
-		show_notice("No valid local journey found")
-		return
+		if not quiet:
+			show_notice("No valid local journey found")
+		return false
+	if is_instance_valid(checkpoint):
+		checkpoint.begin_restore()
 	var restored_point: Vector3 = state.position
 	get_node("World/Regions").update_regions(restored_point)
 	player.position = restored_point
 	player.velocity = Vector3.ZERO
 	exploration.restore_discovered(state.discovered)
 	quest.restore_stage(state.quest_stage)
+	activities.restore_state(state.activity_state)
+	powers.restore_state(state.hero_state)
+	if is_instance_valid(checkpoint):
+		checkpoint.finish_restore(true)
 	update_hud()
-	show_notice("Journey loaded")
+	if not quiet:
+		show_notice("Journey loaded")
+	return true
+
+
+func _progress_changed() -> void:
+	update_hud()
+	if is_instance_valid(checkpoint):
+		checkpoint.request_save()
+
+
+func _open_journal() -> void:
+	quest_ui.open_journal()
+
+
+func _restore_crags() -> void:
+	var state: Dictionary = powers.snapshot()
+	state.destroyed = []
+	powers.restore_state(state)
+	show_notice("Mountain crags restored")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -602,8 +689,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and settings_dirty:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		_save_settings_if_dirty()
+		if is_instance_valid(checkpoint):
+			checkpoint.request_save()
+			checkpoint.flush()
 
 
 func _exit_tree() -> void:

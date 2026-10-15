@@ -32,6 +32,7 @@ func run() -> void:
 	player.set_physics_process(false)
 	await process_frame
 	var model: Node3D = player.model
+	check_layered_attire(model)
 	var meshes := model.find_children("*", "MeshInstance3D", true, false)
 	var triangle_count := 0
 	var all_finite := true
@@ -117,6 +118,29 @@ func run() -> void:
 	copy.free()
 	await SCENE_FIXTURE.dispose_scene(self, player)
 	quit(1 if failures else 0)
+
+
+func check_layered_attire(model: Node3D) -> void:
+	var mantle := model.get_node_or_null("TailoredAttire/ShoulderMantle") as Node3D
+	check(mantle != null, "traveler wears a separate layered shoulder mantle")
+	if mantle == null:
+		return
+	var panels := mantle.find_children("*", "MeshInstance3D", true, false)
+	var bounds := AABB()
+	var first := true
+	for panel: MeshInstance3D in panels:
+		var box := panel.transform * panel.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	check(panels.size() == 2, "mantle cloth and embroidered border share two material batches")
+	check(
+		bounds.size.x > 0.45 and bounds.size.y > 0.2,
+		"mantle geometry spans the shoulders and upper back"
+	)
+	check(
+		mantle.position.y > 1.2 and mantle.position.y < 1.4,
+		"mantle stays attached above the traversal waist"
+	)
 
 
 func test_articulation(player: CharacterBody3D) -> void:

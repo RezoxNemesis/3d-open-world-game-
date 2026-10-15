@@ -9,7 +9,8 @@ var landmarks: Array[Dictionary] = [
 	{"id": "sanctuary", "name": "Cloud Sanctuary", "position": Vector3(0, 1.8, -16)},
 	{"id": "lotus", "name": "Lotus Overlook", "position": Vector3(-30, 0, 1)},
 	{"id": "gate", "name": "Eastern Gate", "position": Vector3(30, 0, -4)},
-	{"id": "sky_temple", "name": "Sky Temple", "position": Vector3(46, 10, -42)}
+	{"id": "sky_temple", "name": "Sky Temple", "position": Vector3(46, 10, -42)},
+	{"id": "fox_shrine", "name": "Sacred Fox Shrine", "position": Vector3(-32, 6, -42)}
 ]
 var discovered: Dictionary = {}
 

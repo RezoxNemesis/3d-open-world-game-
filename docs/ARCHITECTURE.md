@@ -1,6 +1,24 @@
 # Architecture and production backlog
 
-## Celestial District mobile upgrade — version 0.3
+## Current homes and hero powers — version 0.5
+
+The main scene still uses one physics traveler and nine bounded terrain regions. `verdant_route.gd` adds a second real elevated route: thirty 0.20m risers, a covered bridge and a supported six-meter Fox Shrine terrace. `verdant_district.gd` furnishes the scholar hall and gardens. `residence_route.gd` loads an original two-room home at `(20,0.6,31)`, applies authored collision profiles to its floor, walls, posts, ceiling, furniture and roof, and connects its front entrance to the courtyard by a supported side path and three steps. A separate far shell avoids rendering interior furniture at long range. The collision JSON is explicitly included and byte-verified in the APK.
+
+`architectural_detail.gd` discovers actual placed module transforms and attaches curved ceramic tiles, rafters, corbels and fixings through four-meter spatial MultiMeshes. Actual-world index-buffer accounting measures **2,061,008 additional highest-detail triangles**, including the home's near roof; the far house is excluded. This is a whole-world content count. High uses the richer tile shell within30m; Balanced uses a coarser curved shell within14m; Performance hides this layer while retaining base buildings. Counts never add both tile alternatives. Independent geometry and final rendered-pass measurements are recorded separately.
+
+`verdant_flora.gd` adds gnarled trees, wisteria, roots, flowers, moss and ground detail. Crown-aware exclusions protect the western route, shrine and home path. The revised ground garden has160,922 full-density triangles across145 spatial batches before quality culling; ledge vegetation is separate. `celestial_dragon.gd` follows a closed, bounded sky path using an original twenty-joint skinned animation and near/far geometry. This is ambient scenery; dragon riding is not implemented.
+
+`world_activities.gd` manages three proximity-checked original records and a shrine bell that requires the completed lantern errand plus all three records. The earned jade seal is actual traveler geometry. `quest_interface.gd` displays nearby records, an earned-only scrolling journal and a completion-gated bell dialogue while preserving keeper/minimap behavior. The fifth discovery is the Fox Shrine.
+
+`hero_powers.gd` composes velocity through `player.gd`'s existing single `move_and_slide()` call. Flight provides36m/s camera-directed travel,90m/s RUN boost,20m/s vertical controls, hover and a160m altitude cap. Held LEAP charges for up to1.1s and releases18–52m/s vertical velocity. SPEED provides72m/s ground movement and120m/s RUN boost, with a swept capsule and a smoothly restored camera FOV. Streaming prediction and periodic polling share the same desired origin to avoid rebuilding opposite chunk sets near boundaries.
+
+`destructible_mountains.gd` creates three explicitly breakable18–22m karst formations, identified by stable IDs. SMASH removes their actual visible nodes and collision, with a three-second cooldown, bounded24-piece debris pool and short-lived shockwave. Loading an earlier save can restore the original formations. Arbitrary terrain mining and general combat remain unimplemented.
+
+`hero_power_controls.gd` uses independent native touch buttons with published real hit rectangles and charge feedback. Power fingers cannot become camera fingers. Deliberate LEAP release launches; focus loss, canceled touch, resize and modal transitions clear charge and native latches. The secondary DOWN target avoids the top-row MAP control even with a left safe-area inset. `mobile_controls.gd` retains its existing movement/look/manualRUN behavior and adds optional strictly validated edge-of-pad sprint assistance.
+
+`save_store.gd` writes schema5: position, five discovery IDs, quest stage, activity state and `{flying,fast,destroyed}` hero state. Versions1–4 migrate without granting unearned progress. Type, duplicate-ID, coordinate and size guards precede atomic writes. `journey_checkpoint.gd` debounces Android milestones and retries failed writes at bounded intervals; desktop autosave defaults off. It keeps confirmed ground positions separately from flight samples so turning flight off cannot save an unsupported airborne checkpoint. Restore guards prevent loading from immediately overwriting the save.
+
+## Historical Celestial District implementation — version 0.3
 
 `scenes/main.tscn` composes the world, physics traveler and input/HUD coordinators. `scripts/world.gd` builds the sanctuary, side pavilions, eastern gate, lotus waterfront, routes, irregular mountain silhouettes and waterfalls. The original curved-roof Blender/glTF kit remains in use, supplemented by seven original celestial modules in `assets/models/celestial/`. The central sanctuary now has three architectural levels; its upper galleries are scenic. `scripts/architectural_palette.gd` shares named PBR materials across the new texture-free GLBs. The sanctuary plinth and separately aligned pillar collision preserve the traversable original ground floor and eight 0.22 m entrance risers. `scripts/celestial_district.gd` batches market canopies, guardians, planted containers, balustrades and ceremonial props around clear walking space.
 
@@ -31,7 +49,7 @@ Ground garden structure contains 169,868 triangles across 103 spatial batches at
 1. Obtain physical-phone timing, thermal, memory and touch evidence when available; continue independent cloud testing and tune implemented quality presets against measured content and real captures.
 2. Refine hero terrain, foliage lighting, water/shore transitions, authored interiors and character motion toward the concept's natural feel within explicit budgets.
 3. Add cancellable asynchronous region generation, region-owned vegetation/LOD, safe wider routes and more reachable mountain destinations.
-4. Extend the completed lantern errand and version 3 save to additional NPC behaviors, consequential quest choices and mutable world state.
+4. Extend the completed lantern/record/shrine activities and schema5 saves to additional NPC behavior, consequential choices and further mutable world state.
 5. Implement one enemy and a complete combat loop before elemental progression, equipment systems, dragon traversal, crafting, farming/fishing and aquatic activities from the broader reference roadmap.
 
 Weather, caves, trading, combat, dragon riding, crafting and life activities remain future work. The ten images guide visual direction and the broader roadmap; they are concept references rather than evidence that those systems are implemented.

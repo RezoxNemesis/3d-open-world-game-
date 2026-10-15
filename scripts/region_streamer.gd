@@ -10,9 +10,25 @@ var active: Dictionary = {}
 var target: Node3D
 var refresh_time := 0.0
 var last_center := Vector2i(999999, 999999)
+var _prediction_offset := Vector3.ZERO
 
 
 func update_regions(origin: Vector3) -> void:
+	# Manual load/travel is authoritative and invalidates the old motion preview.
+	_prediction_offset = Vector3.ZERO
+	_update_regions(origin)
+
+
+func prepare_motion(origin: Vector3, velocity: Vector3, seconds: float) -> void:
+	_prediction_offset = velocity * seconds
+	_update_regions(origin + _prediction_offset)
+
+
+func clear_motion_prediction() -> void:
+	_prediction_offset = Vector3.ZERO
+
+
+func _update_regions(origin: Vector3) -> void:
 	var center := Vector2i(
 		floori((origin.x + 64) / CHUNK_SIZE), floori((origin.z + 64) / CHUNK_SIZE)
 	)
@@ -43,4 +59,4 @@ func _process(delta: float) -> void:
 	refresh_time += delta
 	if refresh_time >= 0.5 and is_instance_valid(target):
 		refresh_time = 0
-		update_regions(target.global_position)
+		_update_regions(target.global_position + _prediction_offset)

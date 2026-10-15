@@ -69,9 +69,9 @@ jobs:
           trap 'code=$?; printf "::error title=Validation phase failed::%s (exit %s)\n" "$check_phase" "$code"; exit "$code"' ERR
           checked_godot import --headless --editor --import
           check_phase='GDScript lint'
-          python tools/gdtools.py lint scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/celestial_capture.gd tools/startup_smoke.gd
+          python tools/gdtools.py lint scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/celestial_capture.gd tools/verdant_capture.gd tools/verdant_motion_capture.gd tools/audit_architectural_geometry.gd tools/startup_smoke.gd
           check_phase='GDScript formatting'
-          python tools/gdtools.py format --check scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/celestial_capture.gd tools/startup_smoke.gd
+          python tools/gdtools.py format --check scripts tests tools/render_capture.gd tools/mobile_render_capture.gd tools/celestial_capture.gd tools/verdant_capture.gd tools/verdant_motion_capture.gd tools/audit_architectural_geometry.gd tools/startup_smoke.gd
           check_phase='Startup smoke'
           tools/start_environment.sh smoke
           check_phase='Gameplay behavior tests'

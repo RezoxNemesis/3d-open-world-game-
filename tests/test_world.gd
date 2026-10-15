@@ -54,13 +54,17 @@ func run() -> void:
 	Input.action_release("move_right")
 	check(player.position.x > 26, "eastern route exits courtyard through an open gate")
 	for destination in [Vector3(0, 1.8, -16), Vector3(-30, 0, 1), Vector3(30, 0, -4)]:
-		player.position = destination + Vector3(0, 3, 0)
+		# Start inside each clear interior now that its roof has real collision.
+		player.position = destination + Vector3(0, 0.4, 0)
 		player.velocity = Vector3.ZERO
 		for i in range(120):
 			await physics_frame
 		check(
 			player.is_on_floor() and absf(player.position.y - destination.y) < 0.35,
-			"landmark landing has a walkable floor: %s" % destination
+			(
+				"landmark landing has a walkable floor: %s (actual %s, grounded %s)"
+				% [destination, player.position, player.is_on_floor()]
+			)
 		)
 	var world = scene.get_node("World")
 	var sanctuary: Node3D
@@ -101,7 +105,124 @@ func run() -> void:
 			"upper pagoda visible plinth matches the actual ten-meter landing"
 		)
 	check(world.has_node("SkyRoute/WalkableSkyStairs"), "sky stairs use explicit capsule collision")
+	var details: Node3D = world.get_node_or_null("ArchitecturalDetail")
+	check(
+		details != null and details.full_detail_triangles() >= 1000000,
+		"actual placed architecture contains at least one million real near-detail triangles"
+	)
+	if details != null:
+		print("WORLD_ARCHITECTURAL_TRIANGLES: %d" % details.full_detail_triangles())
+		world.apply_quality("performance")
+		var culled := true
+		for batch in details.find_children("*", "MultiMeshInstance3D", true, false):
+			culled = culled and not batch.visible
+		check(culled, "world performance quality culls the actual architectural detail layer")
+		world.apply_quality("high")
+		var restored := true
+		for batch in details.find_children("*", "MultiMeshInstance3D", true, false):
+			restored = (
+				restored and batch.visible and is_equal_approx(batch.visibility_range_end, 30)
+			)
+		check(restored, "world high quality restores bounded near architectural detail")
+		world.apply_quality("balanced")
+	var living_dragon: Node3D = world.get_node_or_null("CelestialDragon")
+	check(
+		living_dragon != null and living_dragon.get_child_count() == 1,
+		"accepted living dragon is built in the actual game world"
+	)
+	if living_dragon != null:
+		world.apply_quality("performance")
+		check(
+			not living_dragon._flight_root.visible,
+			"world quality forwarding culls the living dragon in performance"
+		)
+		world.apply_quality("balanced")
+		check(
+			living_dragon._lods[1].visible and not living_dragon._lods[0].visible,
+			"world quality restores the lower cost animated dragon LOD"
+		)
+	var cascade: MeshInstance3D = world.get_node("DragonMouthCascade")
+	var water_arrays: Array = cascade.mesh.surface_get_arrays(0)
+	var water_vertices: PackedVector3Array = water_arrays[Mesh.ARRAY_VERTEX]
+	var faces_pond := true
+	for normal in water_arrays[Mesh.ARRAY_NORMAL]:
+		faces_pond = faces_pond and normal.dot(Vector3.BACK) > 0.9
+	check(
+		faces_pond,
+		"cascade normals face the pond rather than shading the visible sheet from behind"
+	)
+	var tangents = water_arrays[Mesh.ARRAY_TANGENT]
+	check(
+		tangents is PackedFloat32Array and tangents.size() == water_vertices.size() * 4,
+		"flowing normal-map water has actual mesh tangent data"
+	)
+	var mouth_min := Vector3(INF, INF, INF)
+	var mouth_max := Vector3(-INF, -INF, -INF)
+	var top_points := 0
+	for point in water_vertices:
+		if point.y > 17.99:
+			var top_point: Vector3 = cascade.global_transform * point
+			mouth_min = mouth_min.min(top_point)
+			mouth_max = mouth_max.max(top_point)
+			top_points += 1
+	var mouth_center := (mouth_min + mouth_max) * 0.5
+	var spout: Node3D = world.get_node("CarvedDragonSpout")
+	check(
+		(
+			top_points > 0
+			and mouth_center.distance_to(spout.global_transform * Vector3(0, 1.01, 0.93)) < 0.02
+		),
+		"carved dragon mouth outlet remains anchored to the falling water"
+	)
 	check(world.has_method("terrain_height"), "world exposes continuous terrain height")
+	check(
+		world.cliff_surface.vertex_color_use_as_albedo,
+		"natural cliff material uses its authored vertex-color variation"
+	)
+	check(
+		absf(world.terrain_height(54, 32) - world.terrain_height(60, 32)) > 0.04,
+		"wild ground has real relief inside the former flat seventy-five-meter square"
+	)
+	var continuous := true
+	for edge in [
+		Vector2(-43, -42),
+		Vector2(-21, -42),
+		Vector2(-32, -52),
+		Vector2(-32, -33),
+		Vector2(24, 0),
+		Vector2(59, -4)
+	]:
+		continuous = (
+			continuous
+			and (
+				absf(
+					(
+						world.terrain_height(edge.x - 0.001, edge.y)
+						- world.terrain_height(edge.x + 0.001, edge.y)
+					)
+				)
+				< 0.01
+			)
+		)
+		continuous = (
+			continuous
+			and (
+				absf(
+					(
+						world.terrain_height(edge.x, edge.y - 0.001)
+						- world.terrain_height(edge.x, edge.y + 0.001)
+					)
+				)
+				< 0.01
+			)
+		)
+	check(continuous, "new hill and clearing boundaries have continuous physical terrain heights")
+	var authored_floors := true
+	for point in [
+		Vector2(0, 12), Vector2(0, -18), Vector2(-30, 1), Vector2(30, -4), Vector2(50, -4)
+	]:
+		authored_floors = authored_floors and world.terrain_height(point.x, point.y) < -0.10
+	check(authored_floors, "terrain relief stays below every retained authored route floor")
 	if world.has_method("terrain_height"):
 		var regions = world.get_node("Regions")
 		var left = regions.active[Vector2i.ZERO].get_child(0).mesh

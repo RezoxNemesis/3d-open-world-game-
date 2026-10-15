@@ -58,7 +58,7 @@ func run() -> void:
 	exploration.changed.connect(func(): signal_count += 1)
 	var player = scene.get_node("Player")
 	player.set_physics_process(false)
-	check(exploration.landmarks.size() == 4, "four playable landmarks define the district")
+	check(exploration.landmarks.size() == 5, "five playable landmarks define the district")
 	check(exploration.current_objective().contains("Sanctuary"), "quest begins at sanctuary")
 	var initial: Vector3 = player.position
 	scene.update_hud()
@@ -104,12 +104,15 @@ func run() -> void:
 		exploration.discovered.size() == 4,
 		"reaching upper temple at height boundary earns discovery"
 	)
+	check(exploration.current_objective().contains("Fox"), "journey continues to western shrine")
+	exploration.visit(Vector3(-32, 6, -42))
+	check(exploration.discovered.size() == 5, "western shrine completes all five landmarks")
 	check(
 		exploration.current_objective().contains("complete"), "completed quest reports completion"
 	)
 	scene.set_process(true)
 	await process_frame
-	check(scene.status.text.contains("4 / 4"), "HUD displays live four-landmark progress")
+	check(scene.status.text.contains("5 / 5"), "HUD displays live five-landmark progress")
 	check(scene.map_buttons.has("sky_temple"), "district map includes the upper temple")
 	player.velocity = Vector3(4, -3, 1)
 	check(exploration.travel("sky_temple", player), "earned upper temple allows map travel")

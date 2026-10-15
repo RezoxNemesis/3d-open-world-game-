@@ -1,0 +1,293 @@
+{
+  "generator": "tools/generate_verdant_assets.py",
+  "generator_version": 1,
+  "blender_version": "4.3.2",
+  "license": "MIT (original project geometry)",
+  "source": "Original mathematical joinery, lattice, carved fox and dragon geometry; no reference pixels",
+  "coordinate_system": "glTF Y-up, meters, front +Z, centered floor pivots",
+  "collision": "Gameplay authors collision separately; zero-offset floor/deck top at Y=0",
+  "textures": [],
+  "palette": "Shared runtime Stone/Timber/Roof/Gold/Jade/Paper/Cloth; no embedded images",
+  "floor_offset_y_m": 0.0,
+  "assets": {
+    "scholar_desk": {
+      "file": "scholar_desk.glb",
+      "triangles": 2040,
+      "triangle_budget": 4000,
+      "material_surfaces": [
+        "Timber",
+        "Gold"
+      ],
+      "draw_call_materials": 2,
+      "bounds_min_y_up_m": [
+        -1.15,
+        0.0,
+        -0.55
+      ],
+      "bounds_max_y_up_m": [
+        1.15,
+        1.0,
+        0.55
+      ],
+      "bytes": 168772,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "dimensions_y_up_m": [
+        2.3,
+        1.0,
+        1.1
+      ],
+      "table_top_y_m": 1.0
+    },
+    "scroll_shelf": {
+      "file": "scroll_shelf.glb",
+      "triangles": 3666,
+      "triangle_budget": 4000,
+      "material_surfaces": [
+        "Timber",
+        "Gold",
+        "Paper",
+        "Cloth",
+        "Jade"
+      ],
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -1.05,
+        0.0,
+        -0.35
+      ],
+      "bounds_max_y_up_m": [
+        1.05,
+        2.45,
+        0.35
+      ],
+      "bytes": 301972,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "dimensions_y_up_m": [
+        2.1,
+        2.45,
+        0.7
+      ]
+    },
+    "lattice_screen": {
+      "file": "lattice_screen.glb",
+      "triangles": 2598,
+      "triangle_budget": 3000,
+      "material_surfaces": [
+        "Timber",
+        "Gold",
+        "Cloth",
+        "Jade"
+      ],
+      "draw_call_materials": 4,
+      "bounds_min_y_up_m": [
+        -1.5,
+        0.0,
+        -0.3
+      ],
+      "bounds_max_y_up_m": [
+        1.5,
+        2.45,
+        0.3
+      ],
+      "bytes": 246656,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "dimensions_y_up_m": [
+        3.0,
+        2.45,
+        0.6
+      ]
+    },
+    "fox_guardian": {
+      "file": "fox_guardian.glb",
+      "triangles": 1313,
+      "triangle_budget": 4000,
+      "material_surfaces": [
+        "Stone",
+        "Gold",
+        "Jade",
+        "Cloth"
+      ],
+      "draw_call_materials": 4,
+      "bounds_min_y_up_m": [
+        -0.59,
+        0.0,
+        -0.79
+      ],
+      "bounds_max_y_up_m": [
+        0.8066,
+        2.14,
+        0.742
+      ],
+      "bytes": 93040,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "floor_top_y_m": 0.0,
+      "front": "+Z"
+    },
+    "fox_shrine": {
+      "file": "fox_shrine.glb",
+      "triangles": 7256,
+      "triangle_budget": 16000,
+      "material_surfaces": [
+        "Stone",
+        "Timber",
+        "Gold",
+        "Cloth",
+        "Jade",
+        "Roof"
+      ],
+      "draw_call_materials": 6,
+      "bounds_min_y_up_m": [
+        -5.0,
+        -0.36,
+        -4.0
+      ],
+      "bounds_max_y_up_m": [
+        5.0,
+        6.03,
+        4.0
+      ],
+      "bytes": 613604,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "footprint_xz_m": [
+        10.0,
+        8.0
+      ],
+      "floor_top_y_m": 0.0,
+      "front": "+Z",
+      "clear_front_entry_width_m": 4.8,
+      "post_centers_xz_m": [
+        [
+          -4.15,
+          -2.9
+        ],
+        [
+          -4.15,
+          0
+        ],
+        [
+          -4.15,
+          2.9
+        ],
+        [
+          4.15,
+          -2.9
+        ],
+        [
+          4.15,
+          0
+        ],
+        [
+          4.15,
+          2.9
+        ]
+      ]
+    },
+    "covered_bridge": {
+      "file": "covered_bridge.glb",
+      "triangles": 5236,
+      "triangle_budget": 10000,
+      "material_surfaces": [
+        "Timber",
+        "Stone",
+        "Gold",
+        "Jade",
+        "Roof"
+      ],
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -2.6,
+        -0.4,
+        -4.0
+      ],
+      "bounds_max_y_up_m": [
+        2.6,
+        4.3101,
+        4.0
+      ],
+      "bytes": 381992,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "dimensions_y_up_m": [
+        5.2,
+        4.7101,
+        8.0
+      ],
+      "deck_top_y_m": 0.0,
+      "clear_lane_width_m": 3.6,
+      "post_centers_xz_m": [
+        [
+          -2.4,
+          -3.8
+        ],
+        [
+          -2.4,
+          3.8
+        ],
+        [
+          2.4,
+          -3.8
+        ],
+        [
+          2.4,
+          3.8
+        ]
+      ]
+    },
+    "pergola": {
+      "file": "pergola.glb",
+      "triangles": 4172,
+      "triangle_budget": 6000,
+      "material_surfaces": [
+        "Stone",
+        "Timber",
+        "Gold"
+      ],
+      "draw_call_materials": 3,
+      "bounds_min_y_up_m": [
+        -2.8,
+        0.0,
+        -4.0
+      ],
+      "bounds_max_y_up_m": [
+        2.8,
+        3.8,
+        4.0
+      ],
+      "bytes": 373364,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "dimensions_y_up_m": [
+        5.6,
+        3.8,
+        8.0
+      ]
+    },
+    "dragon_spout": {
+      "file": "dragon_spout.glb",
+      "triangles": 1076,
+      "triangle_budget": 5000,
+      "material_surfaces": [
+        "Stone",
+        "Gold",
+        "Jade"
+      ],
+      "draw_call_materials": 3,
+      "bounds_min_y_up_m": [
+        -0.74,
+        0.0,
+        -0.445
+      ],
+      "bounds_max_y_up_m": [
+        0.74,
+        1.9163,
+        0.93
+      ],
+      "bytes": 77728,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts",
+      "mouth_outlet_y_up_m": [
+        0.0,
+        1.01,
+        0.93
+      ],
+      "front": "+Z"
+    }
+  }
+}

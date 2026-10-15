@@ -140,7 +140,18 @@ func build_shoreline(target: Node3D) -> void:
 					point + Vector3(sin(stalk) * 0.35, height * 0.45, cos(stalk) * 0.3)
 				)
 			)
-	batch(shoreline, "WetShoreRocks", mesh, stones, world.dark_stone)
+	var wet_stone: StandardMaterial3D = world.material(Color.WHITE, 0.64)
+	wet_stone.vertex_color_use_as_albedo = true
+	var bank := batch(shoreline, "WetShoreRocks", mesh, stones, wet_stone)
+	# Reallocate before writing transforms: enabling color data resets the buffer.
+	bank.multimesh.instance_count = 0
+	bank.multimesh.use_colors = true
+	bank.multimesh.instance_count = stones.size()
+	for index in range(stones.size()):
+		bank.multimesh.set_instance_transform(index, stones[index])
+		bank.multimesh.set_instance_color(
+			index, Color("4a5d4a").lerp(Color("899079"), world.rng.randf())
+		)
 	var reed := CylinderMesh.new()
 	reed.top_radius = 0.05
 	reed.bottom_radius = 0.8
@@ -155,7 +166,8 @@ func build_water_detail(target: Node3D, origin: Vector3, width: float) -> void:
 	var container := Node3D.new()
 	container.name = "WaterfallImpact"
 	world.add_child(container)
-	var foam: StandardMaterial3D = world.material(Color("d5e9db"), 0.68)
+	var foam := ShaderMaterial.new()
+	foam.shader = preload("res://assets/shaders/impact_foam.gdshader")
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.70
 	ring.outer_radius = 1.0
@@ -167,7 +179,7 @@ func build_water_detail(target: Node3D, origin: Vector3, width: float) -> void:
 		rings.append(
 			Transform3D(
 				Basis.IDENTITY.scaled(Vector3(radius, 0.035, radius * 0.55)),
-				origin + Vector3(0, 0.005 + index * 0.006, 0.9)
+				origin + Vector3(0, -0.075 + index * 0.006, 0.9)
 			)
 		)
 	var foam_ring := batch(container, "ImpactFoamRings", ring, rings, foam)

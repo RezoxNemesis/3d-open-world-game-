@@ -21,6 +21,12 @@ var modules: Dictionary = {}
 var lantern_transforms: Array[Transform3D] = []
 var cliff_surface: StandardMaterial3D
 var district: Node3D
+var verdant_district: Node3D
+var celestial_dragon: Node3D
+var residence: Node3D
+var architectural_detail: Node3D
+var _waterfall_foam: MultiMeshInstance3D
+var _foam_transforms: Array[Transform3D] = []
 
 
 func material(color: Color, roughness: float = 0.9) -> StandardMaterial3D:
@@ -56,6 +62,10 @@ func _ready() -> void:
 		var path := "res://assets/models/celestial/%s.glb" % label
 		if ResourceLoader.exists(path):
 			modules[label] = load(path)
+	for label in ["covered_bridge", "fox_shrine", "dragon_spout"]:
+		var path := "res://assets/models/verdant/%s.glb" % label
+		if ResourceLoader.exists(path):
+			modules[label] = load(path)
 	setup_sky()
 	build_courtyard()
 	build_temple()
@@ -69,12 +79,36 @@ func _ready() -> void:
 			var column := block(Vector3(0.30, 3.1, 0.30), Vector3(x, 11.55, z), red_wood)
 			column.visible = false
 	landscape.build_shoreline(self)
+	preload("res://scripts/verdant_route.gd").new().build(self)
 	var dressing_path := "res://scripts/celestial_district.gd"
 	if ResourceLoader.exists(dressing_path):
 		district = load(dressing_path).new()
 		district.name = "CelestialDistrict"
 		add_child(district)
 		district.build(self)
+	var verdant_path := "res://scripts/verdant_district.gd"
+	if ResourceLoader.exists(verdant_path):
+		verdant_district = load(verdant_path).new()
+		verdant_district.name = "VerdantDistrict"
+		add_child(verdant_district)
+		verdant_district.build(self)
+	celestial_dragon = preload("res://scripts/celestial_dragon.gd").new()
+	add_child(celestial_dragon)
+	celestial_dragon.build(self)
+	var residence_path := "res://scripts/residence_route.gd"
+	if ResourceLoader.exists(residence_path):
+		residence = load(residence_path).new()
+		residence.name = "ResidenceDistrict"
+		add_child(residence)
+		residence.build(self)
+	architectural_detail = preload("res://scripts/architectural_detail.gd").new()
+	architectural_detail.name = "ArchitecturalDetail"
+	add_child(architectural_detail)
+	architectural_detail.build(self)
+	var structures := preload("res://scripts/architecture_collision.gd").new()
+	structures.name = "ArchitectureCollision"
+	add_child(structures)
+	structures.build(self)
 	batch_lanterns()
 	var ambience := preload("res://scripts/ambience.gd").new()
 	ambience.name = "GardenAmbience"
@@ -134,7 +168,7 @@ func module_at(
 	item.scale = Vector3.ONE * size_value
 	item.rotation.y = yaw
 	if (
-		label in ["sanctuary", "pagoda"]
+		label in ["sanctuary", "pagoda", "covered_bridge", "fox_shrine", "dragon_spout"]
 		and ResourceLoader.exists("res://scripts/architectural_palette.gd")
 	):
 		load("res://scripts/architectural_palette.gd").apply(item)
@@ -183,20 +217,20 @@ func setup_sky() -> void:
 	settings.sky = sky
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	settings.ambient_light_color = Color("9bb6cc")
-	settings.ambient_light_energy = 0.35
+	settings.ambient_light_energy = 0.42
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	settings.tonemap_exposure = 1.0
 	settings.fog_enabled = true
-	settings.fog_light_color = Color("b4ced0")
-	settings.fog_density = 0.0021
+	settings.fog_light_color = Color("a7c0c3")
+	settings.fog_density = 0.0028
 	settings.fog_sky_affect = 0.05
 	environment.environment = settings
 	add_child(environment)
 	var sun := DirectionalLight3D.new()
 	sun.name = "AfternoonSun"
 	sun.rotation_degrees = Vector3(-36, -38, 0)
-	sun.light_color = Color("ffe0b0")
-	sun.light_energy = 1.10
+	sun.light_color = Color("ffe4b9")
+	sun.light_energy = 1.05
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 65
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
@@ -207,7 +241,8 @@ func setup_sky() -> void:
 func build_courtyard() -> void:
 	block(Vector3(42, 0.9, 42), Vector3(0, -0.45, 0), stone)
 	# The retained south wall protects the starter route; side exits lead to gardens.
-	block(Vector3(42, 1.2, 0.65), Vector3(0, 0.6, 20), pale_stone)
+	# A visible opening connects the existing courtyard to the residence lane.
+	block(Vector3(39.2, 1.2, 0.65), Vector3(-1.4, 0.6, 20), pale_stone)
 	for x in [-20.5, 20.5]:
 		for z in [-13.5, 11.5]:
 			block(Vector3(0.5, 0.65, 12), Vector3(x, 0.325, z), pale_stone)
@@ -266,7 +301,6 @@ func build_temple() -> void:
 		banner_at(Vector3(x, 3.65, -14.6), Vector2(1.15, 3.2))
 	# Distant smaller pavilions repeat the architecture in the hillside composition.
 	for placement in [
-		Vector3(-32, 6, -36),
 		Vector3(30, 10, -44),
 		Vector3(-62, 23, -61),
 		Vector3(67, 33, -83),
@@ -305,7 +339,9 @@ func build_lotus_garden() -> void:
 	module_at("pavilion", Vector3(-34, 0, -17), 0.65)
 	block(Vector3(10, 0.8, 7), Vector3(-34, -0.4, -17), stone)
 	build_lotus(Vector3(-34, -0.35, 0), 36)
-	build_waterfall(Vector3(-45, 0, -22.5), 18, 4.2)
+	build_waterfall(Vector3(-45, 0, -22.5), 18, 4.2, true)
+	var spout: Node3D = module_at("dragon_spout", Vector3(-45, 16.586, -26.672), 1.4)
+	spout.name = "CarvedDragonSpout"
 	# The headwater channel visibly connects the cascade basin to the lotus pond,
 	# passing beneath the north waterfront crossing.
 	water_surface(Vector3(-44.2, -0.28, -18.8), Vector2(3.2, 7.8))
@@ -397,7 +433,9 @@ func build_lotus(origin: Vector3, count: int) -> void:
 	add_child(pads)
 
 
-func build_waterfall(origin: Vector3, height: float, width: float) -> void:
+func build_waterfall(
+	origin: Vector3, height: float, width: float, from_spout: bool = false
+) -> void:
 	var shader := ShaderMaterial.new()
 	shader.shader = WATER_SHADER
 	shader.set_shader_parameter("falling", true)
@@ -407,23 +445,33 @@ func build_waterfall(origin: Vector3, height: float, width: float) -> void:
 		for column in range(4):
 			for offset in [
 				Vector2i(0, 0),
-				Vector2i(0, 1),
-				Vector2i(1, 0),
 				Vector2i(1, 0),
 				Vector2i(0, 1),
-				Vector2i(1, 1)
+				Vector2i(1, 0),
+				Vector2i(1, 1),
+				Vector2i(0, 1)
 			]:
 				var uv := Vector2(float(column + offset.x) / 4.0, float(row + offset.y) / 12.0)
 				stream.set_uv(uv)
-				stream.set_normal(Vector3.FORWARD)
+				stream.set_normal(Vector3.BACK)
 				stream.add_vertex(
 					Vector3(
-						(uv.x - 0.5) * width * (0.92 + sin(uv.y * 11.0) * 0.07),
+						(
+							(uv.x - 0.5)
+							* width
+							* (
+								lerpf(1.0, 0.308, pow(uv.y, 2.2))
+								if from_spout
+								else (0.92 + sin(uv.y * 11.0) * 0.07)
+							)
+						),
 						uv.y * height,
 						-uv.y * 2.8 + sin(uv.y * 6.0) * 0.25
 					)
 				)
+	stream.generate_tangents()
 	var falling := solid(stream.commit(), origin, shader, false)
+	falling.name = "DragonMouthCascade" if from_spout else "MountainCascade"
 	falling.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var basin_shader := ShaderMaterial.new()
 	basin_shader.shader = WATER_SHADER
@@ -465,19 +513,37 @@ func build_waterfall(origin: Vector3, height: float, width: float) -> void:
 	bank.material_override = wet_rock
 	bank.visibility_range_end = 160
 	add_child(bank)
-	var foam := material(Color("d0e1d0"))
 	for i in range(3):
-		var mist := SphereMesh.new()
-		mist.radius = rng.randf_range(0.4, 0.8)
-		mist.height = 0.05
-		mist.radial_segments = 10
-		mist.rings = 3
-		var splash := solid(
-			mist, origin + Vector3(rng.randf_range(-width / 3, width / 3), -0.03, 0.3), foam, false
+		var radius := rng.randf_range(0.4, 0.8)
+		var center := origin + Vector3(rng.randf_range(-width / 3, width / 3), -0.03, 0.3)
+		_foam_transforms.append(
+			Transform3D(Basis.IDENTITY.scaled(Vector3(radius, 1, radius)), center)
 		)
-		splash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_batch_waterfall_foam()
 
 	LANDSCAPE.new().build_water_detail(self, origin, width)
+
+
+func _batch_waterfall_foam() -> void:
+	if _waterfall_foam == null:
+		var mesh := SphereMesh.new()
+		mesh.radius = 1.0
+		mesh.height = 0.05
+		mesh.radial_segments = 10
+		mesh.rings = 3
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh
+		_waterfall_foam = MultiMeshInstance3D.new()
+		_waterfall_foam.name = "WaterfallFoamPucks"
+		_waterfall_foam.multimesh = multi
+		_waterfall_foam.material_override = material(Color("d0e1d0"))
+		_waterfall_foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_waterfall_foam.visibility_range_end = 230.0
+		add_child(_waterfall_foam)
+	_waterfall_foam.multimesh.instance_count = _foam_transforms.size()
+	for index in range(_foam_transforms.size()):
+		_waterfall_foam.multimesh.set_instance_transform(index, _foam_transforms[index])
 
 
 func cliff_vertex(
@@ -487,7 +553,7 @@ func cliff_vertex(
 	var angle := sector * TAU / 20.0
 	# Unequal buttresses, offset shoulders and a strongly broken summit replace
 	# circular tubes. World-seeded phases keep the distant silhouette repeatable.
-	var shoulder := 1.0 + sin(t * 15.0 + phase) * 0.065 + sin(t * 31.0 - phase) * 0.035
+	var shoulder := 1.0 + sin(t * 9.0 + phase) * 0.045 + sin(t * 24.0 - phase) * 0.018
 	var taper := 1.0 + pow(1.0 - t, 2.0) * 0.52
 	if spire:
 		taper = lerpf(1.65, 0.42, pow(t, 0.72))
@@ -532,11 +598,6 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 					cliff_vertex(ring + offset.y, sector + offset.x, width, height, spire, phase)
 				)
 			for index in [0, 2, 1, 1, 2, 3]:
-				var level := float(ring) / 14.0
-				var mossiness := sin(sector * 1.7 + ring * 0.9) * 0.5 + 0.5
-				var color := Color("5c6b69").lerp(Color("a5aaa0"), level * 0.72)
-				color = color.lerp(Color("3f6049"), mossiness * (0.18 + level * 0.20))
-				surface.set_color(color)
 				var vertex_level := ring + (1 if index >= 2 else 0)
 				var vertex_sector := sector + (1 if index % 2 else 0)
 				var along_ring := (
@@ -551,7 +612,17 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 						maxi(vertex_level - 1, 0), vertex_sector, width, height, spire, phase
 					)
 				)
-				surface.set_normal(upward.cross(along_ring).normalized())
+				var normal := upward.cross(along_ring).normalized()
+				var point := corners[index] + top
+				var variation := (
+					terrain_noise.get_noise_2d(point.x * 2.7, point.y * 2.0 + point.z) * 0.5 + 0.5
+				)
+				var stone_color := Color("9da495").lerp(Color("c6c8b2"), variation * 0.65)
+				var damp := sin(point.x * 0.29 + point.z * 0.43) * 0.5 + 0.5
+				var ledge := smoothstep(0.13, 0.55, normal.y)
+				stone_color = stone_color.lerp(Color("758958"), damp * 0.16 + ledge * 0.56)
+				surface.set_color(stone_color)
+				surface.set_normal(normal)
 				surface.add_vertex(corners[index])
 	# Close the uneven crown so flying cameras never see an open tube.
 	for sector in range(20):
@@ -565,19 +636,19 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 			surface.add_vertex(point)
 	if cliff_surface == null:
 		cliff_surface = material(Color.WHITE)
-		cliff_surface.vertex_color_use_as_albedo = false
+		cliff_surface.vertex_color_use_as_albedo = true
 		cliff_surface.vertex_color_is_srgb = true
 		cliff_surface.albedo_texture = preload(
 			"res://assets/materials/landscape_karst_original.png"
 		)
 		cliff_surface.uv1_triplanar = true
 		cliff_surface.uv1_world_triplanar = true
-		cliff_surface.uv1_scale = Vector3(0.055, 0.028, 0.055)
+		cliff_surface.uv1_scale = Vector3(0.042, 0.048, 0.042)
 		cliff_surface.normal_enabled = true
 		cliff_surface.normal_texture = preload(
 			"res://assets/materials/landscape_karst_original_normal.png"
 		)
-		cliff_surface.normal_scale = 0.95
+		cliff_surface.normal_scale = 0.72
 		cliff_surface.roughness_texture = preload(
 			"res://assets/materials/landscape_karst_original_roughness.png"
 		)
@@ -591,8 +662,37 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 
 func terrain_height(x: float, z: float) -> float:
 	var radius := maxf(absf(x), absf(z))
-	var rise := smoothstep(75, 200, radius)
-	return -0.8 + rise * (18 + terrain_noise.get_noise_2d(x, z) * 13)
+	var rise := smoothstep(34, 205, radius)
+	var west_ridge := exp(-pow((x + 66) / 32, 2) - pow((z + 66) / 62, 2)) * 10
+	var east_ridge := exp(-pow((x - 83) / 39, 2) - pow((z + 81) / 70, 2)) * 15
+	var ridge_center := -160.0 - sin(x * 0.014) * 18.0
+	var north_massif := exp(-pow((z - ridge_center) / 53.0, 2))
+	north_massif *= (22 + sin(x * 0.022) * 7) * smoothstep(45, 100, -z)
+	var ground := -0.8 + rise * 22 + west_ridge + east_ridge + north_massif
+	ground += terrain_noise.get_noise_2d(x, z) * (0.75 + rise * 5)
+	# Smooth authored clearings keep every legacy floor and water basin intact.
+	ground = _flatten_ground(ground, x, z, Vector2(0, -2), Vector2(24, 27), 10, -0.8)
+	ground = _flatten_ground(ground, x, z, Vector2(-35, -1), Vector2(15, 21), 9, -0.8)
+	ground = _flatten_ground(ground, x, z, Vector2(35, -4), Vector2(23, 8), 9, -0.8)
+	ground = _flatten_ground(ground, x, z, Vector2(50, -19), Vector2(4, 17), 6, -0.8)
+	ground = _flatten_ground(ground, x, z, Vector2(-30, -18), Vector2(3.2, 20), 5, -0.8)
+	ground = _flatten_ground(ground, x, z, Vector2(20, 31), Vector2(10, 11), 6, -0.8)
+	# The shrine's hill joins its supporting rock mass below the six-meter floor.
+	ground = _flatten_ground(ground, x, z, Vector2(-32, -42), Vector2(9, 8), 7, 5.35)
+	return ground
+
+
+func _flatten_ground(
+	ground: float,
+	x: float,
+	z: float,
+	center: Vector2,
+	half: Vector2,
+	feather: float,
+	floor_height: float
+) -> float:
+	var edge := maxf(absf(x - center.x) - half.x, absf(z - center.y) - half.y)
+	return lerpf(minf(ground, floor_height), ground, smoothstep(0, feather, edge))
 
 
 func build_region(key: Vector2i) -> Node3D:
@@ -656,9 +756,7 @@ func build_landscape() -> void:
 	for placement in [Vector3(-140, 48, -95), Vector3(122, 57, -111), Vector3(-25, 96, -216)]:
 		build_cliff(placement, Vector2(31, 24), placement.y + 6, true)
 	var ledges: Array[Vector3] = []
-	for center in [
-		Vector3(-32, 6, -36), Vector3(-62, 23, -61), Vector3(67, 33, -83), Vector3(-104, 46, -123)
-	]:
+	for center in [Vector3(-62, 23, -61), Vector3(67, 33, -83), Vector3(-104, 46, -123)]:
 		for index in range(8):
 			var angle := index * TAU / 8.0
 			ledges.append(center + Vector3(cos(angle) * 6.2, 0, sin(angle) * 4.4))
@@ -690,6 +788,27 @@ func apply_quality(preset: String) -> void:
 		sun.directional_shadow_max_distance = 65.0 if high else 45.0
 	if district != null and district.has_method("apply_quality"):
 		district.apply_quality(selected)
+	if verdant_district != null and verdant_district.has_method("apply_quality"):
+		verdant_district.apply_quality(selected)
+	if celestial_dragon != null:
+		celestial_dragon.apply_quality(selected)
+	if residence != null:
+		residence.apply_quality(selected)
+	if architectural_detail != null:
+		architectural_detail.apply_quality(selected)
+	var fox_route := get_node_or_null("FoxShrineRoute")
+	if fox_route != null:
+		for item in fox_route.find_children("*", "GeometryInstance3D", true, false):
+			item.visibility_range_end = 180.0 if high else (95.0 if low else 140.0)
+			item.cast_shadow = (
+				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				if low
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			)
+	var spout := get_node_or_null("CarvedDragonSpout")
+	if spout != null:
+		for item in spout.find_children("*", "GeometryInstance3D", true, false):
+			item.visibility_range_end = 180.0 if high else (95.0 if low else 140.0)
 	if nature == null:
 		return
 	var density := 1.0 if high else (0.42 if low else 0.72)

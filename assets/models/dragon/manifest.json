@@ -1,0 +1,55 @@
+{
+  "generator": "tools/generate_celestial_dragon.py",
+  "version": 1,
+  "authoring_tool": "Blender 4.3.2",
+  "license": "MIT \u2014 original Temple Realm project geometry/rig/animation",
+  "source": "Mathematical geometry only; no external models, images or reference pixels",
+  "units": "meters",
+  "forward": "-Z",
+  "assets": [
+    {
+      "file": "celestial_dragon.glb",
+      "triangles": 7634,
+      "surfaces": 6,
+      "bones": 20,
+      "smooth_weight_vertices": 2223,
+      "exported_vertices": 4388,
+      "animation": "CelestialSwim",
+      "loop_seconds": 6,
+      "bounds_min_m": [
+        -4.014,
+        -4.331,
+        -3.253
+      ],
+      "bounds_max_m": [
+        4.226,
+        4.281,
+        28.7
+      ],
+      "bytes": 361244,
+      "verified": "Finite unit normals/UV/weights, positive-area triangles, normalized smooth skin, closed 20-joint animation"
+    },
+    {
+      "file": "celestial_dragon_far.glb",
+      "triangles": 4102,
+      "surfaces": 6,
+      "bones": 20,
+      "smooth_weight_vertices": 1008,
+      "exported_vertices": 2432,
+      "animation": "CelestialSwim",
+      "loop_seconds": 6,
+      "bounds_min_m": [
+        -4.014,
+        -4.331,
+        -3.28
+      ],
+      "bounds_max_m": [
+        4.226,
+        4.27,
+        28.7
+      ],
+      "bytes": 238312,
+      "verified": "Finite unit normals/UV/weights, positive-area triangles, normalized smooth skin, closed 20-joint animation"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ var camera: Camera3D
 var spring_arm: SpringArm3D
 var camera_distance := 5.4
 var sprint_enabled := false
+var powers: Node
 var model: Node3D
 var yaw := 0.0
 var pitch := -0.16
@@ -67,7 +68,8 @@ func build_traveler() -> void:
 
 func update_camera() -> void:
 	# Legacy callers (loading and explicit view changes) need an immediate reset.
-	pitch = clampf(pitch, MIN_PITCH, MAX_PITCH)
+	var flying: bool = is_instance_valid(powers) and powers.flying
+	pitch = clampf(pitch, -1.25 if flying else MIN_PITCH, 1.25 if flying else MAX_PITCH)
 	pivot.rotation = Vector3(pitch, yaw, 0)
 	spring_arm.spring_length = 0.0 if first_person else camera_distance
 	model.visible = not first_person
@@ -83,7 +85,12 @@ func set_sprint_enabled(enabled: bool) -> void:
 
 func rotate_camera(relative: Vector2, look_sensitivity := 1.0) -> void:
 	yaw -= relative.x * 0.0035 * clampf(look_sensitivity, 0.4, 2.0)
-	pitch = clampf(pitch - relative.y * 0.0035 * look_sensitivity, MIN_PITCH, MAX_PITCH)
+	var flying: bool = is_instance_valid(powers) and powers.flying
+	pitch = clampf(
+		pitch - relative.y * 0.0035 * look_sensitivity,
+		-1.25 if flying else MIN_PITCH,
+		1.25 if flying else MAX_PITCH
+	)
 
 
 func _process(delta: float) -> void:
@@ -93,6 +100,8 @@ func _process(delta: float) -> void:
 	spring_arm.spring_length = lerpf(
 		spring_arm.spring_length, 0.0 if first_person else camera_distance, weight
 	)
+	if is_instance_valid(powers):
+		powers.update_camera(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -119,6 +128,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(powers):
+		powers.advance(delta)
 	if Input.is_action_just_pressed("toggle_view"):
 		first_person = not first_person
 		update_camera()
@@ -129,15 +140,25 @@ func _physics_process(delta: float) -> void:
 	var running := (
 		sprint_enabled or (InputMap.has_action("sprint") and Input.is_action_pressed("sprint"))
 	)
-	var speed := SPRINT_SPEED if running else SPEED
-	var acceleration := 38.0 if direction.length() > 0 else 50.0
-	velocity.x = move_toward(velocity.x, direction.x * speed, acceleration * delta)
-	velocity.z = move_toward(velocity.z, direction.z * speed, acceleration * delta)
-	if not is_on_floor():
-		velocity.y -= 18.0 * delta
-	elif Input.is_action_just_pressed("jump"):
-		velocity.y = JUMP_SPEED
-	var stepped := try_step(Vector3(velocity.x, 0, velocity.z) * delta)
+	var flying: bool = is_instance_valid(powers) and powers.flying
+	var fast: bool = is_instance_valid(powers) and powers.fast
+	if flying:
+		velocity = powers.flight_velocity(input, running, delta)
+	else:
+		var speed := SPRINT_SPEED if running else SPEED
+		var acceleration := 38.0 if direction.length() > 0 else 50.0
+		if fast:
+			speed = 120.0 if running else 72.0
+			acceleration = 100.0
+		velocity.x = move_toward(velocity.x, direction.x * speed, acceleration * delta)
+		velocity.z = move_toward(velocity.z, direction.z * speed, acceleration * delta)
+		if not is_on_floor():
+			velocity.y -= 18.0 * delta
+		elif Input.is_action_just_pressed("jump"):
+			velocity.y = JUMP_SPEED
+	if is_instance_valid(powers):
+		powers.prepare_streaming(delta)
+	var stepped := not flying and try_step(Vector3(velocity.x, 0, velocity.z) * delta)
 	var snap_distance := floor_snap_length
 	if stepped:
 		# Keep this lift for one frame; snapping to the old floor would undo the step.
@@ -162,9 +183,23 @@ func _physics_process(delta: float) -> void:
 		arms[i].rotation.z = 0.045 if i == 0 else -0.045
 		elbows[i].rotation.x = -0.16 - absf(stride) * 0.18
 		coat_tails[i].rotation.x = -0.08 - absf(stride) * 0.14
+	model.rotation.x = move_toward(model.rotation.x, -0.30 if flying else 0.0, delta * 3.0)
+	if flying:
+		model.position.y = 0.0
+		for index in range(arms.size()):
+			arms[index].rotation.x = 1.42
+			arms[index].rotation.z = 0.12 if index == 0 else -0.12
+			elbows[index].rotation.x = -0.10
+			legs[index].rotation.x = -0.08
+			knees[index].rotation.x = 0.12
+			coat_tails[index].rotation.x = -0.45
 	if position.y < -15:
 		position = Vector3(0, 2, 12)
 		velocity = Vector3.ZERO
+
+
+func is_checkpoint_safe() -> bool:
+	return powers.is_checkpoint_safe() if is_instance_valid(powers) else is_on_floor()
 
 
 func try_step(motion: Vector3) -> bool:

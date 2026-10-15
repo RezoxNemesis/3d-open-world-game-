@@ -14,14 +14,15 @@ static func build(model: Node3D) -> Dictionary:
 	build_body(fixed, palette)
 	build_head(fixed, palette)
 	build_equipment(fixed, palette)
+	var mantle := build_mantle(fixed, palette)
 	var joints := {"arms": [], "elbows": [], "legs": [], "knees": [], "coat_tails": []}
 	for side in [-1.0, 1.0]:
 		build_arm(model, side, palette, joints)
 		build_leg(model, side, palette, joints)
 		build_tail(model, side, palette, joints)
-	batch_static(fixed)
+	batch_static(fixed, [mantle])
 	model.set_meta("lantern_hip", LANTERN_HIP)
-	model.set_meta("original_art", "Temple Realm tailored wanderer v3, MIT")
+	model.set_meta("original_art", "Temple Realm tailored wanderer v4, MIT")
 	return joints
 
 
@@ -137,6 +138,9 @@ static func build_body(parent: Node3D, p: Dictionary) -> void:
 	band(parent, 0.200, 0.141, 0.938, 0.009, p.gold)
 	band(parent, 0.187, 0.130, 1.015, 0.008, p.gold)
 	ellipsoid(parent, Vector3(-0.198, 0.975, -0.035), Vector3(0.035, 0.045, 0.045), p.teal)
+	# A shallow bronze frame and cloth-colored carved center sit on the actual sash.
+	ellipsoid(parent, Vector3(0, 0.976, -0.149), Vector3(0.037, 0.028, 0.012), p.gold)
+	ellipsoid(parent, Vector3(0, 0.976, -0.161), Vector3(0.023, 0.017, 0.006), p.teal)
 	# Back yoke and embroidered cloud/lotus lines stay legible in the player view.
 	ribbon(
 		parent,
@@ -160,6 +164,55 @@ static func build_body(parent: Node3D, p: Dictionary) -> void:
 	piece(parent, rings_mesh([Vector3(0.053, 1.36, 0.051), Vector3(0.052, 1.48, 0.05)]), p.skin)
 	band(parent, 0.075, 0.066, 1.40, 0.05, p.ivory)
 	band(parent, 0.078, 0.068, 1.422, 0.008, p.gold)
+
+
+static func build_mantle(parent: Node3D, p: Dictionary) -> Node3D:
+	var mantle := Node3D.new()
+	mantle.name = "ShoulderMantle"
+	mantle.position.y = 1.31
+	parent.add_child(mantle)
+	# A real open-front drape wraps the shoulders; it does not seal the neck or
+	# cover the articulated upper arms with a rigid full cylinder.
+	var start := -PI * 0.62
+	var finish := PI * 0.62
+	piece(
+		mantle,
+		sector_mesh(
+			[
+				Vector3(0.261, -0.18, 0.168),
+				Vector3(0.267, -0.12, 0.171),
+				Vector3(0.239, 0.018, 0.142),
+				Vector3(0.079, 0.087, 0.075)
+			],
+			start,
+			finish,
+			24,
+			0.006
+		),
+		p.ivory
+	)
+	piece(
+		mantle,
+		sector_mesh(
+			[Vector3(0.263, -0.176, 0.171), Vector3(0.266, -0.161, 0.174)], start, finish, 28, 0.006
+		),
+		p.gold
+	)
+	for side in [-1.0, 1.0]:
+		ribbon(
+			mantle,
+			[
+				Vector3(side * 0.018, -0.105, 0.177),
+				Vector3(side * 0.068, -0.050, 0.174),
+				Vector3(side * 0.125, -0.075, 0.165),
+				Vector3(side * 0.082, -0.102, 0.179),
+				Vector3(side * 0.044, -0.052, 0.173)
+			],
+			0.006,
+			p.gold
+		)
+	batch_static(mantle)
+	return mantle
 
 
 static func build_head(parent: Node3D, p: Dictionary) -> void:
@@ -253,6 +306,17 @@ static func build_head(parent: Node3D, p: Dictionary) -> void:
 	ribbon(parent, [Vector3(-0.023, 1.508, -0.098), Vector3(0.023, 1.508, -0.098)], 0.004, p.face)
 	ellipsoid(parent, Vector3(0, 1.682, 0.082), Vector3(0.057, 0.046, 0.047), p.hair)
 	band(parent, 0.045, 0.036, 1.698, 0.013, p.gold, Vector3(0, 0, 0.083))
+	for side in [-1.0, 1.0]:
+		ribbon(
+			parent,
+			[
+				Vector3(side * 0.012, 1.682, 0.122),
+				Vector3(side * 0.045, 1.670, 0.124),
+				Vector3(side * 0.026, 1.641, 0.126)
+			],
+			0.014,
+			p.ivory
+		)
 	var pin := piece(parent, cylinder(0.006, 0.006, 0.167), p.gold, Vector3(0, 1.704, 0.085))
 	pin.rotation.z = PI / 2.0
 
@@ -300,6 +364,11 @@ static func build_arm(model: Node3D, side: float, p: Dictionary, joints: Diction
 	)
 	band(elbow, 0.049, 0.051, -0.175, 0.045, p.leather)
 	band(elbow, 0.05, 0.052, -0.158, 0.006, p.gold)
+	for index in range(3):
+		var y := -0.145 - index * 0.014
+		ribbon(
+			elbow, [Vector3(-0.035, y, -0.050), Vector3(0.035, y - 0.022, -0.050)], 0.004, p.gold
+		)
 	ellipsoid(elbow, Vector3(0, -0.237, -0.009), Vector3(0.035, 0.062, 0.025), p.skin)
 	ellipsoid(elbow, Vector3(-side * 0.029, -0.22, -0.017), Vector3(0.012, 0.031, 0.016), p.skin)
 	batch_static(arm, [elbow])
@@ -398,6 +467,18 @@ static func build_tail(model: Node3D, side: float, p: Dictionary, joints: Dictio
 		),
 		p.ivory,
 		Vector3(-side * 0.10, 0, 0)
+	)
+	# Gold cloud curls remain attached to each moving coat panel.
+	ribbon(
+		tail,
+		[
+			Vector3(side * 0.025, -0.43, 0.163),
+			Vector3(side * 0.075, -0.39, 0.159),
+			Vector3(side * 0.115, -0.42, 0.151),
+			Vector3(side * 0.070, -0.455, 0.169)
+		],
+		0.007,
+		p.gold
 	)
 	batch_static(tail)
 

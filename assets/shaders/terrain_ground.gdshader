@@ -12,13 +12,17 @@ void vertex() {
 }
 void fragment() {
 	vec2 p = ground_position.xz;
-	float meadow = noise(p * 0.12) * 0.65 + noise(p * 0.63) * 0.35;
-	float grain = noise(p * 16.0);
-	vec3 grass = mix(vec3(0.17, 0.26, 0.18), vec3(0.34, 0.41, 0.25), meadow);
-	float bare = smoothstep(0.62, 0.85, noise(p * 0.27 + 71.0));
-	grass = mix(grass, vec3(0.43, 0.37, 0.26), bare * 0.42);
-	float steep = smoothstep(0.12, 0.40, 1.0 - ground_normal.y);
-	vec3 rock = mix(vec3(0.38, 0.40, 0.34), vec3(0.60, 0.58, 0.45), grain);
-	ALBEDO = mix(grass, rock, steep) * (0.94 + grain * 0.11);
-	ROUGHNESS = 0.95;
+	float broad = noise(p * 0.085);
+	float meadow = broad * 0.6 + noise(p * 0.47) * 0.4;
+	float grain = noise(p * 14.0);
+	vec3 grass = mix(vec3(0.16, 0.25, 0.15), vec3(0.34, 0.40, 0.23), meadow);
+	float soil = smoothstep(0.59, 0.84, noise(p * 0.30 + 71.0));
+	grass = mix(grass, vec3(0.36, 0.32, 0.23), soil * 0.48);
+	float slope = smoothstep(0.09, 0.35, 1.0 - ground_normal.y);
+	vec3 rock = mix(vec3(0.30, 0.35, 0.29), vec3(0.48, 0.49, 0.39), broad * 0.6 + grain * 0.4);
+	// Damp ground rounds the pond's rectangular engineering into a natural bank.
+	vec2 pond = (p - vec2(-34.0, 0.0)) / vec2(13.2, 17.2);
+	float shore = (1.0 - smoothstep(0.92, 1.18, length(pond))) * (1.0 - slope);
+	ALBEDO = mix(mix(grass, rock, slope), vec3(0.22, 0.29, 0.20), shore * 0.48) * (0.94 + grain * 0.10);
+	ROUGHNESS = 0.94 - shore * 0.16;
 }

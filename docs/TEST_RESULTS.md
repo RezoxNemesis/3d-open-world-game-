@@ -1,5 +1,13 @@
 # Verification evidence
 
+## Homes and hero powers — version 0.5, final verification in progress
+
+The frozen combined upgrade passes a cold project import and empty-profile validation: **872 gameplay assertions across26 scene suites, zero failures**. All original/new controls, saves, activities, real capsule routes, house rooms, powers, destructive geometry/collision, LOD and building flight collision are exercised. Eleven Verdant and seven residence serialized-asset tests, six cache safeguards, six Java-selection tests, six skill metadata checks, lint/format/startup and the419-file bounded source scan pass. The cold import changes none of the273 recorded application input hashes.
+
+Actual World highest-detail accounting measures **2,061,008 additional architectural triangles** in22,328 instances/568 spatial batches. Balanced uses a closed36-triangle curved tile shell, High104; both share placements and are counted as alternatives. New structural collision uses87,604 base triangles in17 bodies, excluding decorative tiles and the separately physical residence. Actual roof/facade flight and all five waypoint-spawn/settle/walk-away probes pass. The near two-room home has39,846 triangles and matching wall, furniture, ceiling and roof collision; its actual approach, room-to-room traversal and return pass.
+
+Independent review reproduced and closed unsafe flight-off checkpoint pairing, competing terrain-streaming origins, roof/facade pass-through, incorrect optional-detail culling origins and inset DOWN placement. Controlled wide Balanced capture after tuning records795draws/670,338total pass triangles, inside the800draw/700k courtyard target. Final full-source rendering, gameplay video, signed export, bounded native attempt and hosted artifact verification are still pending; the version0.3 delivery below remains the rollback until the new upload succeeds.
+
 ## Celestial District reference upgrade — version 0.3
 
 The ten supplied concept images guided composition and visual priorities. The game now has an original taller sanctuary, upper pagoda and reachable terrace, market and ceremonial dressing, fine botanical foliage, original karst PBR maps, revised water/shore effects and a tailored animated traveler. The result remains stylized; it does not match the reference's photorealism.

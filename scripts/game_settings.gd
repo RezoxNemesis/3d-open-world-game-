@@ -3,7 +3,11 @@ extends RefCounted
 const FILE_PATH := "user://settings.json"
 const MAX_BYTES := 4096
 const DEFAULTS := {
-	"quality": "balanced", "sensitivity": 1.0, "joystick_scale": 1.0, "camera_distance": 6.0
+	"quality": "balanced",
+	"sensitivity": 1.0,
+	"joystick_scale": 1.0,
+	"camera_distance": 6.0,
+	"sprint_assist": false
 }
 const LIMITS := {
 	"sensitivity": [0.4, 2.0], "joystick_scale": [0.75, 1.4], "camera_distance": [3.5, 8.0]
@@ -19,6 +23,9 @@ func reset_defaults() -> void:
 func set_value(key: String, value: Variant) -> bool:
 	if key == "quality":
 		if typeof(value) != TYPE_STRING or value not in ["performance", "balanced", "high"]:
+			return false
+	elif key == "sprint_assist":
+		if typeof(value) != TYPE_BOOL:
 			return false
 	elif LIMITS.has(key):
 		if typeof(value) not in [TYPE_FLOAT, TYPE_INT]:

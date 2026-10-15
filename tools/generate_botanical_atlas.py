@@ -44,6 +44,28 @@ def tile(kind: int):
     image = Image.new("RGBA", (TILE * SCALE, TILE * SCALE), backgrounds[kind])
     draw = ImageDraw.Draw(image)
     center = (TILE * SCALE * .5, TILE * SCALE * .92)
+    if kind == 0:
+        # Leafy terminal sprays: slender olive stems disappear among irregular
+        # broad leaves instead of forming five dark parallel fans in every card.
+        for branch in range(6):
+            angle = -math.pi * .5 + (branch - 2.5) * .24
+            origin = (center[0] + rng.uniform(-30, 30) * SCALE,
+                      center[1] - rng.uniform(0, 65) * SCALE)
+            length = rng.uniform(.48, .66) * TILE * SCALE
+            bend = rng.uniform(-.24, .24)
+            points = [point(origin, angle + bend * t, length * t)
+                      for t in [i / 12 for i in range(13)]]
+            draw.line(points, fill=(88, 111, 64, 255), width=2 * SCALE)
+            for node in range(5):
+                progress = .22 + node * .16
+                anchor = point(origin, angle + bend * progress, length * progress)
+                for side in [-1, 1]:
+                    direction = angle + side * rng.uniform(.75, 1.35)
+                    size = rng.uniform(38, 55) * SCALE
+                    shade = rng.randrange(-12, 22)
+                    leaf(draw, anchor, direction, size * 1.7, size * .39,
+                         (76 + shade, 119 + shade, 58 + shade, 255))
+        return image.resize((TILE, TILE), Image.Resampling.LANCZOS)
     for branch in range(5):
         angle = -math.pi * .5 + (branch - 2) * .29
         length = rng.uniform(.62, .80) * TILE * SCALE

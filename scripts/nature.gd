@@ -1,6 +1,16 @@
 extends RefCounted
 ## Original botanical cards and forked woody stems share seeded spatial batches.
 
+const AUTHORED_RESERVATIONS := [
+	Rect2(-32.5, -37, 5, 39),  # Western shrine route.
+	Rect2(-41, -50, 18, 16),  # Shrine terrace.
+	Rect2(12.5, 24.5, 15, 13),  # Residence footprint.
+	Rect2(18.2, 12, 3.6, 12),  # Courtyard exit approach.
+	Rect2(9.7, 21.5, 3.6, 17.5),  # Residence side path.
+	Rect2(11.5, 37.2, 8.5, 3.6),  # Path along the front garden.
+	Rect2(18.2, 37, 3.6, 3)
+]
+
 var rng := RandomNumberGenerator.new()
 var height_at: Callable
 var botanical_texture: Texture2D
@@ -87,14 +97,44 @@ func batch_group(
 		multi.set_instance_transform(i, transforms[source])
 		multi.set_instance_color(i, colors[source])
 	item.multimesh = multi
+	var bounds := AABB()
+	for index in range(transforms.size()):
+		var instance_bounds: AABB = transforms[index] * mesh.get_aabb()
+		bounds = instance_bounds if index == 0 else bounds.merge(instance_bounds)
+	# Explicit bounds keep twisted branches and hanging vines from popping at edges.
+	item.custom_aabb = bounds.grow(0.25)
 	# Dummy rendering cannot read GPU transforms back; retain exact placement for route QA.
 	item.set_meta("instance_origins", instance_origins)
 	item.set_meta("density_scaled", density_scaled)
-	item.set_meta("near_cover", label in ["MeadowGrass", "GardenFerns", "MeadowFlowers"])
+	item.set_meta(
+		"near_cover",
+		(
+			label
+			in [
+				"MeadowGrass",
+				"GardenFerns",
+				"MeadowFlowers",
+				"ForestUnderstory",
+				"ForestLeafClumps",
+				"MossCarpets",
+				"FallenPetals",
+				"PlantedEdgeLeaves",
+				"PlantedEdgeFlowers"
+			]
+		)
+	)
 	item.visibility_range_end = 160
 	if (
 		label
-		not in ["GardenBranches", "PineTrunks", "GardenStones", "FloweringCanopies", "PineCanopies"]
+		not in [
+			"GardenBranches",
+			"PineTrunks",
+			"GardenStones",
+			"FloweringCanopies",
+			"PineCanopies",
+			"AncientBoughs",
+			"AncientLeaves"
+		]
 	):
 		item.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(item)
@@ -211,6 +251,7 @@ func populate(parent: Node3D, seed_value: int, ground_height: Callable = Callabl
 	populate_pines(parent)
 	populate_stones(parent)
 	populate_ground_cover(parent)
+	preload("res://scripts/verdant_flora.gd").new().populate(self, parent, seed_value + 407)
 
 
 func _add_branch(
@@ -266,6 +307,8 @@ func populate_blossoms(parent: Node3D) -> void:
 	]
 	for tree_index in range(tree_positions.size()):
 		var root_point := ground(tree_positions[tree_index])
+		if not tree_clears_authored_routes(root_point, 6.4):
+			continue
 		var maple := tree_index >= 12
 		var height := rng.randf_range(3.8, 5.7) * (0.85 if maple else 1.0)
 		var lean := Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.65, 0.65))
@@ -345,6 +388,10 @@ func _pine_group(parent: Node3D, roots: Array[Vector3], low: float, high: float)
 	var trunk_colors: Array[Color] = []
 	for root_point in roots:
 		var height := rng.randf_range(low, high)
+		# Authored ledge roots bypass ground scatter filtering. Reserve the complete
+		# branching crown as well, so a nearby trunk cannot grow through a roof.
+		if not tree_clears_authored_routes(root_point, height * 0.60 + 0.8):
+			continue
 		var lean := Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8))
 		var previous := root_point
 		var joints: Array[Vector3] = []
@@ -395,8 +442,23 @@ func _pine_group(parent: Node3D, roots: Array[Vector3], low: float, high: float)
 	batch(parent, "PineTrunks", _bark_mesh(), trunks, trunk_colors)
 
 
+func tree_clears_authored_routes(point: Vector3, radius: float) -> bool:
+	var origin := Vector2(point.x, point.z)
+	for bounds in AUTHORED_RESERVATIONS:
+		var nearest := Vector2(
+			clampf(point.x, bounds.position.x, bounds.end.x),
+			clampf(point.z, bounds.position.y, bounds.end.y)
+		)
+		if origin.distance_squared_to(nearest) <= radius * radius:
+			return false
+	return true
+
+
 func route_or_water(point: Vector3) -> bool:
-	if absf(point.x) < 8 and point.z > -25 and point.z < 23:
+	if (
+		not tree_clears_authored_routes(point, 0.0)
+		or (absf(point.x) < 8 and point.z > -25 and point.z < 23)
+	):
 		return true
 	var east_route := absf(point.z + 4) < 5 and point.x > 16 and point.x < 54
 	var west_route := absf(point.z - 1) < 5 and point.x < -17 and point.x > -47

@@ -19,6 +19,8 @@ var safe_insets := Vector4(22, 22, 22, 22)
 var floating_center := Vector2.ZERO
 var move_origin := Vector2.ZERO
 var last_running := false
+var sprint_assist := false
+var assist_running := false
 
 
 func _ready() -> void:
@@ -43,9 +45,10 @@ func _ready() -> void:
 	resize_controls()
 
 
-func configure_controls(look_sensitivity: float, stick_scale: float) -> void:
+func configure_controls(look_sensitivity: float, stick_scale: float, assist: bool = false) -> void:
 	sensitivity = clampf(look_sensitivity, 0.4, 2.0)
 	joystick_scale = clampf(stick_scale, 0.75, 1.4)
+	sprint_assist = assist
 	release_all_actions()
 	resize_controls()
 
@@ -125,7 +128,9 @@ func _draw() -> void:
 		var button: TouchScreenButton = buttons[action]
 		var position := button.position
 		var button_radius: float = button.shape.radius
-		var active := Input.is_action_pressed(action)
+		var active: bool = (
+			Input.is_action_pressed(action) or (action == "sprint" and assist_running)
+		)
 		var fill := Color(0.18, 0.30, 0.27, 0.92) if active else Color(0.025, 0.075, 0.08, 0.86)
 		if action in ["map_game", "settings_game"]:
 			fill = Color(0.12, 0.25, 0.23, 0.96) if active else Color(0.025, 0.075, 0.08, 0.90)
@@ -159,13 +164,14 @@ func _draw() -> void:
 
 
 func _process(_delta: float) -> void:
-	var running := Input.is_action_pressed("sprint")
+	var running := Input.is_action_pressed("sprint") or assist_running
 	if running != last_running:
 		last_running = running
 		queue_redraw()
 
 
 func release_movement() -> void:
+	_set_assist_running(false)
 	for action in MOVE_ACTIONS:
 		Input.action_release(action)
 	stick = Vector2.ZERO
@@ -174,6 +180,9 @@ func release_movement() -> void:
 
 
 func _over_action_button(position: Vector2) -> bool:
+	var powers := get_parent().get_node_or_null("HUD/HeroPowerControls")
+	if powers != null and powers.has_method("contains_point") and powers.contains_point(position):
+		return true
 	for action in buttons:
 		var button: TouchScreenButton = buttons[action]
 		if button.visible and position.distance_to(button.position) <= button.shape.radius + 4:
@@ -184,6 +193,7 @@ func _over_action_button(position: Vector2) -> bool:
 func _set_movement(position: Vector2) -> void:
 	stick = (position - move_origin).limit_length(joystick_travel()) / joystick_travel()
 	var magnitude := stick.length()
+	_set_assist_running(sprint_assist and move_finger >= 0 and magnitude >= 0.92)
 	var analog := Vector2.ZERO
 	if magnitude > DEAD_ZONE:
 		analog = stick.normalized() * (magnitude - DEAD_ZONE) / (1.0 - DEAD_ZONE)
@@ -195,6 +205,12 @@ func _set_movement(position: Vector2) -> void:
 		else:
 			Input.action_release(MOVE_ACTIONS[i])
 	queue_redraw()
+
+
+func _set_assist_running(active: bool) -> void:
+	assist_running = active
+	if is_instance_valid(player):
+		player.set_sprint_enabled(active)
 
 
 func _unhandled_input(event: InputEvent) -> void:

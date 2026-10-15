@@ -33,3 +33,15 @@ All geometry, texture painting and shader additions below are original project w
 - `assets/shaders/water_spray.gdshader` is an original Compatibility billboard spray shader. The version 0.3 revisions to `cloud_sky`, `garden_stone`, `terrain_ground` and `jade_water` shaders are original procedural sky, paving, ground and water work. The north-up schematic minimap and quest-interface graphics are drawn from live world state in `scripts/quest_interface.gd`, without reference-map image extraction.
 
 Generator source and manifests preserve provenance; visual similarity to the supplied art is an engineering/design target, not a claim of reference-level realism or an asset-license grant for the supplied images.
+
+## Verdant sanctuaries, homes and hero powers — version 0.5
+
+The new `Temple_Realm_Game_Visual_Upgrade_Reference_Pack.zip` and its images, prose and gameplay video remain outside exported resources. They provide visual direction. Attached agent instructions are treated as reference material under the owner's actual request; they are not executed as environment commands.
+
+- `tools/generate_verdant_assets.py` creates eight original GLBs in `assets/models/verdant/`: a scholar desk, scroll shelf, lattice screen, fox guardian, fox shrine, covered bridge, pergola and carved dragon spout. The serialized manifest records 27,357 triangles across these source modules. They reuse named project palette materials and contain no embedded reference textures.
+- `tools/generate_residence_assets.py` creates original near/far residence GLBs and an authored collision manifest under `assets/models/residence/`. The near house has 39,846 triangles and real separate floor, wall, post, roof, ceiling and furnished-room groups; the far shell has 11,904 triangles. Both use the original shared palette. The JSON collision manifest is explicitly included in exports.
+- `tools/generate_celestial_dragon.py` creates an original skinned dragon, near/far geometry and a six-second swimming animation. Its twenty-joint rig, horns, whiskers, mane and scales are mathematical project art, with no external character or game model. Source manifest and a dedicated license accompany the models.
+- `scripts/architectural_detail.gd` generates original curved ceramic tiles, rafters, corbels and fixings over actual placed roofs, using shared project materials and spatial MultiMeshes. Geometry is counted from instantiated mesh index buffers. Distant buildings use their underlying simpler modules.
+- `scripts/verdant_flora.gd`, `verdant_district.gd`, `world_activities.gd`, `destructible_mountains.gd` and the revised traveler and environmental shaders create original flowers, vines, furnishings, lore, shrine bell/seal, breakable karst formations and short-lived effects. The shrine bell is synthesized in memory. Hero powers use the existing original traveler and generic fantasy names.
+
+These additions are original project work under the repository MIT license. The superhero examples in the owner's request guide movement capabilities; no superhero likeness, costume, logo, music or model is bundled.

@@ -26,42 +26,42 @@
 ### Task1 — Original modular assets and dressed spaces
 
 Files: new generator/models/manifest; new verdant_district.gd and original textures; tests/test_verdant_dressing.gd.
-- [ ] Pin dimensions/material slots from spec; observe failing asset/placement assertions.
-- [ ] Generate eight original UV-mapped modules; shared palette, bounded triangles/materials.
-- [ ] Implement build(world)/apply_quality(preset), furnished scholar interior, pergolas and shrine details with real prop collision.
-- [ ] Run focused imported-geometry/material/collider/corridor/quality tests; inspect actual isolated art.
+- [x] Pin dimensions/material slots from spec; observe failing asset/placement assertions.
+- [x] Generate eight original UV-mapped modules; shared palette, bounded triangles/materials.
+- [x] Implement build(world)/apply_quality(preset), furnished scholar interior, pergolas and shrine details with real prop collision.
+- [x] Run focused imported-geometry/material/collider/corridor/quality tests; inspect actual isolated art.
 
 ### Task2 — Natural landscape, water and reachable western route
 
 Files: world.gd, landscape_visuals.gd, new verdant_route.gd, landscape/shaders; tests/test_verdant_route.gd and world regressions.
-- [ ] Reproduce disabled cliff vertex tint and route absence in tests.
-- [ ] Implement thirty0.2m risers,16m covered bridge and6m shrine terrace as specified; connect actual floor surfaces and guards.
-- [ ] Refine terrain/cliff/shore transitions, supported masses, water and lighting without violating old floors/seams.
-- [ ] Actual capsule ascends, crosses bridge, reaches shrine and returns; verify new solid interior props and old routes.
+- [x] Reproduce disabled cliff vertex tint and route absence in tests.
+- [x] Implement thirty0.2m risers,16m covered bridge and6m shrine terrace as specified; connect actual floor surfaces and guards.
+- [x] Refine terrain/cliff/shore transitions, supported masses, water and lighting without violating old floors/seams.
+- [x] Actual capsule ascends, crosses bridge, reaches shrine and returns; verify new solid interior props and old routes.
 
 ### Task3 — Foliage and optional living dragon
 
 Files: nature.gd/botanical assets and helper; separate dragon generator/model/controller if accepted; focused tests.
-- [ ] Add deterministic rich planted edges/wisteria/forest transitions with route exclusions and density hooks.
-- [ ] Candidate dragon uses real modeled/animated geometry and bounded deterministic flight, <=8ktri/6surfaces.
-- [ ] Verify exclusions/seed/quality restoration and actual dragon animation/path. Reject visual or budget regressions during real render review.
+- [x] Add deterministic rich planted edges/wisteria/forest transitions with route exclusions and density hooks.
+- [x] Candidate dragon uses real modeled/animated geometry and bounded deterministic flight, <=8ktri/6surfaces.
+- [x] Verify exclusions/seed/quality restoration and actual dragon animation/path. Reject visual or budget regressions during real render review.
 
 ### Task4 — Exploration activities and compatible persistence
 
 Files: world_activities.gd, quest_interface.gd, main.gd, exploration.gd, save_store.gd; tests/test_world_activities.gd plus save/exploration fixtures.
-- [ ] Observe missing lore/bell/schema4 behaviors fail.
-- [ ] Three unique proximity lore records, viewable journal, completion-gated bell and visible persistent seal.
-- [ ] Five discovered-only map waypoints; update both route diagrams and ID validation.
-- [ ] Version4 roundtrip and strict invalid/inconsistent data handling, old1/2/3 migrations.
-- [ ] Actual GUI taps, modal pause/release, compact bounds and full3D guard tests pass.
+- [x] Observe missing lore/bell/schema4 behaviors fail.
+- [x] Three unique proximity lore records, viewable journal, completion-gated bell and visible persistent seal.
+- [x] Five discovered-only map waypoints; update both route diagrams and ID validation.
+- [x] Version4 roundtrip and strict invalid/inconsistent data handling, old1/2/3 migrations.
+- [x] Actual GUI taps, modal pause/release, compact bounds and full3D guard tests pass.
 
 ### Task5 — Mobile checkpoint/resume and sprint assistance
 
 Files: journey_checkpoint.gd, main.gd, mobile_controls.gd, player.gd, game_settings.gd; focused lifecycle/control suites.
-- [ ] Reproduce absence of automatic restore/checkpoints and two-thumb sprint support.
-- [ ] Add isolated, debounced grounded checkpoint controller with guarded restore/focus handling; Android default enabled, desktop default disabled.
-- [ ] Add optional strict bool sprint setting/default false; independent assist state with native action compatibility.
-- [ ] Prove milestone save, resume, malformed-load preservation, no restore-write race and every cancellation path.
+- [x] Reproduce absence of automatic restore/checkpoints and two-thumb sprint support.
+- [x] Add isolated, debounced grounded checkpoint controller with guarded restore/focus handling; Android default enabled, desktop default disabled.
+- [x] Add optional strict bool sprint setting/default false; independent assist state with native action compatibility.
+- [x] Prove milestone save, resume, malformed-load preservation, no restore-write race and every cancellation path.
 
 ### Task6 — Review, real pixels and APK delivery
 
@@ -69,5 +69,5 @@ Files: test runner/capture helpers/workflow/version/docs.
 - [ ] Register focused suites; setup, import/lint/startup, all behavior tests and security checks pass.
 - [ ] Compare matched views and all new destinations; actual15s traversal clip and animated water/dragon evidence, bounded content metrics and mobile layouts.
 - [ ] Independent review; fix significant findings with focused regression evidence.
-- [ ] Freeze source, run autonomous cycle and label native host limit honestly; export code4/name0.4.0.
+- [ ] Freeze source, run autonomous cycle and label native host limit honestly; export the combined final Hero milestone as code5/name0.5.0 (the owner extended scope before delivery).
 - [ ] Commit/push tested source once stable; verify successful exact-SHA GitHub workflow and actual APK artifact, then update delivery/handoff docs.

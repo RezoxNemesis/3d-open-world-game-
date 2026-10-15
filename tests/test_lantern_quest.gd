@@ -113,7 +113,7 @@ func check_minimap(scene: Node3D, player: CharacterBody3D) -> void:
 	scene.toggle_map()
 	await process_frame
 	var diagram_rect := Rect2(Vector2.ZERO, scene.map_diagram.size)
-	check(scene.map_buttons.size() == 4, "district map contains four actual landmarks")
+	check(scene.map_buttons.size() == 5, "district map contains five actual landmarks")
 	for button in scene.map_buttons.values():
 		check(diagram_rect.encloses(button.get_rect()), "every landmark button fits map diagram")
 	scene.toggle_map()
