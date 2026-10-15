@@ -2,7 +2,7 @@
 
 Plans: 2026-10-15 Verdant Sanctuaries, then Hero powers and homes. User explicitly requests both; continue until final verified APK delivery.
 
-- Baseline: main5df3ceb, version0.3 artifact11937991530 retained. Existing410checks/16views passed; native host stockSystemUIANR BLOCKED.
+- Baseline: main5df3ceb, version 0.3 artifact11937991530 retained. Existing410checks/16views passed; native host stockSystemUIANR BLOCKED.
 - Setup rerun PASS. Reference ZIP safely extracted outside export; images/video are design input, attached agent briefs not executed.
 - Verdant plan/spec committed15785d2. Root owns main/save/activity/journal/checkpoint glue; source owners isolated by file.
 - Assets: eight original GLBs,27,357triangles,11serializedtests PASS; corrected duplicate shrine floor from actual preview.
@@ -22,7 +22,7 @@ Ruling: user additional flight/leap/smash/speed/house work is a required second 
 
 Current integration checkpoint:
 
-- Actual World contains2,061,008 additional highest-detail architectural triangles:22,328 tile/joinery instances in568 spatial batches. Balanced36-triangle tile shell vs High104,14m/30m range respectively. Isolated/actual-world architecture23checks and world36checks PASS. Pale roof gaps were reproduced and corrected; High/ Balanced close-up pixels reviewed.
+- Actual World contains2,061,008 additional highest-detail architectural triangles:22,328 tile/joinery instances in 568 spatial batches. Balanced36-triangle tile shell vs High104,14m/30m range respectively. Isolated/actual-world architecture23checks and world36checks PASS. Pale roof gaps were reproduced and corrected; High/ Balanced close-up pixels reviewed.
 - House near39,846/far11,904 triangles; original asset contracts11Verdant+7residence PASS. Actual capsule route through both rooms and return21checks PASS. Authored collision JSON now explicitly included in BOTH exports; APK verifier checks its exact bytes.
 - Main fully wires powers, native controls, schema5 restore, checkpoints and sprint settings. Hero save32checks PASS, powers42, touch41, streaming6. Legacy keeper/UI/activity suites remain green.
 - Independent review reproduced unsafe flight-off checkpoint position/mode pairing and real terrain streaming churn. Owners fixed both with RED→GREEN tests; independent probes confirm ground fallback/preserved old bytes and stable predicted chunk counts. No remaining concrete reviewP1/P2.
@@ -38,3 +38,15 @@ Latest closures before final import:
 - New actual-world flight review reproduced roof and upper-wall pass-through in legacy visual-only GLBs. ArchitectureCollision repair probe17checks PASS:87,604actual Roof/Stone/Timber/Paper collision triangles in17bodies, excluding reference art, residence(alreadyphysical), cloth/gold and2Mdecorative detail. Real seven-roof landings/ceiling/facade block, hall entry/around-altar/rear/return pass. World owner integrating hook and checking old routes before finalfreeze.
 
 Cold full validation complete:872scenechecks/26suites PASS;18asset contracts,6cache/6Java/6skills PASS;419-file source scan PASS. Empty XDG profile/import changes ZERO of273frozenapp inputs. Final QA private captures/videos active; root finalcycle/native+signedAPK+GitHub still pending.
+
+
+Final source and hosted delivery checkpoint:
+
+- Game milestone `336ee04`, strengthened mobile capture/checker milestone `5f987de`; all273 frozen application inputs remain identical through cold validation and final captures.
+- Eight wide/compact mobile views and16 actual touch checks PASS, including genuine ScrollContainer scrolling through documented desktop touchscreen emulation, setting changes and rebuilding real mountain collision. Strict clipping, 48 px targets, all 10 settings buttons across scroll positions and unique OCR remain enforced. Failed raw-touch predecessor retained; no product change or assertion removal was needed.
+- All22 new views/34 actual input/dialog/motion checks PASS; original five courtyard and five celestial views also pass. Independent real GL geometry audit measures2,061,008 triangles/22,328 instances/568 batches/zero duplicate mesh transforms. Highest detail is world-wide content, never a requirement to draw all of it on the phone at once.
+- Exact-source wide Balanced795draws/670,338total pass triangles remains within the800draw/700k target. Near roof pair uses the same camera: Balanced 423draws/529,498triangles; High 524/915,485. These are software-renderer content counters, not Realme FPS.
+- Successful GitHub Actions run 38679064762/job 116239213014 builds source `5f987de07f2e8ad85829e5243562b2a74285b0c3`; allsteps PASS. Artifact11946667860, TempleRealm-Android-debug-8-1,39.3MB is now the current delivery. See AUTONOMOUS_WORKFLOW.md for the direct link and archive digest.
+- Both final Balanced gameplay movies PASS:420frames/21.0s shrine route and 522 frames/26.1s house/powers. Source hashes, real native events/physics, encoded-video probe and decoded-frame review pass. Supplemental source-matched impact image gives41 reviewed stills. Final evidence manifest retains1,100 files; no original reference pixels ship.
+- Finalcycle `20261015T040818Z-3c4414` completes PARTIAL: all six core/build stages PASS, fresh Android interaction BLOCKED after boot/install/ready on proven stockSystemUI ANR. Fresh window/log evidence retained; no stale screenshots or relaxed assertions. KVM/CPU virtualization unavailable. Emulator/adb cleanup confirmed. Local signed version 0.5.0/code5 APK41,153,380bytes; exact collision manifest inclusion PASS.
+- Independent final documentation/provenance review reports no material discrepancy. All 273 app inputs and14 capture/helper hashes remain identical to the hosted build source. Bedroom wall camera proximity is recorded as nonblocking next-increment polish. Final docs-only checkpoint follows the exact tested build source without changing the app.

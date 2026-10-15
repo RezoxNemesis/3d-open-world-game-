@@ -66,8 +66,11 @@ Files: journey_checkpoint.gd, main.gd, mobile_controls.gd, player.gd, game_setti
 ### Task6 — Review, real pixels and APK delivery
 
 Files: test runner/capture helpers/workflow/version/docs.
-- [ ] Register focused suites; setup, import/lint/startup, all behavior tests and security checks pass.
-- [ ] Compare matched views and all new destinations; actual15s traversal clip and animated water/dragon evidence, bounded content metrics and mobile layouts.
-- [ ] Independent review; fix significant findings with focused regression evidence.
-- [ ] Freeze source, run autonomous cycle and label native host limit honestly; export the combined final Hero milestone as code5/name0.5.0 (the owner extended scope before delivery).
-- [ ] Commit/push tested source once stable; verify successful exact-SHA GitHub workflow and actual APK artifact, then update delivery/handoff docs.
+- [x] Register focused suites; setup, import/lint/startup, all behavior tests and security checks pass.
+- [x] Compare matched views and all new destinations; actual15s traversal clip and animated water/dragon evidence, bounded content metrics and mobile layouts.
+- [x] Independent review; fix significant findings with focused regression evidence.
+- [x] Freeze source, run autonomous cycle and label native host limit honestly; export the combined final Hero milestone as code5/name0.5.0 (the owner extended scope before delivery).
+- [x] Commit/push tested source once stable; verify successful exact-SHA GitHub workflow and actual APK artifact, then update delivery/handoff docs.
+
+
+Final verification: 872 scene assertions/26 suites pass;41 source-matched stills and both 21.0s/26.1s gameplay movies pass. Cycle `20261015T040818Z-3c4414` is PARTIAL with all six core/build stages PASS and native interaction BLOCKED on a fresh, proven stock SystemUI ANR after boot/install/game-ready. No Android assertion was weakened. Successful exact-source `5f987de` GitHub run 38679064762 uploads artifact11946667860 (39.3MB); see AUTONOMOUS_WORKFLOW.md for the verified direct download and TEST_RESULTS.md for limits.

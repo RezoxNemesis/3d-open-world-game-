@@ -11,8 +11,11 @@
 - [x] Refine traveler visuals in a separate owned builder, preserving Player/rig APIs and flying pose requirements.
 - [x] Finish and verify the Verdant activities/checkpoint milestone before root exposes new powers UI.
 - [x] Add schema5 strict hero-state migration, actual destroyed-state restoration and airborne checkpoint/resume.
-- [ ] Run all existing/new tests and independent review. Record actual15s+ ability/interior/destruction footage and matched environment/mobile views with frozen source hashes; tune visible budgets.
-- [ ] Run final autonomous cycle/native attempt and honest limit reporting; export code5/name0.5.0.
-- [ ] Push exact verified source, verify successful GitHub Actions upload, deliver real APK artifact link and updated continuity docs.
+- [x] Run all existing/new tests and independent review. Record actual15s+ ability/interior/destruction footage and matched environment/mobile views with frozen source hashes; tune visible budgets.
+- [x] Run final autonomous cycle/native attempt and honest limit reporting; export code5/name0.5.0.
+- [x] Push exact verified source, verify successful GitHub Actions upload, deliver real APK artifact link and updated continuity docs.
 
 Review focus: no flight collision tunneling, leap on canceled touch, stale speed/FOV after overlays, unloaded terrain at extreme speed, destructible collision surviving visual removal, or airborne resume losing flight state. No paid services, signing changes or copied reference imagery.
+
+
+Final verification: 872 scene assertions/26 suites pass;41 source-matched stills and both 21.0s/26.1s gameplay movies pass. Cycle `20261015T040818Z-3c4414` is PARTIAL with all six core/build stages PASS and native interaction BLOCKED on a fresh, proven stock SystemUI ANR after boot/install/game-ready. No Android assertion was weakened. Successful exact-source `5f987de` GitHub run 38679064762 uploads artifact11946667860 (39.3MB); see AUTONOMOUS_WORKFLOW.md for the verified direct download and TEST_RESULTS.md for limits.
