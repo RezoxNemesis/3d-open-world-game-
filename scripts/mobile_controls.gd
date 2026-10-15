@@ -126,13 +126,15 @@ func _draw() -> void:
 		var position := button.position
 		var button_radius: float = button.shape.radius
 		var active := Input.is_action_pressed(action)
-		var fill := Color(0.18, 0.30, 0.27, 0.78) if active else color
+		var fill := Color(0.18, 0.30, 0.27, 0.92) if active else Color(0.025, 0.075, 0.08, 0.86)
 		if action in ["map_game", "settings_game"]:
 			fill = Color(0.12, 0.25, 0.23, 0.96) if active else Color(0.025, 0.075, 0.08, 0.90)
 		draw_circle(position, button_radius, fill)
 		draw_arc(position, button_radius, 0, TAU, 48, gold, 1.5, true)
 		draw_arc(position, button_radius - 5, 0, TAU, 48, Color(gold, 0.20), 1.0, true)
-		var font_size := maxi(14, roundi(16 * layout_scale))
+		var font_size := maxi(16, roundi(18 * layout_scale))
+		if action in ["map_game", "settings_game"]:
+			font_size = maxi(14, roundi(16 * layout_scale))
 		var label: String = labels[action]
 		var text_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		draw_string(

@@ -1,6 +1,7 @@
 extends CharacterBody3D
 ## Camera-relative movement with real physics and an original walking traveler.
 
+const TRAVELER_VISUAL := preload("res://scripts/traveler_visual.gd")
 const SPEED := 5.0
 const SPRINT_SPEED := 8.0
 const MIN_PITCH := -0.80
@@ -15,7 +16,7 @@ var camera_distance := 5.4
 var sprint_enabled := false
 var model: Node3D
 var yaw := 0.0
-var pitch := -0.28
+var pitch := -0.16
 var first_person := false
 var step_time := 0.0
 var arms: Array[Node3D] = []
@@ -57,146 +58,11 @@ func _ready() -> void:
 
 
 func build_traveler() -> void:
-	# All pieces are decorative meshes; the single capsule remains the physics body.
-	var skin := make_material("c99572")
-	var cream := make_material("ddd0a5")
-	var teal := make_material("285b59")
-	var dark_cloth := make_material("293b3c")
-	var leather := make_material("493529")
-	var hair := make_material("25231e")
-	var gold := make_material("b5934a", 0.65)
-	var steel := make_material("76878b", 0.55)
-	var torso := add_piece(model, make_capsule(0.225, 0.51), cream, Vector3(0, 1.12, 0))
-	torso.scale.z = 0.75
-	var lower_tunic := add_piece(
-		model, make_cylinder(0.205, 0.245, 0.29), teal, Vector3(0, 0.805, 0)
-	)
-	lower_tunic.scale.z = 0.78
-	add_piece(model, make_box(Vector3(0.11, 0.43, 0.025)), teal, Vector3(-0.07, 1.1, -0.175))
-	add_piece(model, make_box(Vector3(0.09, 0.26, 0.025)), gold, Vector3(-0.07, 0.785, -0.195))
-	add_piece(model, make_cylinder(0.225, 0.23, 0.065), leather, Vector3(0, 0.935, 0))
-	add_piece(model, make_box(Vector3(0.075, 0.075, 0.025)), gold, Vector3(0, 0.935, -0.237))
-	var sash := add_piece(
-		model, make_box(Vector3(0.065, 0.43, 0.025)), gold, Vector3(0.03, 1.155, -0.222)
-	)
-	sash.rotation.z = -0.48
-	add_piece(model, make_cylinder(0.06, 0.065, 0.12), skin, Vector3(0, 1.36, 0))
-	add_piece(model, make_cylinder(0.085, 0.085, 0.06), teal, Vector3(0, 1.355, 0))
-	add_piece(model, make_sphere(0.14, 0.30), skin, Vector3(0, 1.535, 0))
-	add_piece(model, make_sphere(0.148, 0.11), hair, Vector3(0, 1.668, 0.014))
-	add_piece(model, make_sphere(0.11, 0.22), hair, Vector3(0, 1.57, 0.085))
-	add_piece(model, make_sphere(0.075, 0.1), hair, Vector3(0, 1.655, 0.18))
-	add_piece(model, make_sphere(0.023, 0.034), skin, Vector3(0, 1.525, -0.14))
-	add_piece(model, make_sphere(0.021, 0.008), make_material("9c684f"), Vector3(0, 1.488, -0.13))
-	var eye_mesh := make_sphere(0.012, 0.015)
-	for side in [-1.0, 1.0]:
-		add_piece(model, eye_mesh, hair, Vector3(side * 0.049, 1.563, -0.131))
-	# Matching limbs share their mesh resources and materials.
-	var sleeve_mesh := make_capsule(0.082, 0.29)
-	var forearm_mesh := make_capsule(0.049, 0.21)
-	var hand_mesh := make_sphere(0.048, 0.11)
-	var trouser_mesh := make_capsule(0.088, 0.36)
-	var boot_mesh := make_capsule(0.077, 0.29)
-	var foot_mesh := make_sphere(0.088, 0.11)
-	for side in [-1.0, 1.0]:
-		var arm := Node3D.new()
-		arm.name = "ArmLeft" if side < 0 else "ArmRight"
-		arm.position = Vector3(side * 0.235, 1.29, 0)
-		model.add_child(arm)
-		arms.append(arm)
-		add_piece(arm, sleeve_mesh, cream, Vector3(0, -0.125, 0))
-		var elbow := Node3D.new()
-		elbow.position.y = -0.27
-		arm.add_child(elbow)
-		elbows.append(elbow)
-		add_piece(elbow, forearm_mesh, skin, Vector3(0, -0.10, 0))
-		add_piece(elbow, hand_mesh, skin, Vector3(0, -0.225, 0))
-		add_piece(elbow, make_cylinder(0.055, 0.055, 0.06), teal, Vector3(0, -0.16, 0))
-		var leg := Node3D.new()
-		leg.name = "LegLeft" if side < 0 else "LegRight"
-		leg.position = Vector3(side * 0.125, 0.7, 0)
-		model.add_child(leg)
-		legs.append(leg)
-		add_piece(leg, trouser_mesh, dark_cloth, Vector3(0, -0.165, 0))
-		var knee := Node3D.new()
-		knee.position.y = -0.32
-		leg.add_child(knee)
-		knees.append(knee)
-		add_piece(knee, boot_mesh, leather, Vector3(0, -0.15, 0))
-		var foot := add_piece(knee, foot_mesh, leather, Vector3(0, -0.315, -0.055))
-		foot.scale.z = 1.55
-		var tail := Node3D.new()
-		tail.position = Vector3(side * 0.16, 0.89, 0.12)
-		model.add_child(tail)
-		coat_tails.append(tail)
-		add_piece(tail, make_box(Vector3(0.13, 0.30, 0.025)), cream, Vector3(0, -0.135, 0))
-	# A compact travel pack and sheathed blade keep the rear silhouette readable.
-	add_piece(model, make_box(Vector3(0.255, 0.30, 0.115)), leather, Vector3(0, 1.17, 0.225))
-	var bedroll := add_piece(
-		model, make_cylinder(0.085, 0.085, 0.36), cream, Vector3(0, 1.35, 0.245)
-	)
-	bedroll.rotation.z = PI / 2
-	for side in [-1.0, 1.0]:
-		add_piece(
-			model, make_box(Vector3(0.025, 0.30, 0.13)), gold, Vector3(side * 0.08, 1.17, 0.23)
-		)
-	var blade := Node3D.new()
-	blade.position = Vector3(0.18, 1.01, 0.23)
-	blade.rotation.z = -0.32
-	model.add_child(blade)
-	add_piece(blade, make_box(Vector3(0.055, 0.54, 0.045)), dark_cloth, Vector3(0, 0, 0))
-	add_piece(blade, make_box(Vector3(0.16, 0.025, 0.05)), gold, Vector3(0, 0.285, 0))
-	add_piece(blade, make_cylinder(0.023, 0.023, 0.13), leather, Vector3(0, 0.36, 0))
-	add_piece(blade, make_sphere(0.029, 0.035), steel, Vector3(0, 0.438, 0))
-
-
-func make_material(color: String, roughness := 0.9) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(color)
-	material.roughness = roughness
-	return material
-
-
-func make_cylinder(top: float, bottom: float, height: float) -> CylinderMesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = top
-	mesh.bottom_radius = bottom
-	mesh.height = height
-	mesh.radial_segments = 20
-	return mesh
-
-
-func make_capsule(radius: float, height: float) -> CapsuleMesh:
-	var mesh := CapsuleMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh.radial_segments = 16
-	mesh.rings = 4
-	return mesh
-
-
-func make_sphere(radius: float, height: float) -> SphereMesh:
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh.radial_segments = 16
-	mesh.rings = 8
-	return mesh
-
-
-func make_box(size: Vector3) -> BoxMesh:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	return mesh
-
-
-func add_piece(parent: Node3D, mesh: Mesh, material: Material, at: Vector3) -> MeshInstance3D:
-	var piece := MeshInstance3D.new()
-	piece.mesh = mesh
-	piece.material_override = material
-	piece.position = at
-	parent.add_child(piece)
-	return piece
+	# Decorative authored cloth remains separate from the single physics capsule.
+	var joints := TRAVELER_VISUAL.build(model)
+	for key in joints:
+		var destination: Array = get(key)
+		destination.assign(joints[key])
 
 
 func update_camera() -> void:

@@ -1,8 +1,10 @@
 extends RefCounted
-## Seeded garden plants share spatial batches; authored walking routes stay clear.
+## Original botanical cards and forked woody stems share seeded spatial batches.
 
 var rng := RandomNumberGenerator.new()
 var height_at: Callable
+var botanical_texture: Texture2D
+var bark_texture: Texture2D
 
 
 func surface(color: Color) -> StandardMaterial3D:
@@ -14,11 +16,18 @@ func surface(color: Color) -> StandardMaterial3D:
 	return result
 
 
-func foliage_surface(blossom: bool = false, strength: float = 0.045) -> ShaderMaterial:
+func foliage_surface(
+	blossom: bool = false, strength: float = 0.045, atlas: bool = false
+) -> ShaderMaterial:
 	var result := ShaderMaterial.new()
 	result.shader = preload("res://assets/shaders/garden_foliage.gdshader")
 	result.set_shader_parameter("blossom", blossom)
 	result.set_shader_parameter("wind_strength", strength)
+	result.set_shader_parameter("use_atlas", atlas)
+	if atlas:
+		if botanical_texture == null:
+			botanical_texture = load("res://assets/materials/botanical_atlas.png")
+		result.set_shader_parameter("foliage_atlas", botanical_texture)
 	return result
 
 
@@ -33,7 +42,7 @@ func batch(
 	var groups: Dictionary = {}
 	for i in range(transforms.size()):
 		var point := transforms[i].origin
-		var key := Vector2i(floori(point.x / 32), floori(point.z / 32))
+		var key := Vector2i(floori(point.x / 48), floori(point.z / 48))
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(i)
@@ -62,24 +71,37 @@ func batch_group(
 	multi.mesh = mesh
 	multi.instance_count = transforms.size()
 	var instance_origins := PackedVector3Array()
+	var order := range(transforms.size())
+	if density_scaled:
+		# A reduced prefix should thin all crowns, not strip the last trees of leaves.
+		var shuffle_rng := RandomNumberGenerator.new()
+		shuffle_rng.seed = hash(label + str(transforms[0].origin))
+		for index in range(order.size() - 1, 0, -1):
+			var other := shuffle_rng.randi_range(0, index)
+			var previous: int = order[index]
+			order[index] = order[other]
+			order[other] = previous
 	for i in range(transforms.size()):
-		instance_origins.append(transforms[i].origin)
-		multi.set_instance_transform(i, transforms[i])
-		multi.set_instance_color(i, colors[i])
+		var source: int = order[i]
+		instance_origins.append(transforms[source].origin)
+		multi.set_instance_transform(i, transforms[source])
+		multi.set_instance_color(i, colors[source])
 	item.multimesh = multi
-	# Dummy rendering cannot read GPU transforms back; retain source origins for route QA.
+	# Dummy rendering cannot read GPU transforms back; retain exact placement for route QA.
 	item.set_meta("instance_origins", instance_origins)
 	item.set_meta("density_scaled", density_scaled)
 	item.set_meta("near_cover", label in ["MeadowGrass", "GardenFerns", "MeadowFlowers"])
 	item.visibility_range_end = 160
-	if label not in ["GardenBranches", "PineTrunks", "GardenStones"]:
+	if (
+		label
+		not in ["GardenBranches", "PineTrunks", "GardenStones", "FloweringCanopies", "PineCanopies"]
+	):
 		item.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(item)
 
 
 func ground(point: Vector3) -> Vector3:
 	point.y = float(height_at.call(point.x, point.z)) if height_at.is_valid() else -0.8
-	# Flower beds sit above the courtyard, all other plants follow real terrain.
 	if absf(point.x) < 21 and absf(point.z) < 21:
 		point.y = 0.0
 		if absf(absf(point.x) - 13) < 3.35 and absf(point.z - 7) < 3.9:
@@ -97,38 +119,49 @@ func transform_at(point: Vector3, scale_value: Vector3) -> Transform3D:
 func branch_transform(start: Vector3, end: Vector3, radius: float) -> Transform3D:
 	var direction := end - start
 	var up := direction.normalized()
-	var right := up.cross(Vector3.FORWARD).normalized()
+	var reference := Vector3.RIGHT if absf(up.dot(Vector3.FORWARD)) > 0.95 else Vector3.FORWARD
+	var right := up.cross(reference).normalized()
 	return Transform3D(
 		Basis(right * radius, up * direction.length(), right.cross(up) * radius), (start + end) / 2
 	)
 
 
-func canopy_mesh() -> SphereMesh:
-	var result := SphereMesh.new()
-	result.radius = 1.0
-	result.height = 2.0
-	result.radial_segments = 10
-	result.rings = 4
-	result.material = foliage_surface()
+func _bark_mesh() -> CylinderMesh:
+	var result := CylinderMesh.new()
+	result.top_radius = 0.82
+	result.bottom_radius = 1.0
+	result.height = 1.0
+	result.radial_segments = 6
+	result.rings = 1
+	var material := surface(Color.WHITE)
+	if bark_texture == null:
+		bark_texture = load("res://assets/materials/botanical_bark.png")
+	material.albedo_texture = bark_texture
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	result.material = material
 	return result
 
 
-func petal_mesh() -> ArrayMesh:
+func _atlas_mesh(tile: int, planes: int = 3) -> ArrayMesh:
 	var builder := SurfaceTool.new()
 	builder.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for axis in range(3):
-		var basis := Basis(Vector3.UP, axis * TAU / 3)
-		var points: Array[Vector3] = [
-			Vector3(-0.08, 0, 0),
-			Vector3(0.16, 0.09, -0.15),
-			Vector3(0.55, 0.03, 0),
-			Vector3(0.16, 0.09, 0.15)
-		]
+	var offset := Vector2(tile % 2, tile / 2) * 0.5
+	var uvs: Array[Vector2] = [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+	var points: Array[Vector3] = [
+		Vector3(-0.5, -0.5, 0), Vector3(0.5, -0.5, 0), Vector3(0.5, 0.5, 0), Vector3(-0.5, 0.5, 0)
+	]
+	for plane in range(planes):
+		var basis := Basis.from_euler(Vector3(plane * 0.23 - 0.2, plane * PI / planes, 0))
 		for index in [0, 1, 2, 0, 2, 3]:
+			builder.set_uv(offset + Vector2.ONE * 0.005 + uvs[index] * 0.49)
 			builder.add_vertex(basis * points[index])
 	builder.generate_normals()
-	builder.set_material(foliage_surface(true, 0.07))
+	builder.set_material(foliage_surface(tile == 1, 0.055 if tile == 2 else 0.09, true))
 	return builder.commit()
+
+
+func petal_mesh() -> ArrayMesh:
+	return _atlas_mesh(1, 2)
 
 
 func grass_mesh() -> ArrayMesh:
@@ -153,17 +186,17 @@ func grass_mesh() -> ArrayMesh:
 func fern_mesh() -> ArrayMesh:
 	var builder := SurfaceTool.new()
 	builder.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for frond in range(5):
-		var basis := Basis(Vector3.UP, frond * TAU / 5)
-		for leaflet in range(4):
-			var distance := 0.10 + leaflet * 0.16
-			var width := (4 - leaflet) * 0.06
-			var middle := Vector3(distance, 0.20 + sin(distance * 3.0) * 0.22, 0)
+	for frond in range(6):
+		var basis := Basis(Vector3.UP, frond * TAU / 6)
+		for leaflet in range(6):
+			var distance := 0.09 + leaflet * 0.105
+			var width := (6 - leaflet) * 0.045
+			var middle := Vector3(distance, 0.12 + sin(distance * 3.8) * 0.32, 0)
 			for side in [-1, 1]:
 				for point in [
 					middle,
-					middle + Vector3(0.12, 0.02, width * side),
-					middle + Vector3(0.18, 0.0, 0.02 * side)
+					middle + Vector3(0.10, 0.02, width * side),
+					middle + Vector3(0.15, 0.0, 0.02 * side)
 				]:
 					builder.add_vertex(basis * point)
 	builder.generate_normals()
@@ -180,15 +213,40 @@ func populate(parent: Node3D, seed_value: int, ground_height: Callable = Callabl
 	populate_ground_cover(parent)
 
 
+func _add_branch(
+	transforms: Array[Transform3D],
+	colors: Array[Color],
+	start: Vector3,
+	end: Vector3,
+	radius: float
+) -> void:
+	transforms.append(branch_transform(start, end, radius))
+	colors.append(Color("c6b8a2").lerp(Color.WHITE, rng.randf() * 0.8))
+
+
+func _camera_canopy(parent: Node3D, point: Vector3, width: float) -> void:
+	var blocker := StaticBody3D.new()
+	blocker.name = "CanopyCameraBlocker"
+	blocker.collision_layer = 2
+	blocker.collision_mask = 0
+	blocker.position = point
+	var collision := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = width
+	collision.shape = sphere
+	blocker.add_child(collision)
+	parent.add_child(blocker)
+
+
 func populate_blossoms(parent: Node3D) -> void:
 	var trunks: Array[Transform3D] = []
 	var bark_colors: Array[Color] = []
 	var flowers: Array[Transform3D] = []
 	var blossom_colors: Array[Color] = []
-	var cores: Array[Transform3D] = []
-	var core_colors: Array[Color] = []
 	var leaves: Array[Transform3D] = []
 	var leaf_colors: Array[Color] = []
+	var maples: Array[Transform3D] = []
+	var maple_colors: Array[Color] = []
 	var tree_positions: Array[Vector3] = [
 		Vector3(-10, 0, 9),
 		Vector3(15, 0, 10),
@@ -201,151 +259,150 @@ func populate_blossoms(parent: Node3D) -> void:
 		Vector3(-16, 0, 16),
 		Vector3(19, 0, -1),
 		Vector3(-22, 0, -25),
-		Vector3(22, 0, -25)
+		Vector3(22, 0, -25),
+		Vector3(-24, 0, 22),
+		Vector3(24, 0, 20),
+		Vector3(34, 0, -28)
 	]
-	for root_point in tree_positions:
-		root_point = ground(root_point)
-		var height := rng.randf_range(3.3, 5.0)
-		var fork := root_point + Vector3(rng.randf_range(-0.25, 0.25), height * 0.6, 0.2)
-		trunks.append(branch_transform(root_point, fork, 0.27))
-		bark_colors.append(Color("56453b"))
-		for branch in range(7):
-			var angle := branch * TAU / 7 + rng.randf() * 0.5
-			var reach := rng.randf_range(1.3, 2.6)
-			var end := (
-				root_point
-				+ Vector3(
-					cos(angle) * reach, height + rng.randf_range(-0.2, 0.8), sin(angle) * reach
-				)
-			)
-			trunks.append(branch_transform(fork, end, rng.randf_range(0.08, 0.15)))
-			bark_colors.append(Color("74604f"))
-			var width := rng.randf_range(1.0, 1.45)
-			var canopy_blocker := StaticBody3D.new()
-			canopy_blocker.name = "CanopyCameraBlocker"
-			canopy_blocker.collision_layer = 2
-			canopy_blocker.collision_mask = 0
-			canopy_blocker.position = end
-			var canopy_shape := CollisionShape3D.new()
-			var canopy_sphere := SphereShape3D.new()
-			canopy_sphere.radius = width * 0.86
-			canopy_shape.shape = canopy_sphere
-			canopy_blocker.add_child(canopy_shape)
-			parent.add_child(canopy_blocker)
-			for lobe in range(3):
-				var lobe_width := width * rng.randf_range(0.45, 0.67)
-				var offset := Vector3(
-					rng.randf_range(-0.55, 0.55),
-					rng.randf_range(-0.25, 0.40),
-					rng.randf_range(-0.55, 0.55)
-				)
-				cores.append(
-					transform_at(
-						end + offset,
-						Vector3(lobe_width, lobe_width * rng.randf_range(0.65, 0.95), lobe_width)
+	for tree_index in range(tree_positions.size()):
+		var root_point := ground(tree_positions[tree_index])
+		var maple := tree_index >= 12
+		var height := rng.randf_range(3.8, 5.7) * (0.85 if maple else 1.0)
+		var lean := Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.65, 0.65))
+		var bend := root_point + Vector3.UP * height * 0.32 + lean * 0.2
+		var fork := root_point + Vector3.UP * height * 0.63 + lean
+		_add_branch(trunks, bark_colors, root_point, bend, 0.27)
+		_add_branch(trunks, bark_colors, bend, fork, 0.22)
+		for branch in range(6):
+			var angle := branch * 2.399 + rng.randf_range(-0.3, 0.3)
+			var outward := Vector3(cos(angle), 0, sin(angle))
+			var reach := rng.randf_range(1.7, 3.1)
+			var joint := fork + outward * reach * 0.5 + Vector3.UP * height * 0.12
+			var end := fork + outward * reach + Vector3.UP * rng.randf_range(0.55, 1.6)
+			_add_branch(trunks, bark_colors, fork, joint, 0.13)
+			_add_branch(trunks, bark_colors, joint, end, 0.085)
+			_camera_canopy(parent, end + Vector3.UP * 0.2, 0.82)
+			for twig in range(3):
+				var twig_angle := angle + (twig - 1) * 0.7
+				var twig_end := (
+					end
+					+ (
+						Vector3(cos(twig_angle), 0.55 + twig * 0.1, sin(twig_angle))
+						* rng.randf_range(0.45, 0.9)
 					)
 				)
-				core_colors.append(Color("bd798b").lerp(Color("e6b9ae"), rng.randf() * 0.85))
-			var leaf_offset := Vector3(
-				rng.randf_range(-0.35, 0.35), -0.2, rng.randf_range(-0.35, 0.35)
-			)
-			leaves.append(
-				transform_at(end + leaf_offset, Vector3(width * 0.60, 0.48, width * 0.65))
-			)
-			leaf_colors.append(Color("375840").lerp(Color("628453"), rng.randf() * 0.7))
-			for blossom_index in range(62):
-				var angle_detail := rng.randf() * TAU
-				var elevation := rng.randf_range(-0.75, 0.9)
-				var ring_width := sqrt(1.0 - elevation * elevation)
-				var offset := (
-					Vector3(
-						cos(angle_detail) * ring_width,
-						elevation * 0.7,
-						sin(angle_detail) * ring_width
+				_add_branch(trunks, bark_colors, end, twig_end, 0.035)
+				for cluster in range(6):
+					var offset := Vector3(
+						rng.randf_range(-0.68, 0.68),
+						rng.randf_range(-0.12, 0.78),
+						rng.randf_range(-0.68, 0.68)
 					)
-					* width
-				)
-				flowers.append(
-					transform_at(end + offset, Vector3.ONE * rng.randf_range(0.30, 0.48))
-				)
-				blossom_colors.append(Color("df95a6").lerp(Color("ffe0cc"), rng.randf()))
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.55
-	trunk.bottom_radius = 1.0
-	trunk.height = 1.0
-	trunk.radial_segments = 8
-	trunk.rings = 1
-	trunk.material = surface(Color.WHITE)
-	batch(parent, "GardenBranches", trunk, trunks, bark_colors)
-	var blossom_core := canopy_mesh()
-	blossom_core.radial_segments = 8
-	blossom_core.rings = 3
-	blossom_core.material = foliage_surface(true, 0.025)
-	batch(parent, "BlossomCrowns", blossom_core, cores, core_colors)
+					var width := rng.randf_range(0.95, 1.45)
+					var transform := transform_at(
+						twig_end + offset, Vector3(width, width * 0.83, width)
+					)
+					if maple:
+						maples.append(transform)
+						maple_colors.append(Color("b4a27f").lerp(Color.WHITE, rng.randf()))
+					else:
+						flowers.append(transform)
+						blossom_colors.append(Color("e0bdc8").lerp(Color.WHITE, rng.randf()))
+				for cluster in range(2):
+					leaves.append(
+						transform_at(twig_end, Vector3(1.0, 0.65, 1.0) * rng.randf_range(0.7, 1.1))
+					)
+					leaf_colors.append(Color("7d8d6e").lerp(Color.WHITE, rng.randf() * 0.7))
+	batch(parent, "GardenBranches", _bark_mesh(), trunks, bark_colors)
 	batch(parent, "FloweringCanopies", petal_mesh(), flowers, blossom_colors, true)
-	batch(parent, "GardenLeaves", canopy_mesh(), leaves, leaf_colors)
+	batch(parent, "GardenLeaves", _atlas_mesh(0), leaves, leaf_colors, true)
+	batch(parent, "RedMapleCanopies", _atlas_mesh(3), maples, maple_colors, true)
 
 
 func populate_pines(parent: Node3D) -> void:
-	var transforms: Array[Transform3D] = []
-	var colors: Array[Color] = []
-	var trunk_transforms: Array[Transform3D] = []
-	var trunk_colors: Array[Color] = []
+	var roots: Array[Vector3] = []
 	for i in range(82):
 		var angle := rng.randf_range(-PI, PI)
 		var radius := rng.randf_range(43, 102)
 		var point := ground(Vector3(cos(angle) * radius, 0, sin(angle) * radius))
-		if point.z > 25 and absf(point.x) < 30:
+		if (point.z > 25 and absf(point.x) < 30) or route_or_water(point):
 			continue
-		var height := rng.randf_range(6, 12)
-		trunk_transforms.append(
-			Transform3D(
-				Basis.IDENTITY.scaled(Vector3(0.23, height, 0.23)), point + Vector3.UP * height / 2
-			)
-		)
-		trunk_colors.append(Color("564d39"))
-		for layer in range(4):
-			var width := (4 - layer) * height * 0.08
-			for lobe in range(3):
-				var yaw := lobe * TAU / 3 + layer * 1.3
-				var center := (
-					point
-					+ Vector3(
-						cos(yaw) * width * 0.35,
-						height * 0.43 + layer * height * 0.14,
-						sin(yaw) * width * 0.35
+		roots.append(point)
+	for point in [Vector3(-23, 0, -27), Vector3(25, 0, -24), Vector3(-22, 0, 20)]:
+		roots.append(ground(point))
+	_pine_group(parent, roots, 6.0, 11.5)
+
+
+func populate_ledge(parent: Node3D, seed_value: int, points: Array[Vector3]) -> void:
+	rng.seed = seed_value
+	_pine_group(parent, points, 2.8, 5.2)
+
+
+func _pine_group(parent: Node3D, roots: Array[Vector3], low: float, high: float) -> void:
+	var leaves: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	var trunks: Array[Transform3D] = []
+	var trunk_colors: Array[Color] = []
+	for root_point in roots:
+		var height := rng.randf_range(low, high)
+		var lean := Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8))
+		var previous := root_point
+		var joints: Array[Vector3] = []
+		for joint in range(4):
+			var rise := float(joint + 1) / 4
+			var point := root_point + Vector3.UP * height * rise + lean * sin(rise * PI * 0.65)
+			_add_branch(trunks, trunk_colors, previous, point, height * (0.039 - rise * 0.022))
+			joints.append(point)
+			previous = point
+		var yaw := rng.randf() * TAU
+		for branch in range(9):
+			var level := 0.35 + branch * 0.071
+			var start := root_point + Vector3.UP * height * level + lean * sin(level * PI * 0.65)
+			var angle := yaw + branch * 2.399
+			var width := height * rng.randf_range(0.24, 0.38) * (1.15 - level * 0.7)
+			var outward := Vector3(cos(angle), 0, sin(angle))
+			var joint := start + outward * width * 0.6 + Vector3.UP * height * 0.025
+			var end := start + outward * width + Vector3.UP * height * rng.randf_range(0.04, 0.09)
+			_add_branch(trunks, trunk_colors, start, joint, height * 0.013)
+			_add_branch(trunks, trunk_colors, joint, end, height * 0.007)
+			for spray in range(5):
+				var position := joint.lerp(end, rng.randf())
+				position += (
+					Vector3(
+						rng.randf_range(-0.4, 0.4),
+						rng.randf_range(0.0, 0.4),
+						rng.randf_range(-0.4, 0.4)
+					)
+					* height
+					/ 7.0
+				)
+				var size := height * rng.randf_range(0.14, 0.24)
+				var basis := Basis.from_euler(
+					Vector3(
+						rng.randf_range(-0.7, 0.7),
+						angle + rng.randf_range(-0.7, 0.7),
+						rng.randf_range(-0.4, 0.4)
 					)
 				)
-				transforms.append(
-					Transform3D(
-						(
-							Basis(Vector3.UP, yaw)
-							* Basis.from_scale(Vector3(width, height * 0.11, width * 0.58))
-						),
-						center
-					)
+				leaves.append(
+					Transform3D(basis.scaled(Vector3(size * 1.15, size * 0.85, size)), position)
 				)
-				colors.append(Color("254c40").lerp(Color("59734d"), rng.randf() * 0.8))
-	var pine := canopy_mesh()
-	pine.radial_segments = 8
-	pine.rings = 2
-	batch(parent, "PineCanopies", pine, transforms, colors)
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.45
-	trunk.bottom_radius = 0.8
-	trunk.height = 1.0
-	trunk.radial_segments = 6
-	trunk.rings = 1
-	trunk.material = surface(Color.WHITE)
-	batch(parent, "PineTrunks", trunk, trunk_transforms, trunk_colors)
+				colors.append(Color("839973").lerp(Color("d5ddac"), rng.randf() * 0.8))
+		var tip_size := height * 0.2
+		leaves.append(transform_at(joints[3], Vector3.ONE * tip_size))
+		colors.append(Color("a7b38a"))
+	batch(parent, "PineCanopies", _atlas_mesh(2), leaves, colors, true)
+	batch(parent, "PineTrunks", _bark_mesh(), trunks, trunk_colors)
 
 
 func route_or_water(point: Vector3) -> bool:
 	if absf(point.x) < 8 and point.z > -25 and point.z < 23:
 		return true
-	var east_route := absf(point.z + 4) < 5 and point.x > 16 and point.x < 48
+	var east_route := absf(point.z + 4) < 5 and point.x > 16 and point.x < 54
 	var west_route := absf(point.z - 1) < 5 and point.x < -17 and point.x > -47
-	if east_route or west_route:
+	var upper_stair := point.x > 47 and point.x < 53 and point.z > -33 and point.z < -4
+	var upper_terrace := point.x > 37 and point.x < 55 and point.z > -50 and point.z < -28
+	if east_route or west_route or upper_stair or upper_terrace:
 		return true
 	if point.x > -48 and point.x < -20 and point.z > -21 and point.z < 17:
 		return true
@@ -364,24 +421,30 @@ func populate_ground_cover(parent: Node3D) -> void:
 	var fern_colors: Array[Color] = []
 	var flowers: Array[Transform3D] = []
 	var flower_colors: Array[Color] = []
-	for i in range(4100):
+	for i in range(3800):
 		var point := Vector3(rng.randf_range(-78, 78), 0, rng.randf_range(-88, 42))
+		if i > 3300:
+			point = Vector3(
+				(13.0 if i % 2 == 0 else -13.0) + rng.randf_range(-2.8, 2.8),
+				0,
+				7 + rng.randf_range(-3.2, 3.2)
+			)
 		if route_or_water(point):
 			continue
 		point = ground(point)
-		var patch := rng.randf_range(0.55, 1.25)
+		var patch := rng.randf_range(0.6, 1.4)
 		grass.append(
 			Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * patch), point)
 		)
 		grass_colors.append(Color("48633d").lerp(Color("879257"), rng.randf() * 0.75))
-		if i % 12 == 0:
+		if i % 13 == 0:
 			ferns.append(transform_at(point, Vector3.ONE * rng.randf_range(0.75, 1.5)))
 			fern_colors.append(Color("315a42").lerp(Color("6b8652"), rng.randf() * 0.6))
-		if i % 17 == 0:
+		if i % 19 == 0:
 			flowers.append(
-				transform_at(point + Vector3.UP * 0.28, Vector3.ONE * rng.randf_range(0.40, 0.65))
+				transform_at(point + Vector3.UP * 0.28, Vector3.ONE * rng.randf_range(0.4, 0.65))
 			)
-			flower_colors.append(Color("e9b9be").lerp(Color("e9d39a"), rng.randf()))
+			flower_colors.append(Color("cfa9b1").lerp(Color.WHITE, rng.randf()))
 	batch(parent, "MeadowGrass", grass_mesh(), grass, grass_colors, true)
 	batch(parent, "GardenFerns", fern_mesh(), ferns, fern_colors, true)
 	batch(parent, "MeadowFlowers", petal_mesh(), flowers, flower_colors, true)

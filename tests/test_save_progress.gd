@@ -37,7 +37,7 @@ func run() -> void:
 		finish()
 		return
 	var position := Vector3(-30, 0.12, 1)
-	check(storage.save_state(position, ["sanctuary", "lotus"], PATH), "v2 exploration save writes")
+	check(storage.save_state(position, ["sanctuary", "lotus"], PATH), "v3 exploration save writes")
 	var state: Dictionary = storage.load_state(PATH)
 	check(state.valid, "new exploration save is valid")
 	check(state.position.is_equal_approx(position), "exploration save restores position")
@@ -89,9 +89,94 @@ func run() -> void:
 	check(not storage.load_state(PATH).valid, "oversized exploration save rejected")
 	DirAccess.remove_absolute(PATH)
 	check(not storage.load_state(PATH).valid, "missing progress save rejected")
+	check_v3_schema(storage, position)
+	DirAccess.remove_absolute(PATH)
 	exploration.free()
 	await check_main_roundtrip()
 	finish()
+
+
+func check_v3_schema(storage: RefCounted, position: Vector3) -> void:
+	for version in [1, 2]:
+		var payload := {"version": version, "position": [position.x, position.y, position.z]}
+		if version == 2:
+			payload.discovered = ["sanctuary", "gate"]
+		write_fixture(JSON.stringify(payload))
+		var legacy: Dictionary = storage.load_state(PATH)
+		check(
+			legacy.valid and legacy.get("quest_stage", -1) == 0,
+			"older saves migrate to quest stage zero"
+		)
+		check(
+			legacy.position.is_equal_approx(position), "quest migration preserves legacy position"
+		)
+		if version == 2:
+			check(
+				legacy.discovered == ["sanctuary", "gate"],
+				"quest migration preserves earned discovery"
+			)
+	var earned := ["sanctuary", "lotus", "gate", "sky_temple"]
+	for stage in range(4):
+		check(storage.save_state(position, earned, PATH, stage), "each valid quest stage writes")
+		var saved: Dictionary = storage.load_state(PATH)
+		check(
+			saved.valid and saved.get("quest_stage", -1) == stage,
+			"each quest stage roundtrips exactly"
+		)
+		check(saved.discovered == earned, "v3 save retains all four landmarks")
+	check(
+		not storage.save_state(position, [], PATH, -1), "negative quest stage cannot overwrite save"
+	)
+	check(
+		not storage.save_state(position, [], PATH, 4),
+		"out-of-range quest stage cannot overwrite save"
+	)
+	check(
+		storage.load_state(PATH).get("quest_stage", -1) == 3,
+		"rejected stage writes preserve prior progress"
+	)
+	for invalid_stage in [true, false, "complete", -1, 4, 1.5, null, [], {}]:
+		write_fixture(
+			JSON.stringify(
+				{
+					"version": 3,
+					"position": [1, 2, 3],
+					"discovered": [],
+					"quest_stage": invalid_stage
+				}
+			)
+		)
+		var invalid: Dictionary = storage.load_state(PATH, position)
+		check(not invalid.valid, "malformed quest stage is rejected")
+		check(
+			(
+				invalid.position.is_equal_approx(position)
+				and invalid.discovered.is_empty()
+				and invalid.get("quest_stage", -1) == 0
+			),
+			"malformed quest data returns a complete safe fallback"
+		)
+	for malformed in [
+		{"version": 3, "position": [1, 2, 3], "discovered": []},
+		{"version": 4, "position": [1, 2, 3], "discovered": [], "quest_stage": 0},
+		{
+			"version": 3,
+			"position": [1, 2, 3],
+			"discovered": ["sky_temple", "sky_temple"],
+			"quest_stage": 1
+		}
+	]:
+		write_fixture(JSON.stringify(malformed))
+		check(not storage.load_state(PATH).valid, "incomplete or unsupported v3 save is rejected")
+	check(
+		storage.save_state(position, ["sky_temple"], PATH),
+		"old three-argument save API still writes"
+	)
+	var default_stage: Dictionary = storage.load_state(PATH)
+	check(
+		default_stage.valid and default_stage.get("quest_stage", -1) == 0,
+		"omitted quest stage defaults to available"
+	)
 
 
 func check_main_roundtrip() -> void:

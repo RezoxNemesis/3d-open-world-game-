@@ -1,0 +1,180 @@
+{
+  "generator": "tools/generate_celestial_assets.py",
+  "generator_version": 1,
+  "blender_version": "4.3.2",
+  "license": "MIT (original project geometry)",
+  "source": "Original mathematical geometry; reference images used for composition only",
+  "coordinate_system": "glTF Y-up, meters, centered base pivots; front is +Z",
+  "collision": "World authors gameplay collision separately; no embedded physics",
+  "textures": [],
+  "palette": "Shared runtime Stone/Timber/Roof/Gold/Jade/Paper/Cloth; no embedded image copies",
+  "sanctuary_floor_top_y_m": 0.59,
+  "assets": {
+    "sanctuary": {
+      "file": "sanctuary.glb",
+      "triangles": 35244,
+      "triangle_budget": 45000,
+      "material_surfaces": [
+        "Stone",
+        "Timber",
+        "Gold",
+        "Paper",
+        "Roof",
+        "Jade"
+      ],
+      "draw_call_materials": 6,
+      "bounds_min_y_up_m": [
+        -7.1264,
+        0.0,
+        -4.6795
+      ],
+      "bounds_max_y_up_m": [
+        7.1264,
+        12.51,
+        4.6795
+      ],
+      "bytes": 2316644,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "pagoda": {
+      "file": "pagoda.glb",
+      "triangles": 18548,
+      "triangle_budget": 25000,
+      "material_surfaces": [
+        "Stone",
+        "Timber",
+        "Gold",
+        "Roof",
+        "Paper"
+      ],
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -4.2399,
+        0.0,
+        -3.7234
+      ],
+      "bounds_max_y_up_m": [
+        4.2399,
+        15.87,
+        3.7234
+      ],
+      "bytes": 1368048,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "market_stall": {
+      "file": "market_stall.glb",
+      "triangles": 876,
+      "triangle_budget": 2000,
+      "material_surfaces": [
+        "Timber",
+        "Gold",
+        "Cloth",
+        "Paper",
+        "Jade"
+      ],
+      "draw_call_materials": 5,
+      "bounds_min_y_up_m": [
+        -1.6005,
+        0.0,
+        -1.1746
+      ],
+      "bounds_max_y_up_m": [
+        1.6005,
+        2.52,
+        1.178
+      ],
+      "bytes": 65336,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "stone_guardian": {
+      "file": "stone_guardian.glb",
+      "triangles": 1010,
+      "triangle_budget": 2000,
+      "material_surfaces": [
+        "Stone",
+        "Jade"
+      ],
+      "draw_call_materials": 2,
+      "bounds_min_y_up_m": [
+        -0.56,
+        0.0,
+        -0.6833
+      ],
+      "bounds_max_y_up_m": [
+        0.56,
+        1.655,
+        0.66
+      ],
+      "bytes": 73584,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "planter": {
+      "file": "planter.glb",
+      "triangles": 712,
+      "triangle_budget": 2000,
+      "material_surfaces": [
+        "Jade",
+        "Gold",
+        "Stone"
+      ],
+      "draw_call_materials": 3,
+      "bounds_min_y_up_m": [
+        -0.55,
+        0.0,
+        -0.55
+      ],
+      "bounds_max_y_up_m": [
+        0.55,
+        0.72,
+        0.55
+      ],
+      "bytes": 46856,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "balustrade": {
+      "file": "balustrade.glb",
+      "triangles": 396,
+      "triangle_budget": 2000,
+      "material_surfaces": [
+        "Stone",
+        "Timber",
+        "Gold"
+      ],
+      "draw_call_materials": 3,
+      "bounds_min_y_up_m": [
+        -1.0,
+        0.0,
+        -0.135
+      ],
+      "bounds_max_y_up_m": [
+        1.0,
+        1.12,
+        0.135
+      ],
+      "bytes": 38624,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    },
+    "incense_burner": {
+      "file": "incense_burner.glb",
+      "triangles": 1180,
+      "triangle_budget": 2000,
+      "material_surfaces": [
+        "Gold",
+        "Jade"
+      ],
+      "draw_call_materials": 2,
+      "bounds_min_y_up_m": [
+        -0.7253,
+        0.0126,
+        -0.4963
+      ],
+      "bounds_max_y_up_m": [
+        0.7253,
+        1.48,
+        0.4963
+      ],
+      "bytes": 79104,
+      "verified": "finite geometry/normals/tangents/UVs, positive-area triangles, serialized counts"
+    }
+  }
+}

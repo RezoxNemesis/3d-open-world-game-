@@ -8,6 +8,9 @@ var storage = preload("res://scripts/save_store.gd").new()
 var settings = preload("res://scripts/game_settings.gd").new()
 var settings_path := "user://settings.json"
 var exploration: Node
+var quest: Node
+var quest_ui: Control
+var story_objective: Label
 var status: Label
 var objective: Label
 var notice: Label
@@ -37,7 +40,7 @@ class DistrictDiagram:
 
 	func project(position: Vector3) -> Vector2:
 		return Vector2(
-			size.x * 0.5 + position.x * size.x / 88.0, size.y * 0.58 + position.z * size.y / 60.0
+			size.x * 0.5 + position.x * size.x / 128.0, size.y * 0.67 + position.z * size.y / 100.0
 		)
 
 	func _draw() -> void:
@@ -62,6 +65,20 @@ class DistrictDiagram:
 		draw_circle(project(Vector3(-31, 0, 7)), size.y * 0.13, Color(0.13, 0.35, 0.35, 0.75))
 		for target in [Vector3(-30, 0, 1), Vector3(0, 1.8, -16), Vector3(30, 0, -4)]:
 			draw_line(center, project(target), Color(0.78, 0.65, 0.39, 0.30), 5.0, true)
+		draw_line(
+			project(Vector3(30, 0, -4)),
+			project(Vector3(50, 0, -2.6)),
+			Color(0.78, 0.65, 0.39, 0.30),
+			4.0,
+			true
+		)
+		draw_line(
+			project(Vector3(50, 0, -2.6)),
+			project(Vector3(46, 10, -42)),
+			Color(0.78, 0.65, 0.39, 0.30),
+			4.0,
+			true
+		)
 		var player := project(player_position)
 		draw_circle(player, 11, Color(0.83, 0.71, 0.47, 0.25))
 		draw_circle(player, 5, Color("f8df9f"))
@@ -89,6 +106,7 @@ func _enter_tree() -> void:
 		"load_game": [],
 		"map_game": [KEY_M],
 		"settings_game": [KEY_ESCAPE],
+		"interact_game": [KEY_E],
 		"sprint": [KEY_SHIFT]
 	}
 	for action in bindings:
@@ -128,12 +146,24 @@ func _ready() -> void:
 	box.add_child(objective)
 	status = make_label("", 15, MUTED)
 	box.add_child(status)
+	story_objective = make_label("", 15, GOLD)
+	story_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(story_objective)
 	notice = make_label("", 16, GOLD)
 	box.add_child(notice)
 	notice.hide()
 	build_map(canvas)
 	settings.load_settings(settings_path)
 	_build_settings(canvas)
+	quest = preload("res://scripts/lantern_quest.gd").new()
+	quest.name = "LanternQuest"
+	add_child(quest)
+	quest.setup(get_node("Player"), get_node("World"))
+	quest.changed.connect(update_hud)
+	quest_ui = preload("res://scripts/quest_interface.gd").new()
+	canvas.add_child(quest_ui)
+	quest_ui.setup(self, quest, exploration, get_node("Player"))
+	quest_ui.overlay_changed.connect(_quest_overlay_changed)
 	apply_settings()
 	get_viewport().size_changed.connect(resize_hud)
 	resize_hud()
@@ -424,18 +454,27 @@ func resize_hud() -> void:
 	var setting_size := Vector2(minf(860, safe.size.x - 48), minf(590, safe.size.y - 48))
 	settings_panel.position = safe.position + (safe.size - setting_size) * 0.5
 	settings_panel.size = setting_size
+	if is_instance_valid(quest_ui):
+		quest_ui.resize(safe, viewport_size)
 	update_map.call_deferred()
 
 
 func update_hud() -> void:
 	var player := get_node("Player") as CharacterBody3D
 	objective.text = exploration.current_objective()
+	if is_instance_valid(quest):
+		story_objective.text = quest.summary()
+	if is_instance_valid(quest_ui):
+		quest_ui.refresh()
 	location.text = "TEMPLE COURTYARD"
 	for landmark in exploration.landmarks:
 		var point: Vector3 = landmark.position
 		if (
-			Vector2(player.position.x, player.position.z).distance_to(Vector2(point.x, point.z))
-			< 10
+			(
+				Vector2(player.position.x, player.position.z).distance_to(Vector2(point.x, point.z))
+				< 10
+			)
+			and absf(player.position.y - point.y) <= 3.0
 		):
 			location.text = str(landmark.name).to_upper()
 			break
@@ -474,6 +513,8 @@ func toggle_map() -> void:
 	map_overlay.visible = not map_overlay.visible
 	if map_overlay.visible:
 		settings_overlay.hide()
+		if quest_ui.dialog_open:
+			quest_ui.close_dialog()
 		_save_settings_if_dirty()
 		update_map()
 	_sync_overlay_state()
@@ -483,13 +524,24 @@ func toggle_settings() -> void:
 	settings_overlay.visible = not settings_overlay.visible
 	if settings_overlay.visible:
 		map_overlay.hide()
+		if quest_ui.dialog_open:
+			quest_ui.close_dialog()
 	else:
 		_save_settings_if_dirty()
 	_sync_overlay_state()
 
 
+func _quest_overlay_changed() -> void:
+	if quest_ui.dialog_open:
+		map_overlay.hide()
+		settings_overlay.hide()
+		_save_settings_if_dirty()
+	_sync_overlay_state()
+
+
 func _sync_overlay_state() -> void:
-	var overlay_open := map_overlay.visible or settings_overlay.visible
+	var overlay_open: bool = map_overlay.visible or settings_overlay.visible or quest_ui.dialog_open
+	quest_ui.refresh()
 	var mobile := get_node("MobileControls")
 	mobile.release_all_actions()
 	mobile.visible = not overlay_open
@@ -517,7 +569,9 @@ func save_game(path: String = "user://save.json") -> void:
 	show_notice(
 		(
 			"Journey saved locally"
-			if storage.save_state(get_node("Player").position, exploration.discovered.keys(), path)
+			if storage.save_state(
+				get_node("Player").position, exploration.discovered.keys(), path, quest.stage
+			)
 			else "Save failed"
 		)
 	)
@@ -534,6 +588,7 @@ func load_game(path: String = "user://save.json") -> void:
 	player.position = restored_point
 	player.velocity = Vector3.ZERO
 	exploration.restore_discovered(state.discovered)
+	quest.restore_stage(state.quest_stage)
 	update_hud()
 	show_notice("Journey loaded")
 
@@ -565,10 +620,14 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("map_game") and Input.is_action_pressed("map_game"):
 		toggle_map()
 	if Input.is_action_just_pressed("settings_game") and Input.is_action_pressed("settings_game"):
-		if map_overlay.visible:
+		if quest_ui.dialog_open:
+			quest_ui.close_dialog()
+		elif map_overlay.visible:
 			toggle_map()
 		else:
 			toggle_settings()
+	if Input.is_action_just_pressed("interact_game") and Input.is_action_pressed("interact_game"):
+		quest_ui.interact()
 	if settings_dirty:
 		settings_save_time -= delta
 		if settings_save_time <= 0:

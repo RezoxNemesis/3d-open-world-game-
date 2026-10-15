@@ -4,10 +4,12 @@ extends Node
 signal changed
 
 const DISCOVERY_RADIUS := 7.0
+const DISCOVERY_HEIGHT := 3.0
 var landmarks: Array[Dictionary] = [
 	{"id": "sanctuary", "name": "Cloud Sanctuary", "position": Vector3(0, 1.8, -16)},
 	{"id": "lotus", "name": "Lotus Overlook", "position": Vector3(-30, 0, 1)},
-	{"id": "gate", "name": "Eastern Gate", "position": Vector3(30, 0, -4)}
+	{"id": "gate", "name": "Eastern Gate", "position": Vector3(30, 0, -4)},
+	{"id": "sky_temple", "name": "Sky Temple", "position": Vector3(46, 10, -42)}
 ]
 var discovered: Dictionary = {}
 
@@ -26,7 +28,11 @@ func visit(position: Vector3) -> void:
 	for landmark in landmarks:
 		var point: Vector3 = landmark.position
 		var distance := Vector2(position.x, position.z).distance_to(Vector2(point.x, point.z))
-		if distance <= DISCOVERY_RADIUS and not discovered.has(landmark.id):
+		if (
+			distance <= DISCOVERY_RADIUS
+			and absf(position.y - point.y) <= DISCOVERY_HEIGHT
+			and not discovered.has(landmark.id)
+		):
 			discovered[landmark.id] = true
 			changed.emit()
 

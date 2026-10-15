@@ -1,6 +1,7 @@
 shader_type spatial;
-uniform vec4 stone_color : source_color = vec4(0.60, 0.59, 0.51, 1.0);
+uniform vec4 stone_color : source_color = vec4(0.59, 0.57, 0.49, 1.0);
 uniform bool paving = true;
+uniform sampler2D stone_normal : hint_normal, repeat_enable;
 varying vec3 world_position;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -10,17 +11,19 @@ float noise(vec2 p) {
 void vertex() { world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
 	vec2 p = world_position.xz;
-	float grain = noise(p * 21.0) * 0.09 + noise(p * 2.0) * 0.10;
+	float grain = noise(p * 21.0) * 0.035 + noise(p * 2.0) * 0.075;
 	vec3 color = stone_color.rgb * (0.86 + grain);
 	if (paving) {
 		vec2 tile = vec2(p.x / 1.70 + mod(floor(p.y / 1.10), 2.0) * 0.5, p.y / 1.10);
 		vec2 edge = min(fract(tile), 1.0 - fract(tile));
 		float joint = smoothstep(0.003, 0.013, min(edge.x, edge.y));
-		color *= mix(0.50, 0.92 + hash(floor(tile)) * 0.14, joint);
+		color *= mix(0.48, 0.88 + hash(floor(tile)) * 0.17, joint);
 		float moss = smoothstep(0.60, 0.78, noise(p * 0.26)) * (1.0 - smoothstep(0.01, 0.06, min(edge.x, edge.y)));
 		color = mix(color, vec3(0.24, 0.32, 0.18), moss * 0.48);
 	}
 	ALBEDO = color;
 	ROUGHNESS = 0.83;
-	SPECULAR = 0.22;
+	SPECULAR = 0.28;
+	NORMAL_MAP = texture(stone_normal, p * 0.42).rgb;
+	NORMAL_MAP_DEPTH = 0.28;
 }

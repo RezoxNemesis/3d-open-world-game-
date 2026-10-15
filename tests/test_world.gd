@@ -82,6 +82,25 @@ func run() -> void:
 			absf(visible_floor_at(sanctuary, player.position) - player.position.y) < 0.08,
 			"traveler feet match the visible sanctuary floor geometry"
 		)
+	var eastern_gate := world.find_child("Gate", false, false) as Node3D
+	var timber_retained := false
+	if eastern_gate != null:
+		for item in eastern_gate.find_children("*", "MeshInstance3D", true, false):
+			for surface_index in range(item.mesh.get_surface_count()):
+				var active: Material = item.get_active_material(surface_index)
+				if active != null and active.resource_name == "Temple_Red_Timber":
+					timber_retained = true
+	check(timber_retained, "legacy eastern gate keeps its original red timber material")
+	check(world.modules.has("sanctuary"), "the three-tier celestial sanctuary is loaded")
+	check(world.modules.has("pagoda"), "the upper celestial pagoda is loaded")
+	var pagoda := world.find_child("Pagoda", false, false) as Node3D
+	check(pagoda != null, "reachable terrace has its authored pagoda model")
+	if pagoda != null:
+		check(
+			absf(visible_floor_at(pagoda, Vector3(46, 10, -42)) - 10.0) < 0.08,
+			"upper pagoda visible plinth matches the actual ten-meter landing"
+		)
+	check(world.has_node("SkyRoute/WalkableSkyStairs"), "sky stairs use explicit capsule collision")
 	check(world.has_method("terrain_height"), "world exposes continuous terrain height")
 	if world.has_method("terrain_height"):
 		var regions = world.get_node("Regions")

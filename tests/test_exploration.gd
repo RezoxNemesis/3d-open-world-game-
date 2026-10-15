@@ -58,7 +58,7 @@ func run() -> void:
 	exploration.changed.connect(func(): signal_count += 1)
 	var player = scene.get_node("Player")
 	player.set_physics_process(false)
-	check(exploration.landmarks.size() == 3, "three playable landmarks define the district")
+	check(exploration.landmarks.size() == 4, "four playable landmarks define the district")
 	check(exploration.current_objective().contains("Sanctuary"), "quest begins at sanctuary")
 	var initial: Vector3 = player.position
 	scene.update_hud()
@@ -72,6 +72,10 @@ func run() -> void:
 	check(player.position.is_equal_approx(initial), "rejected travel preserves position")
 	exploration.visit(Vector3(0, 1.8, -8.9))
 	check(not exploration.discovered.has("sanctuary"), "landmark outside seven meters stays locked")
+	exploration.visit(Vector3(0, 5, -16))
+	check(
+		not exploration.discovered.has("sanctuary"), "flying over a landmark does not discover it"
+	)
 	exploration.visit(Vector3(0, 1.8, -9.1))
 	check(exploration.discovered.has("sanctuary"), "walking inside radius discovers sanctuary")
 	check(signal_count == 1, "first discovery emits one quest update")
@@ -85,15 +89,35 @@ func run() -> void:
 	exploration.visit(Vector3(-30, 0, 1))
 	check(exploration.current_objective().contains("Gate"), "quest advances to eastern gate")
 	exploration.visit(Vector3(30, 0, -4))
+	check(exploration.discovered.size() == 3, "original three landmarks remain playable")
 	check(
-		exploration.discovered.size() == 3, "physically visiting all landmarks completes discovery"
+		exploration.current_objective().contains("Sky"), "district route continues to upper temple"
+	)
+	exploration.visit(Vector3(46, 0, -42))
+	check(not exploration.discovered.has("sky_temple"), "standing under upper temple stays locked")
+	exploration.visit(Vector3(46, 13.01, -42))
+	check(not exploration.discovered.has("sky_temple"), "upper landmark enforces vertical range")
+	exploration.visit(Vector3(53.01, 10, -42))
+	check(not exploration.discovered.has("sky_temple"), "upper landmark enforces horizontal radius")
+	exploration.visit(Vector3(46, 13, -42))
+	check(
+		exploration.discovered.size() == 4,
+		"reaching upper temple at height boundary earns discovery"
 	)
 	check(
 		exploration.current_objective().contains("complete"), "completed quest reports completion"
 	)
 	scene.set_process(true)
 	await process_frame
-	check(scene.status.text.contains("3 / 3"), "HUD displays live discovery progress")
+	check(scene.status.text.contains("4 / 4"), "HUD displays live four-landmark progress")
+	check(scene.map_buttons.has("sky_temple"), "district map includes the upper temple")
+	player.velocity = Vector3(4, -3, 1)
+	check(exploration.travel("sky_temple", player), "earned upper temple allows map travel")
+	check(
+		player.position.is_equal_approx(Vector3(46, 10.12, -42)),
+		"upper map travel lands at terrace height"
+	)
+	check(player.velocity.is_zero_approx(), "upper temple travel clears previous movement")
 	Input.action_press("map_game")
 	await process_frame
 	await process_frame

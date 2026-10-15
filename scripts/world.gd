@@ -3,6 +3,8 @@ extends Node3D
 
 const SEED := 73109
 const WATER_SHADER := preload("res://assets/shaders/jade_water.gdshader")
+const LANDSCAPE := preload("res://scripts/landscape_visuals.gd")
+const NATURE := preload("res://scripts/nature.gd")
 var rng := RandomNumberGenerator.new()
 var stone: ShaderMaterial
 var pale_stone: StandardMaterial3D
@@ -14,8 +16,11 @@ var terrain_noise := FastNoiseLite.new()
 var terrain_surface: ShaderMaterial
 var quality_preset := "balanced"
 var nature: Node3D
+var woodlands: Node3D
 var modules: Dictionary = {}
 var lantern_transforms: Array[Transform3D] = []
+var cliff_surface: StandardMaterial3D
+var district: Node3D
 
 
 func material(color: Color, roughness: float = 0.9) -> StandardMaterial3D:
@@ -31,6 +36,9 @@ func _ready() -> void:
 	terrain_noise.frequency = 0.022
 	stone = ShaderMaterial.new()
 	stone.shader = preload("res://assets/shaders/garden_stone.gdshader")
+	stone.set_shader_parameter(
+		"stone_normal", preload("res://assets/materials/temple_stone_original_normal.png")
+	)
 	pale_stone = material(Color("acac92"))
 	red_wood = material(Color("7b3026"))
 	dark_stone = material(Color("596253"))
@@ -44,12 +52,29 @@ func _ready() -> void:
 			modules[label] = load(path)
 		else:
 			push_error("Missing architectural module: " + path)
+	for label in ["sanctuary", "pagoda"]:
+		var path := "res://assets/models/celestial/%s.glb" % label
+		if ResourceLoader.exists(path):
+			modules[label] = load(path)
 	setup_sky()
 	build_courtyard()
 	build_temple()
 	build_lotus_garden()
 	build_eastern_gate()
 	build_landscape()
+	var landscape := LANDSCAPE.new()
+	landscape.build_route(self)
+	for x in [43.725, 48.275]:
+		for z in [-44.275, -39.725]:
+			var column := block(Vector3(0.30, 3.1, 0.30), Vector3(x, 11.55, z), red_wood)
+			column.visible = false
+	landscape.build_shoreline(self)
+	var dressing_path := "res://scripts/celestial_district.gd"
+	if ResourceLoader.exists(dressing_path):
+		district = load(dressing_path).new()
+		district.name = "CelestialDistrict"
+		add_child(district)
+		district.build(self)
 	batch_lanterns()
 	var ambience := preload("res://scripts/ambience.gd").new()
 	ambience.name = "GardenAmbience"
@@ -103,11 +128,16 @@ func module_at(
 		item = Node3D.new()
 	item.name = label.capitalize()
 	item.position = location
-	if label in ["pavilion", "pavilion_far"]:
+	if label in ["pavilion", "pavilion_far", "sanctuary", "pagoda"]:
 		# Align the imported upper plinth with the authored walkable floor.
 		item.position.y -= 0.59 * size_value
 	item.scale = Vector3.ONE * size_value
 	item.rotation.y = yaw
+	if (
+		label in ["sanctuary", "pagoda"]
+		and ResourceLoader.exists("res://scripts/architectural_palette.gd")
+	):
+		load("res://scripts/architectural_palette.gd").apply(item)
 	add_child(item)
 	if label in ["lantern", "pavilion_far"]:
 		for child in item.find_children("*", "MeshInstance3D", true, false):
@@ -152,21 +182,21 @@ func setup_sky() -> void:
 	sky.sky_material = sky_material
 	settings.sky = sky
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("b5cbd2")
-	settings.ambient_light_energy = 0.42
+	settings.ambient_light_color = Color("9bb6cc")
+	settings.ambient_light_energy = 0.35
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	settings.tonemap_exposure = 1.0
 	settings.fog_enabled = true
-	settings.fog_light_color = Color("bdd1c9")
-	settings.fog_density = 0.0014
+	settings.fog_light_color = Color("b4ced0")
+	settings.fog_density = 0.0021
 	settings.fog_sky_affect = 0.05
 	environment.environment = settings
 	add_child(environment)
 	var sun := DirectionalLight3D.new()
 	sun.name = "AfternoonSun"
-	sun.rotation_degrees = Vector3(-39, -48, 0)
-	sun.light_color = Color("ffe5ba")
-	sun.light_energy = 0.85
+	sun.rotation_degrees = Vector3(-36, -38, 0)
+	sun.light_color = Color("ffe0b0")
+	sun.light_energy = 1.10
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 65
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
@@ -222,7 +252,7 @@ func build_temple() -> void:
 		var height := (i + 1) * 0.22
 		block(Vector3(10, height, 0.95), Vector3(0, height / 2, -8 - i * 0.85), stone)
 	block(Vector3(15, 1.76, 9.5), Vector3(0, 0.88, -18.25), stone)
-	module_at("pavilion", Vector3(0, 1.76, -18))
+	module_at("sanctuary" if modules.has("sanctuary") else "pavilion", Vector3(0, 1.76, -18))
 	# Pillar colliders are intentionally separate from high-detail decorative GLBs.
 	for x in [-4.5, 4.5]:
 		for z in [-14.95, -18, -21.05]:
@@ -243,7 +273,7 @@ func build_temple() -> void:
 		Vector3(3, 42, -125),
 		Vector3(-104, 46, -123)
 	]:
-		build_cliff(placement - Vector3(0, 2, 0), Vector2(10, 8), placement.y + 3)
+		build_cliff(placement - Vector3(0, 0.6, 0), Vector2(10, 8), placement.y + 3)
 		block(Vector3(13, 0.6, 10), placement - Vector3(0, 0.3, 0), dark_stone, false)
 		module_at("pavilion_far", placement, 0.8)
 
@@ -276,6 +306,9 @@ func build_lotus_garden() -> void:
 	block(Vector3(10, 0.8, 7), Vector3(-34, -0.4, -17), stone)
 	build_lotus(Vector3(-34, -0.35, 0), 36)
 	build_waterfall(Vector3(-45, 0, -22.5), 18, 4.2)
+	# The headwater channel visibly connects the cascade basin to the lotus pond,
+	# passing beneath the north waterfront crossing.
+	water_surface(Vector3(-44.2, -0.28, -18.8), Vector2(3.2, 7.8))
 	build_cliff(Vector3(-47, 20, -32), Vector2(10, 7), 20)
 	module_at("shrine", Vector3(-47, 20, -32), 0.85)
 
@@ -444,39 +477,46 @@ func build_waterfall(origin: Vector3, height: float, width: float) -> void:
 		)
 		splash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
+	LANDSCAPE.new().build_water_detail(self, origin, width)
+
 
 func cliff_vertex(
 	level: int, sector: int, width: Vector2, height: float, spire: bool, phase: float = 0.0
 ) -> Vector3:
 	var t := float(level) / 14.0
 	var angle := sector * TAU / 20.0
-	var shoulder := (
-		1.0
-		+ 0.027 * sin(t * 17.0 + phase)
-		+ 0.020 * sin(t * 37.0 + phase * 2.4)
-		+ 0.010 * sin(t * 67.0 - phase)
-	)
-	var taper := 1.0 + pow(1.0 - t, 2.0) * 0.36
+	# Unequal buttresses, offset shoulders and a strongly broken summit replace
+	# circular tubes. World-seeded phases keep the distant silhouette repeatable.
+	var shoulder := 1.0 + sin(t * 15.0 + phase) * 0.065 + sin(t * 31.0 - phase) * 0.035
+	var taper := 1.0 + pow(1.0 - t, 2.0) * 0.52
 	if spire:
-		# Karst pillars retain steep upper shoulders and an uneven crown, rather than a cone.
-		taper = lerpf(1.55, 0.67, smoothstep(0.0, 0.88, t))
-		if t > 0.90:
-			taper *= lerpf(1.0, 0.62, (t - 0.90) / 0.10)
-	var fluting := (
-		0.95
-		+ sin(angle * 5.0 + phase) * 0.07
-		+ sin(angle * 9.0 + phase * 2.0) * 0.055
-		+ sin(angle * 13.0 + 0.3) * 0.025
+		taper = lerpf(1.65, 0.42, pow(t, 0.72))
+		taper += exp(-pow((t - 0.50 - sin(phase) * 0.10) * 4.8, 2.0)) * 0.20
+	var buttress := (
+		1.0
+		+ sin(angle * 2.0 + phase + t * 1.4) * 0.19
+		+ sin(angle * 3.0 - phase * 1.7 + t * 0.6) * 0.13
+		+ sin(angle * 7.0 + phase + t * 3.0) * 0.058
 	)
 	var lean := Vector2(
-		(sin(t * 2.2 + phase) - sin(phase)) * width.x * 0.16,
-		(sin(t * 2.9 - phase) + sin(phase)) * width.y * 0.12
+		(sin(t * 2.3 + phase) - sin(phase)) * width.x * 0.32,
+		(sin(t * 2.9 - phase) + sin(phase)) * width.y * 0.23
 	)
-	var crown := sin(angle * 3.0 + phase) * height * 0.028 * pow(t, 8.0) if spire else 0.0
+	var crown := 0.0
+	if spire:
+		crown = (
+			(
+				sin(angle * 2.0 + phase) * 0.090
+				+ sin(angle * 5.0 - phase) * 0.036
+				+ sin(angle * 9.0 + phase) * 0.018
+			)
+			* height
+			* pow(t, 3.0)
+		)
 	return Vector3(
-		cos(angle) * width.x * fluting * shoulder * taper + lean.x,
+		cos(angle) * width.x * buttress * shoulder * taper + lean.x,
 		t * height - height + crown,
-		sin(angle) * width.y * fluting * shoulder * taper + lean.y
+		sin(angle) * width.y * buttress * shoulder * taper + lean.y
 	)
 
 
@@ -494,8 +534,8 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 			for index in [0, 2, 1, 1, 2, 3]:
 				var level := float(ring) / 14.0
 				var mossiness := sin(sector * 1.7 + ring * 0.9) * 0.5 + 0.5
-				var color := Color("777c70").lerp(Color("b7b7a2"), level * 0.65)
-				color = color.lerp(Color("526c56"), mossiness * (0.12 + level * 0.16))
+				var color := Color("5c6b69").lerp(Color("a5aaa0"), level * 0.72)
+				color = color.lerp(Color("3f6049"), mossiness * (0.18 + level * 0.20))
 				surface.set_color(color)
 				var vertex_level := ring + (1 if index >= 2 else 0)
 				var vertex_sector := sector + (1 if index % 2 else 0)
@@ -523,21 +563,30 @@ func build_cliff(top: Vector3, width: Vector2, height: float, spire: bool = fals
 			surface.set_color(Color("7a8767"))
 			surface.set_normal(Vector3.UP)
 			surface.add_vertex(point)
-	var cliff_material := material(Color.WHITE)
-	cliff_material.vertex_color_use_as_albedo = true
-	cliff_material.vertex_color_is_srgb = true
-	cliff_material.albedo_texture = preload("res://assets/materials/karst_rock_original.png")
-	cliff_material.uv1_triplanar = true
-	cliff_material.uv1_world_triplanar = true
-	cliff_material.uv1_scale = Vector3(0.18, 0.10, 0.18)
-	cliff_material.normal_enabled = true
-	cliff_material.normal_texture = preload("res://assets/materials/karst_rock_original_normal.png")
-	cliff_material.normal_scale = 0.75
-	cliff_material.roughness_texture = preload(
-		"res://assets/materials/karst_rock_original_roughness.png"
-	)
-	cliff_material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-	solid(surface.commit(), top, cliff_material, false)
+	if cliff_surface == null:
+		cliff_surface = material(Color.WHITE)
+		cliff_surface.vertex_color_use_as_albedo = false
+		cliff_surface.vertex_color_is_srgb = true
+		cliff_surface.albedo_texture = preload(
+			"res://assets/materials/landscape_karst_original.png"
+		)
+		cliff_surface.uv1_triplanar = true
+		cliff_surface.uv1_world_triplanar = true
+		cliff_surface.uv1_scale = Vector3(0.055, 0.028, 0.055)
+		cliff_surface.normal_enabled = true
+		cliff_surface.normal_texture = preload(
+			"res://assets/materials/landscape_karst_original_normal.png"
+		)
+		cliff_surface.normal_scale = 0.95
+		cliff_surface.roughness_texture = preload(
+			"res://assets/materials/landscape_karst_original_roughness.png"
+		)
+		cliff_surface.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	var cliff := solid(surface.commit(), top, cliff_surface, false)
+	cliff.name = "IrregularKarst"
+	# Distant cliffs receive sunlight but do not allocate mobile shadow geometry.
+	if top.length() > 95:
+		cliff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func terrain_height(x: float, z: float) -> float:
@@ -594,16 +643,31 @@ func build_landscape() -> void:
 	nature = Node3D.new()
 	nature.name = "GardenNature"
 	add_child(nature)
-	preload("res://scripts/nature.gd").new().populate(nature, SEED, terrain_height)
+	NATURE.new().populate(nature, SEED, terrain_height)
 	for i in range(18):
-		var x := -180 + i * 22
-		var height := rng.randf_range(34, 82)
+		var x := -190 + i * 23 + rng.randf_range(-11, 11)
+		var height := rng.randf_range(38, 88)
 		build_cliff(
 			Vector3(x, height, -130 - rng.randf_range(0, 90)),
-			Vector2(rng.randf_range(12, 25), rng.randf_range(10, 19)),
+			Vector2(rng.randf_range(12, 25), rng.randf_range(9, 22)),
 			height + 4,
 			true
 		)
+	for placement in [Vector3(-140, 48, -95), Vector3(122, 57, -111), Vector3(-25, 96, -216)]:
+		build_cliff(placement, Vector2(31, 24), placement.y + 6, true)
+	var ledges: Array[Vector3] = []
+	for center in [
+		Vector3(-32, 6, -36), Vector3(-62, 23, -61), Vector3(67, 33, -83), Vector3(-104, 46, -123)
+	]:
+		for index in range(8):
+			var angle := index * TAU / 8.0
+			ledges.append(center + Vector3(cos(angle) * 6.2, 0, sin(angle) * 4.4))
+	woodlands = Node3D.new()
+	woodlands.name = "MountainWoodlands"
+	add_child(woodlands)
+	var ledge_generator := NATURE.new()
+	if ledge_generator.has_method("populate_ledge"):
+		ledge_generator.populate_ledge(woodlands, SEED + 93, ledges)
 	build_waterfall(Vector3(-64, 0, -49.0), 21, 4.5)
 	build_waterfall(Vector3(68, 0, -71.3), 30, 3.5)
 
@@ -617,14 +681,22 @@ func apply_quality(preset: String) -> void:
 	quality_preset = selected
 	var low := selected == "performance"
 	var high := selected == "high"
+	for item in find_children("WaterfallSpray", "MultiMeshInstance3D", true, false):
+		item.visible = not low
+		item.visibility_range_end = 180.0 if high else 130.0
 	var sun := get_node_or_null("AfternoonSun") as DirectionalLight3D
 	if sun != null:
 		sun.shadow_enabled = not low
 		sun.directional_shadow_max_distance = 65.0 if high else 45.0
+	if district != null and district.has_method("apply_quality"):
+		district.apply_quality(selected)
 	if nature == null:
 		return
 	var density := 1.0 if high else (0.42 if low else 0.72)
-	for item in nature.get_children():
+	var batches: Array[Node] = nature.get_children()
+	if woodlands != null:
+		batches.append_array(woodlands.get_children())
+	for item in batches:
 		if item is MultiMeshInstance3D:
 			if item.get_meta("density_scaled", false):
 				item.multimesh.visible_instance_count = maxi(
