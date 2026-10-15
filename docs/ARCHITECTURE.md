@@ -55,3 +55,13 @@ The version 0.5 ground garden contains160,922 triangles across145 spatial batche
 5. Implement one enemy and a complete combat loop before elemental progression, equipment systems, dragon traversal, crafting, farming/fishing and aquatic activities from the broader reference roadmap.
 
 Weather, caves, trading, combat, dragon riding, crafting and life activities remain future work. The ten images guide visual direction and the broader roadmap; they are concept references rather than evidence that those systems are implemented.
+
+## Version 0.6 expedition layer
+
+The temple district keeps its previous quests, powers and version5 journey save. MAP opens a separate expedition scene; its coordinate save is `user://expedition.json`, and returning reloads the preserved temple journey. The expedition uses 128m integer sectors with local float coordinates in [-64,64): x spans exactly -100,000,000m to+100,000,000m. Nine surrounding sectors are resident at most; central collision loads synchronously, neighbor scenery is deferred by sector. The atlas provides long-distance routes. Generated regions repeat architectural modules; the large domain is not all unique authored content.
+
+Sector(0,0) owns the specifically composed Lotus Cliff Sanctuary, water garden, covered crossing, reachable hillside pavilion and residents. All their nodes belong to the region and unload together. Origin serialization normalizes coordinates even between player physics and the following rebase. Both rider and vehicle respect the domain bounds; distant parked carts suspend gravity before their ground unloads.
+
+The original guardian encounter uses telegraphed area strikes, facing/range/occlusion checked melee, swept-collision dodge, recoverable defeat and retry. Wind cart motion uses a real CharacterBody3D, conservative hull/mast clearance, grounded safe dismount, parked-state handling and fall recovery. Encounter and mount state reset on atlas travel/reload; the expedition save currently preserves coordinates, not vehicle posture or guardian progress.
+
+Conservative real-render QA thresholds at1600x720 Balanced are500total draws and400,000 total-pass triangles for thirteen named expedition views. These are software renderer counters, not phone FPS. Existing district thresholds and million-triangle highest-detail architecture remain unchanged. Shared terrain grids reduce redundant vertex/derivative construction while retaining the same ground triangles and smooth seam normals.

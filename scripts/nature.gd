@@ -172,7 +172,9 @@ func _bark_mesh() -> CylinderMesh:
 	result.bottom_radius = 1.0
 	result.height = 1.0
 	result.radial_segments = 6
-	result.rings = 1
+	# A straight taper keeps its silhouette without the redundant axial split.
+	# Every trunk and twig uses this mesh, including repeated shadow passes.
+	result.rings = 0
 	var material := surface(Color.WHITE)
 	if bark_texture == null:
 		bark_texture = load("res://assets/materials/botanical_bark.png")

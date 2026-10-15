@@ -38,6 +38,7 @@ var settings_save_time := 0.0
 var settings_dirty := false
 var notice_time := 0.0
 var hud_time := 0.0
+var _transitioning := false
 
 
 class DistrictDiagram:
@@ -133,6 +134,9 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+	if get_tree().root.has_meta("journey_return_path"):
+		journey_path = str(get_tree().root.get_meta("journey_return_path"))
+		get_tree().root.remove_meta("journey_return_path")
 	exploration = preload("res://scripts/exploration.gd").new()
 	exploration.name = "Exploration"
 	add_child(exploration)
@@ -197,6 +201,9 @@ func _ready() -> void:
 	add_child(checkpoint)
 	checkpoint.setup(self, journey_path, autosave_enabled)
 	checkpoint.start()
+	if get_tree().root.get_meta("return_to_journey", false):
+		get_tree().root.remove_meta("return_to_journey")
+		load_game(journey_path, true)
 	print(
 		"TEMPLE_REALM_READY: connected temple district, exploration quest and mobile HUD initialized"
 	)
@@ -266,7 +273,36 @@ func build_map(canvas: CanvasLayer) -> void:
 		map_diagram.add_child(button)
 		map_buttons[landmark.id] = button
 	box.add_child(make_label("●  Your position     —  Courtyard paths", 16, MUTED))
+	var expedition_button := Button.new()
+	expedition_button.text = "EXPLORE THE JADE EXPANSE  ·  World expedition"
+	expedition_button.custom_minimum_size.y = 46
+	style_button(expedition_button)
+	expedition_button.pressed.connect(begin_expedition)
+	box.add_child(expedition_button)
 	map_overlay.hide()
+
+
+func begin_expedition() -> void:
+	if _transitioning:
+		return
+	if not write_journey(get_node("Player").position, journey_path):
+		show_notice("Could not save journey; try again")
+		return
+	_transitioning = true
+	get_tree().root.set_meta("journey_return_path", journey_path)
+	get_node("Player").set_physics_process(false)
+	get_node("MobileControls").release_all_actions()
+	power_controls.release_all_actions()
+	get_node("World/GardenAmbience").process_mode = Node.PROCESS_MODE_DISABLED
+	for audio in get_node("World/GardenAmbience").find_children(
+		"*", "AudioStreamPlayer", true, false
+	):
+		audio.stop()
+		audio.stream = null
+	var drain_until := Time.get_ticks_msec() + 160
+	while Time.get_ticks_msec() < drain_until:
+		await get_tree().process_frame
+	get_tree().change_scene_to_file("res://scenes/expedition.tscn")
 
 
 func _build_settings(canvas: CanvasLayer) -> void:

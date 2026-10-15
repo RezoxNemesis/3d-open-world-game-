@@ -1,0 +1,115 @@
+{
+	"captures": [
+		{
+			"camera": [
+				"(0.0, 4.0, 14.0)",
+				"(-0.03124, 0.0, 0.0)"
+			],
+			"draw_calls": 687,
+			"layer_contributions": {
+				"ArchitecturalDetail": {
+					"draw_calls": 0,
+					"triangles": 0
+				},
+				"CelestialDistrict": {
+					"draw_calls": 79,
+					"triangles": 31046
+				},
+				"GardenNature": {
+					"draw_calls": 106,
+					"triangles": 101789
+				},
+				"MountainWoodlands": {
+					"draw_calls": 4,
+					"triangles": 11616
+				},
+				"VerdantDistrict": {
+					"draw_calls": 54,
+					"triangles": 25700
+				}
+			},
+			"triangles": 599743,
+			"video_memory_bytes": 92542468,
+			"view": "courtyard"
+		},
+		{
+			"camera": [
+				"(11.0, 9.0, -9.0)",
+				"(-0.139802, 0.885067, 0.0)"
+			],
+			"draw_calls": 478,
+			"layer_contributions": {
+				"ArchitecturalDetail": {
+					"draw_calls": 25,
+					"triangles": 48576
+				},
+				"CelestialDistrict": {
+					"draw_calls": 17,
+					"triangles": 4610
+				},
+				"GardenNature": {
+					"draw_calls": 78,
+					"triangles": 85260
+				},
+				"MountainWoodlands": {
+					"draw_calls": 2,
+					"triangles": 5808
+				},
+				"VerdantDistrict": {
+					"draw_calls": 47,
+					"triangles": 17912
+				}
+			},
+			"triangles": 462645,
+			"video_memory_bytes": 92542468,
+			"view": "roof"
+		},
+		{
+			"camera": [
+				"(35.0, 22.0, 35.0)",
+				"(-0.315072, 0.734161, 0.0)"
+			],
+			"draw_calls": 688,
+			"layer_contributions": {
+				"ArchitecturalDetail": {
+					"draw_calls": 0,
+					"triangles": 0
+				},
+				"CelestialDistrict": {
+					"draw_calls": 102,
+					"triangles": 35976
+				},
+				"GardenNature": {
+					"draw_calls": 99,
+					"triangles": 98572
+				},
+				"MountainWoodlands": {
+					"draw_calls": 2,
+					"triangles": 5808
+				},
+				"VerdantDistrict": {
+					"draw_calls": 60,
+					"triangles": 24316
+				}
+			},
+			"triangles": 570760,
+			"video_memory_bytes": 92542468,
+			"view": "overview"
+		}
+	],
+	"coverage": "Static desktop Compatibility render counters; no physical phone timing.",
+	"inputs_sha256": {
+		"architectural_detail": "f5521ade5041d4f8ec1d3c33c5dfe6a1dab96edb27be13189f49583e17defd09",
+		"celestial_district": "429d788230072747326bf5853bf4b6edb38c1772a87be6eb8c481c4eccab65b8",
+		"nature": "2fb9ede1774b627b7b4dd240f3d924e0b69f39d99b60684d8778b9e5d39d7456",
+		"player": "9d22861029818f476fb07451b0c95869d9b863ae2df17cae9761d225d22a426f",
+		"verdant_district": "7f2d0f620c9bb93d6934772219d77639a9a305bb93b3b9b7e31914df9e4920fd",
+		"world": "b0e5a65743616f30688733a26f7f1681472eb4f06b15b110f2e49a9f5482689a"
+	},
+	"preset": "balanced",
+	"renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+	"viewport": [
+		1600,
+		720
+	]
+}

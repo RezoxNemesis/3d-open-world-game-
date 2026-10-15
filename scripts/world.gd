@@ -699,32 +699,27 @@ func build_region(key: Vector2i) -> Node3D:
 	var region := Node3D.new()
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Each shared vertex and derivative is computed once, rather than 4/6 times
+	# per cell. The same triangles, heights and seam-safe normals are retained.
+	for x in range(33):
+		for z in range(33):
+			var px := key.x * 128.0 - 64.0 + x * 4.0
+			var pz := key.y * 128.0 - 64.0 + z * 4.0
+			var normal := (
+				Vector3(
+					terrain_height(px - 0.5, pz) - terrain_height(px + 0.5, pz),
+					1.0,
+					terrain_height(px, pz - 0.5) - terrain_height(px, pz + 0.5)
+				)
+				. normalized()
+			)
+			surface.set_normal(normal)
+			surface.add_vertex(Vector3(px, terrain_height(px, pz), pz))
 	for x in range(32):
 		for z in range(32):
-			var corners: Array[Vector3] = []
-			for offset in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-				var px: float = key.x * 128 - 64 + (x + offset.x) * 4
-				var pz: float = key.y * 128 - 64 + (z + offset.y) * 4
-				corners.append(Vector3(px, terrain_height(px, pz), pz))
-			for index in [0, 1, 2, 1, 3, 2]:
-				var point := corners[index]
-				# Shared world-space derivatives prevent flat facets and region lighting seams.
-				var normal := (
-					Vector3(
-						(
-							terrain_height(point.x - 0.5, point.z)
-							- terrain_height(point.x + 0.5, point.z)
-						),
-						1.0,
-						(
-							terrain_height(point.x, point.z - 0.5)
-							- terrain_height(point.x, point.z + 0.5)
-						)
-					)
-					. normalized()
-				)
-				surface.set_normal(normal)
-				surface.add_vertex(point)
+			var a := x * 33 + z
+			for index in [a, a + 33, a + 1, a + 33, a + 34, a + 1]:
+				surface.add_index(index)
 	var terrain := MeshInstance3D.new()
 	terrain.mesh = surface.commit()
 	terrain.material_override = terrain_surface

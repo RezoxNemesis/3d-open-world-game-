@@ -56,3 +56,20 @@ rg -q 'HERO_STREAMING_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/hero-str
 python tools/test_verdant_asset_contract.py
 python tools/test_residence_asset_contract.py
 python tools/check_skills.py
+
+checked_godot terrain-efficiency-tests --headless --script tests/test_terrain_efficiency.gd
+rg -q 'TERRAIN_EFFICIENCY_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/terrain-efficiency-tests.log
+checked_godot human-motion-tests --headless --fixed-fps 60 --script tests/test_human_motion.gd
+rg -q 'HUMAN_MOTION_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/human-motion-tests.log
+checked_godot mobile-performance-tests --headless --script tests/test_mobile_performance.gd
+rg -q 'MOBILE_PERFORMANCE_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/mobile-performance-tests.log
+checked_godot expedition-world-tests --headless --fixed-fps 60 --script tests/test_expedition_world.gd
+rg -q 'EXPEDITION WORLD: [1-9][0-9]* checks, 0 failures' artifacts/expedition-world-tests.log
+checked_godot expedition-encounter-tests --headless --fixed-fps 60 --script tests/test_expedition_encounter.gd
+rg -q 'RESULT: [1-9][0-9]* expedition encounter checks, 0 failures' artifacts/expedition-encounter-tests.log
+checked_godot expedition-journey-tests --headless --fixed-fps 60 --script tests/test_expedition_journey.gd
+rg -q 'EXPEDITION_JOURNEY_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-journey-tests.log
+checked_godot expedition-transition-tests --headless --fixed-fps 60 --script tests/test_expedition_transition.gd
+rg -q 'EXPEDITION_TRANSITION_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-transition-tests.log
+checked_godot expedition-residents-tests --headless --fixed-fps 60 --script tests/test_expedition_residents.gd
+rg -q 'EXPEDITION_RESIDENTS_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-residents-tests.log

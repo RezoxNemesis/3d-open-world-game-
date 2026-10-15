@@ -60,6 +60,7 @@ try:
         ('gameplay', ['tools/validate_environment.sh'], 180),
         ('security', ['tools/security_audit.sh'], 180),
         ('render', ['tools/render_environment.sh'], 180),
+        ('expedition-render', ['tools/render_expedition.sh'], 180),
         ('phone-apk', ['tools/export_android.sh'], 180),
     ]:
         outcome = step(label, command, timeout)

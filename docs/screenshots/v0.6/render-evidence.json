@@ -1,0 +1,593 @@
+{
+	"captures": [
+		{
+			"camera": [
+				0.0,
+				0.000000238418579101562,
+				6.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 456,
+			"file": "01-expedition-gameplay.png",
+			"gameplay_hud": true,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 357395
+		},
+		{
+			"camera": [
+				24.0,
+				7.0,
+				25.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 301,
+			"file": "02-temple-road.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 318687
+		},
+		{
+			"camera": [
+				4.80000019073486,
+				2.29999995231628,
+				-16.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 184,
+			"file": "03-hall-interior.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 330153
+		},
+		{
+			"camera": [
+				24.0,
+				3.70000004768372,
+				12.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 341,
+			"file": "04-guardian.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 320075
+		},
+		{
+			"camera": [
+				13.0,
+				3.5,
+				18.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 360,
+			"file": "05-wind-cart.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 330037
+		},
+		{
+			"camera": [
+				-38.0,
+				27.0,
+				42.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 267,
+			"file": "06-frontier-overlook.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 269327
+		},
+		{
+			"camera": [
+				-6.0,
+				4.0,
+				16.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 228,
+			"file": "10-lotus-sanctuary.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 269971
+		},
+		{
+			"camera": [
+				-28.0,
+				2.5,
+				10.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 216,
+			"file": "11-water-garden.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 321353
+		},
+		{
+			"camera": [
+				-36.0,
+				11.0,
+				-33.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 309,
+			"file": "12-pavilion-view.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 274349
+		},
+		{
+			"camera": [
+				-3.0,
+				2.0,
+				10.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 208,
+			"file": "13-keeper.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 258217
+		},
+		{
+			"camera": [
+				20.0,
+				6.0,
+				20.0
+			],
+			"coordinates": {
+				"local": [
+					0.0,
+					0.000731717795133591,
+					12.0
+				],
+				"sector": [
+					781249,
+					0
+				]
+			},
+			"draws": 239,
+			"file": "07-eastern-frontier.png",
+			"gameplay_hud": false,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 226600
+		},
+		{
+			"camera": [
+				0.0,
+				0.0,
+				6.00000095367432
+			],
+			"coordinates": {
+				"local": [
+					18.0,
+					0.000703126192092896,
+					10.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 396,
+			"file": "08-encounter-gameplay.png",
+			"gameplay_hud": true,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 316685
+		},
+		{
+			"camera": [
+				0.0,
+				0.0,
+				6.00000095367432
+			],
+			"coordinates": {
+				"local": [
+					18.0,
+					0.000703126192092896,
+					10.0
+				],
+				"sector": [
+					0,
+					0
+				]
+			},
+			"draws": 375,
+			"file": "09-world-atlas.png",
+			"gameplay_hud": true,
+			"size": [
+				1600,
+				720
+			],
+			"triangles": 345585
+		}
+	],
+	"coverage": "Actual desktop Compatibility render; not Realme performance.",
+	"inputs_sha256": {
+		"assets/audio/garden.ogg": "495f7911ff16320e2d112335ab16a61a0832f928dd316ccd092d5be29ef54e99",
+		"assets/audio/garden.ogg.import": "e4e8340637396a8ae088894b99f23ffc0102a157f43390c1d187ee61b5795875",
+		"assets/icon.svg": "b9b56f2821a9ebdb95d4ac9584c5916967bc3a0cd261438de7da8b654a5fe8fa",
+		"assets/icon.svg.import": "f543f857485b21706d9650590b44fb41b0cdd71174353128574a09a8e7ad9069",
+		"assets/materials/botanical_atlas.png": "1c359df5998e644086cf27a7e2abaa9d838c826afb9c705f0c9466a20883a0df",
+		"assets/materials/botanical_atlas.png.import": "eccff772160a65572c28966cf96f128bb015d0638211aa685550b2a06fad88c1",
+		"assets/materials/botanical_bark.png": "b2a74a3db49d792b988cf9ef1884626c1f27f67ec0e88c24248c0f852e80c037",
+		"assets/materials/botanical_bark.png.import": "63c4af01328ec42067677651f77c80f6aa9cb3304b09c671f2b94af91af61098",
+		"assets/materials/karst_rock_original.png": "41521af948c32cf8f08a6c13e212422d8bbff5e4b73a007f509a222e3ed22206",
+		"assets/materials/karst_rock_original.png.import": "7a8c595df4710be405c5737298887b6e9e692b74adff51196da864c1ba67e520",
+		"assets/materials/karst_rock_original_normal.png": "59c390c6c2e670d83e66adfb7959fa2ab81d52efec848b0c4a5d02abe190a289",
+		"assets/materials/karst_rock_original_normal.png.import": "1ce533977d862e93a155e2aec6081c8233b3fdb38c0c297df05b15cae25a7a4a",
+		"assets/materials/karst_rock_original_roughness.png": "50870b8bb17f3e2ecedb63563e42b47ba2e4a3232ba8e1788c47e766893a0763",
+		"assets/materials/karst_rock_original_roughness.png.import": "99ec2249f19dcabef37fcb37ec499eee3691b8c068a2442563e4a9ca67f04c75",
+		"assets/materials/landscape_karst_original.png": "8adcb24123fc6148c0ff480ba8dfd86338667535753dffab5d0d8f8e688c67c8",
+		"assets/materials/landscape_karst_original.png.import": "1f3df8cb63746262aaef9b6339e5074fb79b564663c365bf78523faaf044dbe2",
+		"assets/materials/landscape_karst_original_normal.png": "94c8b863f6ef9797feebd2e83b1801af99f5c2795fa609f18545d7e01e5a6ede",
+		"assets/materials/landscape_karst_original_normal.png.import": "e9eee8f996d4da7eb568cafa42a271371361d0c2095c98dd283922b6b868beef",
+		"assets/materials/landscape_karst_original_roughness.png": "9461e9659b3ac16bed7272e2ce5a2c11b3567c94a5536402543a4e6aafd538fa",
+		"assets/materials/landscape_karst_original_roughness.png.import": "20763535b495c466d16f83a250d3489140a767595e2673f1cf65281ddd3ccbdf",
+		"assets/materials/lotus_banner.svg": "3aedba1b314ed8fbd7b923c379311c39dce01c390001465cfcf113b1268d3d76",
+		"assets/materials/lotus_banner.svg.import": "6a93e386dc43b4edd5d18fd0cb0bad486c76e9d0c6ecccc15e365e3d6f6f725a",
+		"assets/materials/temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/materials/temple_roof_original.png.import": "078a490a5776806ff3af27e54b144d6cf78298876f997a598404f5d4a90f7c53",
+		"assets/materials/temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/materials/temple_roof_original_normal.png.import": "f17a37cb40aa4deba923540a2dc92ebcec192db2681611eb7a75d1306fa1032b",
+		"assets/materials/temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/materials/temple_roof_original_roughness.png.import": "9f86786eba983baf0c8803d9adb2191cedb2d4b17d63f55dd7ec60f48d63b0dd",
+		"assets/materials/temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/materials/temple_stone_original.png.import": "aa53cadfd98ed4f2c1480c88931aab638eb9ac19d8fc3fefb8e8f560a626a233",
+		"assets/materials/temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/materials/temple_stone_original_normal.png.import": "e367a773a4422e41155e2010c4b2ebad4b9ee8ad79ffe856facab898930eb271",
+		"assets/materials/temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/materials/temple_stone_original_roughness.png.import": "ad37d5999d690bf9f954c0c76be5b906b951e3285314e45f165d434b21ff697c",
+		"assets/materials/temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/materials/temple_timber_original.png.import": "84f507586c3c1a74f3b49fdcc9ff15c39621322249b1fd55afaac7a7c18da478",
+		"assets/materials/temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/materials/temple_timber_original_normal.png.import": "07801a88d53cfa18ad08cda0439a8715c3ed4e99387459e32b2ef6cf5aa6c0fd",
+		"assets/materials/temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/materials/temple_timber_original_roughness.png.import": "11a0c4c495feef1f9710f9be48469f4c7fd055f323edddce3f923a9d19c063a2",
+		"assets/models/bridge.glb": "65bfa1bafe0734b09ef5ddf6ba844df17c5c6d1244a6f7abf95a74e199c2d1cf",
+		"assets/models/bridge.glb.import": "66510b5db0f3070dc62df3f16200b8dd4abbdd212ce9b3e017ddaf1edc8c12ff",
+		"assets/models/bridge_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/bridge_temple_stone_original.png.import": "39def3e3057e55d9aab878da67cfc6d0a9d2b4352d06b9a90c04121978b7d663",
+		"assets/models/bridge_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/bridge_temple_stone_original_normal.png.import": "d3c377f99d13c7c71eee9049340d8163653c135a4d32502e9c8341eef2da1471",
+		"assets/models/bridge_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/bridge_temple_stone_original_roughness.png.import": "7b12ae9715630ee0dc6c5dba1c37539e6e0c2d856885dc243e9637036edb09af",
+		"assets/models/bridge_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/bridge_temple_timber_original.png.import": "058ee8c4a0ad2b201374a63827e2bec5e5eb4abcc6257aadfb3bb1e36e384af7",
+		"assets/models/bridge_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/bridge_temple_timber_original_normal.png.import": "733a18adfb4c78bc1a4d25dc670f61b38f4afa6446c12aaa01a321d7c37359b9",
+		"assets/models/bridge_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/bridge_temple_timber_original_roughness.png.import": "c20e101b8d284e2b64dcfc44af1292cac81773522cdeebc26e3eb6a6e6ac03c4",
+		"assets/models/celestial/balustrade.glb": "5f1283fce0a153e6b20f04e9520f863ec88700f1c64357a23bbbf26b658aa5b9",
+		"assets/models/celestial/balustrade.glb.import": "1878bd4768baff0ff410b47fc3dd9db916efcf26e828fc9d0da68d4fef48cc6e",
+		"assets/models/celestial/incense_burner.glb": "070ddddefcf0d6404316868cd29d1f75a42fc61f8dec08283081de70bcb7e44a",
+		"assets/models/celestial/incense_burner.glb.import": "b6357569afbad27b9bbc4ca76686836dca9e560f89d1ce7178d467859db659ec",
+		"assets/models/celestial/manifest.json": "c520cab3ef47303e3e8d87255ea717e06ee3dd7c4359334775ac816b2945d601",
+		"assets/models/celestial/market_stall.glb": "3eba48167a6e4be7971d8c951df4a4deec36d003744257ef6f15335a04dd4eab",
+		"assets/models/celestial/market_stall.glb.import": "113c2db5b7c55f227d235edbc5ce08d900b99c43f53483e01c93a6d47bb80c4f",
+		"assets/models/celestial/pagoda.glb": "a147295f9b7670e15ae04add4e7a2092d2806ce0142704d74e694c71742f4285",
+		"assets/models/celestial/pagoda.glb.import": "792a43b8fe3947dccb79a629041cef3854e376b29c031b51ad8f71a10dd563f2",
+		"assets/models/celestial/planter.glb": "6b7e69f0dfb073d2cb83cfa58a815f94f5f7f8e1932845d7eb254df15d13b69a",
+		"assets/models/celestial/planter.glb.import": "120bc940783b590dec374c00ff107c6d8df027c8dbad618c6d067621b1730635",
+		"assets/models/celestial/sanctuary.glb": "872dbb7608507bfa2651dff0eefdb7b7f54f09d751bb899cabba54e9c88d9694",
+		"assets/models/celestial/sanctuary.glb.import": "7cb1d55920689853b40de6068721c4a7da9a26f32d18b3b642a0e9bb81ac655a",
+		"assets/models/celestial/stone_guardian.glb": "f51eb7c16a66239f7ee235c4e25e9dda31ef14536c2ecdbb01ffe9937a472f02",
+		"assets/models/celestial/stone_guardian.glb.import": "6a25652af0921c07111a7ce964eba4810fda0af21393780a21966205d3d8a676",
+		"assets/models/dragon/LICENSE.txt": "8c3c1f1d539e7483636431bb3b256c0ecb9a2a1aee4b5b8a89caeecc301dac7c",
+		"assets/models/dragon/celestial_dragon.glb": "5368f6b73604569dd85466c35ef6e837ba9ed900baae18055339e43652a79b90",
+		"assets/models/dragon/celestial_dragon.glb.import": "c28b09c7c3d81216b833ad0b1e79adbc428f0f87bd08212b853348db9c2419a8",
+		"assets/models/dragon/celestial_dragon_far.glb": "41b4c9f8c9c677b7bdaf25fb9bb21cce986527cecd59277ff10f5893f18c4486",
+		"assets/models/dragon/celestial_dragon_far.glb.import": "cd46bc697b25e158922e783d7c59d51aeb0b05c6ccbefe74afac05f3ed83a2e1",
+		"assets/models/dragon/manifest.json": "4a62bfb212f209ac9adf4167ff086b34940447e2a68b4735e46fe37d0f7024db",
+		"assets/models/gate.glb": "79a4b886d270e1ab93f08c7e252c92b63174ae9190bd07c9eb213e36102981be",
+		"assets/models/gate.glb.import": "94e84da5d4e037485136f06a9c2be6ac8931c4f04d3617ee8579038df6c0994c",
+		"assets/models/gate_temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/models/gate_temple_roof_original.png.import": "939c1775c2cdabca23b58cc93bfbacad933319590306356d47e9b260b1a595eb",
+		"assets/models/gate_temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/models/gate_temple_roof_original_normal.png.import": "6adb984a1712fabc7185fa85471d950b709e444e7ac1f073d8ca839ac9d24ed9",
+		"assets/models/gate_temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/models/gate_temple_roof_original_roughness.png.import": "83a86e3613f6914aec2c790d7cac585e9dd779071383fe3c598b0b24e649b790",
+		"assets/models/gate_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/gate_temple_stone_original.png.import": "b883ddce216e374a854bdef34d83c582abc6e4ca7804850f48aef16f256beea7",
+		"assets/models/gate_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/gate_temple_stone_original_normal.png.import": "6b97c59ba8ff2860765a1ceaf8254c5a8022d7d4cdee313afe78bc7da9be8fa6",
+		"assets/models/gate_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/gate_temple_stone_original_roughness.png.import": "9a4b5ec95333e6754b35327c7a12289f76572daf6a67b3d0ac7dfdede46fcb45",
+		"assets/models/gate_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/gate_temple_timber_original.png.import": "60e6b3d03e85cefffa975f4f572f470fe81716982e450aa21b15e05cf28fdac7",
+		"assets/models/gate_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/gate_temple_timber_original_normal.png.import": "a3ba28ae00eac8b9268395641a739f8a339babc90588ee766fe158d373c0ee54",
+		"assets/models/gate_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/gate_temple_timber_original_roughness.png.import": "9e07bbc22cdfb327674871ad28680b9d7a1d6c4222d4bee63ccc570d236f9a32",
+		"assets/models/lantern.glb": "0d69ebaaa051806efc77871623628b89257177e252fad53dd638902795a9d248",
+		"assets/models/lantern.glb.import": "760c04d34e0305d2dae4a6dca31a6be1434b95e01fc8ed5993e0472dc50788ec",
+		"assets/models/lantern_temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/models/lantern_temple_roof_original.png.import": "841a925a1fe830498fad9a356fe669897dd000c7c846abcea05851010b12cd6f",
+		"assets/models/lantern_temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/models/lantern_temple_roof_original_normal.png.import": "64e1b64022c97167f0851753ac8f9574c7d3dbe9edea524ef69aa4a33999a1e2",
+		"assets/models/lantern_temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/models/lantern_temple_roof_original_roughness.png.import": "46c10bf5333111015ae3ce2706b341b219ec64eddcf6e0c846b0e3b4c7a43d9c",
+		"assets/models/lantern_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/lantern_temple_stone_original.png.import": "88540358d5ff1d35610a269eb759d5d5028fc4e998f4b1a4efe8e0a7da6ed3e4",
+		"assets/models/lantern_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/lantern_temple_stone_original_normal.png.import": "4385d6352a4ae67af281df232c004f6c234907f0eda148ece17eac164d82acb0",
+		"assets/models/lantern_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/lantern_temple_stone_original_roughness.png.import": "7cc0e7233a0c92bad3792f64a53bc5a47322e30503ba919f0605671a80f91b21",
+		"assets/models/lantern_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/lantern_temple_timber_original.png.import": "031b631c6b4a4eb335c20c1c3d21f4376f7135fe2d6afb769580b0e76d4d7f10",
+		"assets/models/lantern_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/lantern_temple_timber_original_normal.png.import": "6af2e6c51887db034741a94b0242988a6825aaf6878d606dfc6551033ddc17ec",
+		"assets/models/lantern_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/lantern_temple_timber_original_roughness.png.import": "e3ec29710113bb5de5245897f50647841ca36082c7dec213349f830b02a1833f",
+		"assets/models/manifest.json": "e229dffa1b7ddc543fbaf98e04f1a5b85df67fa1dac2f0514a9987ede0cdc4d0",
+		"assets/models/pavilion.glb": "c89a523729d0ab8f9b330c5ef4f5b07876d66ee7c8f8377bb8ed74cce191d5e7",
+		"assets/models/pavilion.glb.import": "a9781c55030fd9496728026820c67945ae94176907737020fe92e5788bbf2620",
+		"assets/models/pavilion_far.glb": "dd5ba0dc5f9745f8178fa3c04c59c92584e30783f17f1878b634230f28b1ad63",
+		"assets/models/pavilion_far.glb.import": "e94771dc059bcc45622ba71f7504f29e8afe314f86565337552d4d378f27e87f",
+		"assets/models/pavilion_far_temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/models/pavilion_far_temple_roof_original.png.import": "ed5e956be5c76232e2d29c7b627c811a69b70eb404e847185df67f4406565d7c",
+		"assets/models/pavilion_far_temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/models/pavilion_far_temple_roof_original_normal.png.import": "0dc924deb70a3f70fb1d4f4974089cd5bfd5608b0f732f0d22538b3d49b501ec",
+		"assets/models/pavilion_far_temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/models/pavilion_far_temple_roof_original_roughness.png.import": "c5284578c86845533c974c2aa93f03304575ebe8cedd66b168bcb868ff08a734",
+		"assets/models/pavilion_far_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/pavilion_far_temple_stone_original.png.import": "026cd02ce82d6c233287b3c55208c774f32045aab27eb26e998988a4477aa76b",
+		"assets/models/pavilion_far_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/pavilion_far_temple_stone_original_normal.png.import": "2bdf69a0c1d077506d0c93c0a511197b613899e5fae1ed616395e1b8e64d0f1d",
+		"assets/models/pavilion_far_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/pavilion_far_temple_stone_original_roughness.png.import": "8ad595b14e968651c424f3581cbc437d1e5a0378c88ea50396da9f0cd82f0a65",
+		"assets/models/pavilion_far_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/pavilion_far_temple_timber_original.png.import": "767403e0ccf83865ed7de8acabbf1609af31a86e9b7365472186cccd8d6416e8",
+		"assets/models/pavilion_far_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/pavilion_far_temple_timber_original_normal.png.import": "a26a53032cb285ed9024453ba8b1507c23f3254d0a123b64af5aa4f691cc900b",
+		"assets/models/pavilion_far_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/pavilion_far_temple_timber_original_roughness.png.import": "ea158d0272d7fefcdc2b06d0b9ee4a6fddbe566153b60dc952ac7074dd4eb8fe",
+		"assets/models/pavilion_temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/models/pavilion_temple_roof_original.png.import": "e307c8c3bbdb9275dcc94e472581abfa5f6d2b5072f6bc73c5c916cb9d0e149c",
+		"assets/models/pavilion_temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/models/pavilion_temple_roof_original_normal.png.import": "b449478aca688d29e7d342fd0256c755f72d214925608a0a6145f689530eb59c",
+		"assets/models/pavilion_temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/models/pavilion_temple_roof_original_roughness.png.import": "f1d36316549409dde788a402c473244d12f2e0ed24d27d6b196eda16e64af691",
+		"assets/models/pavilion_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/pavilion_temple_stone_original.png.import": "44ec7c6028bbe47acb1859d92e028ea8d61818baa667fd9ca7225828b999c6dc",
+		"assets/models/pavilion_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/pavilion_temple_stone_original_normal.png.import": "58f5e20de51852d6a21bcbd3f639dff424382924b873847a308b6da20195eb55",
+		"assets/models/pavilion_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/pavilion_temple_stone_original_roughness.png.import": "ec6ca926123f2b4f1f26f3041c52da0f1dc32d6299768c1c02c0b03d73919218",
+		"assets/models/pavilion_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/pavilion_temple_timber_original.png.import": "d32f44a4fce868bb597409c485a167103cd61751f79bc2eacaae61dfca10a9e1",
+		"assets/models/pavilion_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/pavilion_temple_timber_original_normal.png.import": "63e937911e38726504af3d12adf5dbd4fd8cf5d8b0058297cd21ea787e24b1b2",
+		"assets/models/pavilion_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/pavilion_temple_timber_original_roughness.png.import": "dbff3e05f8a0c9e27a525ce7ae429122b9afe8560a80946f7bfb6ec4c43e4b28",
+		"assets/models/residence/manifest.json": "6716979973ddc34c67408ec0fae1d27c82044f447efe53142c0f8a7dbac42333",
+		"assets/models/residence/residence_far.glb": "39ce8770957209d5257c8a2abd04238bb18fe540d86eeab1944e203dcc3d168f",
+		"assets/models/residence/residence_far.glb.import": "4c5c29ca92a83ec88421b5456d5a0b582b1d90f5499eff8d9ce953d73b55c20e",
+		"assets/models/residence/residence_near.glb": "50b19680d4ce6c81faa8c0c411c0117b07f3a841663197a3fc42a8062b84bbd0",
+		"assets/models/residence/residence_near.glb.import": "ec183443966f4e3c83615f13ba214a9f1dc26c1010613e8236077e7884a42140",
+		"assets/models/shrine.glb": "62c286c168c56228c830bcc854b8f2f2bca2f222f7d06490541be96a08f4a480",
+		"assets/models/shrine.glb.import": "f89e966eed4da2b4b83c86a80c15b06c9ffbd8d05735eef49ab05ef874b3e393",
+		"assets/models/shrine_temple_roof_original.png": "5df6d7f1ead2e119984649c88579a337ec2411824c85258525ba1df61932d28c",
+		"assets/models/shrine_temple_roof_original.png.import": "680692360b427b3dcee3c8669fa62ee404a9bdfb3a5e77b4fd2ed63e24a52811",
+		"assets/models/shrine_temple_roof_original_normal.png": "f07670bbbf83fbf248b3b7d3ecd70bd29408aa4a0686c339433e0302aae10146",
+		"assets/models/shrine_temple_roof_original_normal.png.import": "d246b852f6b89fd5ba96d6138dace62036d0391fb20efd28fa08a053e6698fec",
+		"assets/models/shrine_temple_roof_original_roughness.png": "d533f499c2ce6ff14fc52dd39d6c4b3e6978a456900d6c2a491bb08473320b9c",
+		"assets/models/shrine_temple_roof_original_roughness.png.import": "0d03cae66c8f1a50fd56e694373076081cbc7661aaddc2bbb4a525ec3f84f7f1",
+		"assets/models/shrine_temple_stone_original.png": "cf025d634667383c94f53ef3fb549d1067601c7ffc8c7fd742fb16a91439bf65",
+		"assets/models/shrine_temple_stone_original.png.import": "a67e8f651e386f5e9e072548b312b9e2c782147b136b604f380eb7e3f7bbfe28",
+		"assets/models/shrine_temple_stone_original_normal.png": "2d06d3b3e2020a1969779c3b45ba47f5224b1be7050d43cb9f5afc493610fe16",
+		"assets/models/shrine_temple_stone_original_normal.png.import": "5bd69a85373971ddd37cdd2cb2edfe9a05db39bb5a3215dcf28ca3c9e5cda5fa",
+		"assets/models/shrine_temple_stone_original_roughness.png": "bf980da717c0f28ab075ee25173421e4562036e524810309a909768a2ae91868",
+		"assets/models/shrine_temple_stone_original_roughness.png.import": "0c6f6bb5c03279a7101ea506051a48c66aa55f2ef320e52624cc3309fe777d45",
+		"assets/models/shrine_temple_timber_original.png": "ec9ea689d0ee4c4a9b06780eb9dfcdd78e217d450c4134f8f97f4afed017b5fb",
+		"assets/models/shrine_temple_timber_original.png.import": "0c307c71523943baf9b89ef5cf62dedc05ca2ca1c82c2f21e87a096c11ffd34d",
+		"assets/models/shrine_temple_timber_original_normal.png": "66f63646a77cc003d1a7d6d75c6fdf1be00b946fda47a491580c9f6dd2493f61",
+		"assets/models/shrine_temple_timber_original_normal.png.import": "0b9ca6965a9e754656504a0df56ea6965b1534c8b7cf3d8e9adf729da62d77a8",
+		"assets/models/shrine_temple_timber_original_roughness.png": "0ccb55042587355fc7be65d5f1c39d25d696ebb7f8024fa97d7cc5d93f259f04",
+		"assets/models/shrine_temple_timber_original_roughness.png.import": "79f5ae5aeccdb5cdcd6838c31fea2d3647e45d7279ce3770a27937971ace8395",
+		"assets/models/verdant/covered_bridge.glb": "828febe2d703ad0eb9c44b57a4cb3e4eabc9789421d4e70e47048dafd08d6e87",
+		"assets/models/verdant/covered_bridge.glb.import": "7eddcbe7c5a85162109f445bd022d09080738be67be28c4f66141a5788b78ba6",
+		"assets/models/verdant/dragon_spout.glb": "0408bd44c8aa360f247551d5b416a9b8659a9b6919eb62624d255bbb22956d8f",
+		"assets/models/verdant/dragon_spout.glb.import": "eedaefdd3492799e1006d772229228c15c438f044296083a18771d28470d3763",
+		"assets/models/verdant/fox_guardian.glb": "598a9d5b30dadab419f56df79b89fd38a17cf2d6a9536f6054d641155ef34233",
+		"assets/models/verdant/fox_guardian.glb.import": "257e1f137136ad36727abbeaa53f80fabd945b4308380910ca6c4a943745321b",
+		"assets/models/verdant/fox_shrine.glb": "173f37f963b9ce2be605cefda44c4c3d45b965ce07ea5430cce098e64c6e6d1f",
+		"assets/models/verdant/fox_shrine.glb.import": "aefd3e0f7a1226b0c383eaa613da85877e8be89395562d2478bd42426ad371f9",
+		"assets/models/verdant/lattice_screen.glb": "d41aa8f2d0a1be71f4b439d87f3b128a3972bbc8cd5c6db503252c727944a573",
+		"assets/models/verdant/lattice_screen.glb.import": "2524f11a9389823ef30fc4c9137a52618bbab839379f548bde916f3aa51067e8",
+		"assets/models/verdant/manifest.json": "111cd11748f917a44c73b08d514b862101bf5a22a58ba414ab7a2cdbca546655",
+		"assets/models/verdant/pergola.glb": "eda83bf2aebeafdc661c496b20330deb9acfb343e6f4ee29f3f1aa4e29c9ce7c",
+		"assets/models/verdant/pergola.glb.import": "597a269411e981ae437ba3b56304d0b4bd5b4d3424b5199050db0bee570a5eda",
+		"assets/models/verdant/scholar_desk.glb": "a2462bf92153f7842e14519c01a77e487428f7367a31154baeca57631af572a3",
+		"assets/models/verdant/scholar_desk.glb.import": "c202506dc37f8d0ee828548516fbfd27108576f21980ce2ee9fc44cf45d2445e",
+		"assets/models/verdant/scroll_shelf.glb": "5562baf880794281b924b2d422f9db36e5cedd5f0fa298c914529f705d6e5c22",
+		"assets/models/verdant/scroll_shelf.glb.import": "45fe84ffc2025133f1f94314c717014d1c5f76fb877522a21d17fa5329c762d4",
+		"assets/shaders/cloud_sky.gdshader": "1c0ddb065de271ac3d6547f8b88f91f6f054e8b5a7a51da2138f955305b1c836",
+		"assets/shaders/garden_foliage.gdshader": "e325565ebb5c2c00869e11716f63501c62bdb3901d9a4999dac165df74c7b7e3",
+		"assets/shaders/garden_stone.gdshader": "df10848b7db4ef1e8af758a0e43ebdd725d524d921ca1511099366d3cb4b126c",
+		"assets/shaders/impact_foam.gdshader": "2e9be500b73539c2d569f3122e65c732607fb5a26893705e87d7b6160db52d38",
+		"assets/shaders/jade_water.gdshader": "4cb09562e11071469a756dffc6cdf66f15b9e74ea7fec9a1de78982de49c189a",
+		"assets/shaders/silk_banner.gdshader": "885f693b38ab1c38ab2eb74eab5360e8d053d78417be47a248cf77e97dfa149c",
+		"assets/shaders/terrain_ground.gdshader": "6fe84747785bdf3f52bf48ea49d4db62735b25843b30a75dcfe5ba1f6fdae257",
+		"assets/shaders/water_spray.gdshader": "f77cd029ea41504b1538d58ba8a31bcd8b3ac9f9917265951fda53519daf360a",
+		"project.godot": "a472f8fd62bc4409ca7d3dc3dd54af2494a419dd1d8a6f423c832d6db46feabc",
+		"scenes/expedition.tscn": "fa225c84fc91b0593424cbbf8c5d4f08a3fbe00d7ab3724804bc250eefb65d59",
+		"scenes/main.tscn": "44c99661e96357054f267159944d11e5e8fd06bcba53d82797131b57953d669b",
+		"scripts/ambience.gd": "d99aa3997b6f45133e1153185e5fd0f9d8182922dd811bfabb53cf2a8c9a64ef",
+		"scripts/architectural_detail.gd": "f5521ade5041d4f8ec1d3c33c5dfe6a1dab96edb27be13189f49583e17defd09",
+		"scripts/architectural_palette.gd": "89bbe4d31054aa1ad1e846e7de1c2143bc682c4d9beda9d63b8ce00351f6a0a7",
+		"scripts/architecture_collision.gd": "521b6b01b691bb5e5fffcc495c1fcde804edc688c4f4b3ef3a11931d82061017",
+		"scripts/celestial_district.gd": "429d788230072747326bf5853bf4b6edb38c1772a87be6eb8c481c4eccab65b8",
+		"scripts/celestial_dragon.gd": "43bdce0dab67bd660bb690aafed515dd4f636c1208326d1b2157ab392a3e9192",
+		"scripts/destructible_mountains.gd": "c96ae14da5c11bbfb7182e56048fd7e0d1287fa182247e07465aa44eb24988da",
+		"scripts/expedition.gd": "335b5854115c7d6590085d7940bcfb5b795ce8c21890b0b9f0ae3774997d99ac",
+		"scripts/expedition_atmosphere.gd": "25048266f9300398d98a92b2bee8aaaadfb801812552e862957877f0f581922b",
+		"scripts/expedition_controls.gd": "0e9c6e937b5bac0efc4fa14adf4630537300da9e3f8d24fffe674d1245065b6f",
+		"scripts/expedition_encounter.gd": "c96fbd0fcd1a66169e951ec49a7db169324bd4d00eb70d03646629a326750a36",
+		"scripts/expedition_garden.gd": "532fe49f7b8852c95949ffe9da61c8455f4069f829b59271e44726af3ed3f2d7",
+		"scripts/expedition_guardian_art.gd": "2bea03028291b72b9429249f90cb891857806f7ce9c75b944d81b52256005b23",
+		"scripts/expedition_residents.gd": "2b4bc62953e14a1c5a4f96b580a4d970dea64892015480b4e41cb568a8e79838",
+		"scripts/expedition_sanctuary.gd": "fe4abed4d37e03ce96e6f61d32e2d38bfebaa377030f5c9ded45f33e9f73cb9e",
+		"scripts/expedition_world.gd": "feb90c01c2e98c79448448b46473e6482d578fe195c3455eb2357d83a0641a18",
+		"scripts/exploration.gd": "17c75908e35ebb2d85fb902c30c68469f7d0a3016284183044ec16b18a7f47f2",
+		"scripts/game_settings.gd": "e4d005344e48a4713b995433410acdbf97d87f6257a3e5b799cd1167896ebd99",
+		"scripts/hero_power_controls.gd": "3f4a9388fdd2c5b4f25c2a2a5117f5f76aa165b9380c9724087617763fff07f1",
+		"scripts/hero_powers.gd": "94648bc4c3564405b728a0ba4e464600d1adddde30bae4fef7ccc5455d2ed654",
+		"scripts/journey_checkpoint.gd": "ac55c852840c70865bf240ff2b0a83bc55b57f9d652f7b413476b9a9be111996",
+		"scripts/landscape_visuals.gd": "5eb0b564bca6c7187494194278ba14b82d94ceaf156120e216300979899f8f45",
+		"scripts/lantern_quest.gd": "8a772bc5ba2d4170c3f041d8b38ee39e7939d5fab8c9e5d769989059268a1d28",
+		"scripts/main.gd": "0eedba5717609b68991f9aeb44c6726990f83e106b595df0eae0bfad2451b159",
+		"scripts/mobile_controls.gd": "0b9f7e129c3748d4647b634ea7b92d8fca54cf4e177c0f6f466d05bbb6932137",
+		"scripts/nature.gd": "2fb9ede1774b627b7b4dd240f3d924e0b69f39d99b60684d8778b9e5d39d7456",
+		"scripts/player.gd": "9d22861029818f476fb07451b0c95869d9b863ae2df17cae9761d225d22a426f",
+		"scripts/quest_interface.gd": "43fd68e60d19b36a9849777baa5227f30ee748d6ee3e2c1dd26d28e506167476",
+		"scripts/region_streamer.gd": "b1483d2034bf457271c9c715a02b62141fa441676431a5a383232d7dce2261bf",
+		"scripts/residence_route.gd": "fbc8c1e80c13815ed4dcd35df7d090da88cf420e28fd6dcb140c113ac25f900c",
+		"scripts/save_store.gd": "38311881149ec1e6f16654e36c3dd3ce9a81703ea1aafe7fbb7f4e08777d4b4f",
+		"scripts/traveler_motion.gd": "12c7fb6fef1ce96e464c513ea67f35e05898f3727b1bd91f2bc5a00c3dc10117",
+		"scripts/traveler_visual.gd": "3d2caa3dd3261bb41933fe94723afc33f82cdad5241b457ea9980e7b4c30bb88",
+		"scripts/verdant_district.gd": "7f2d0f620c9bb93d6934772219d77639a9a305bb93b3b9b7e31914df9e4920fd",
+		"scripts/verdant_flora.gd": "6e1ada3fd553d07dfcff7cf45eb336f78b7e5214689d53f6ca3db17fe99da3ac",
+		"scripts/verdant_route.gd": "866b76295d9478929eab71cbbf38c8af9d9de93f266dccb44b6245ec159674ca",
+		"scripts/world.gd": "b0e5a65743616f30688733a26f7f1681472eb4f06b15b110f2e49a9f5482689a",
+		"scripts/world_activities.gd": "7c8c3a55d8ef115116deb4d3d4fedae31b744e9c0505b5008621dea2dc2bed70"
+	},
+	"renderer": "llvmpipe (LLVM 19.1.7, 256 bits)"
+}

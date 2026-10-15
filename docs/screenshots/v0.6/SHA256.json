@@ -1,0 +1,18 @@
+{
+  "01-expedition-gameplay.png": "b7b2295f128f1c2e114e4dc04f5803ee502c28d9afdf79b6b46a37fe35e32487",
+  "02-temple-road.png": "d7dcdcf59e37639df53ff716b8cb665088162662b04421f3a7321bb18fcd410d",
+  "03-hall-interior.png": "1a44df2708defeaa121349a157639b96d4a391c49475230f1ab3be17fd466739",
+  "04-guardian.png": "8a2a6137e5dd2bb75eaa02261ea3b638a91c9319efe3a3d9bb890b77a5abe602",
+  "05-wind-cart.png": "5a75c66824245556965863c99b0a470828644dd9d5aa378fd312f3b9907b9ccb",
+  "06-frontier-overlook.png": "7cd991942db1df5af2ed208a36867d0b399129db1a0a3b91197ee19538677ba8",
+  "07-eastern-frontier.png": "6c724e2b6acde3590cde7ca66257f9eb75d4afebc689569c26782e8e05db9652",
+  "08-encounter-gameplay.png": "2e457fed0c6248de1f4bd6960f3b62f86f25c4346984a636c14d3dbc5beee716",
+  "09-world-atlas.png": "7c4c2129b9b33cd034ed2a7be0a29f598bd844ac94217b22c969eefbe5ac12bf",
+  "10-lotus-sanctuary.png": "d68aafcdc691c68ec47ad396540c2481062d9f125be5a7ea3d1573e3918c8f07",
+  "11-water-garden.png": "063652ce023c42a64925705ca78c642ba4bb1dd6ec169ed4325a62d0c9d2e0ef",
+  "12-pavilion-view.png": "dd124521747c535a2f084b0035336d68508dde6b6f2a3bb62c63ec12e4f04053",
+  "13-keeper.png": "b77f79cf6547f8ca471decee89de4b2de505fcdc77439c47cc10f128cb6255df",
+  "district-performance-after.json": "a53537c18f7f6d5017edaad5a9256fb1992d29b7255e400f031268b4394079a3",
+  "render-evidence.json": "d18913fed3c3ec1d53f3e5d54f2d1a54d51205128f07a46ac199005b7082ab32",
+  "terrain-benchmark.json": "f56dc1c3784b37de9256039b50f97fa14225582110980c967fdecc920f08520d"
+}

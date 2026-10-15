@@ -45,3 +45,16 @@ The new `Temple_Realm_Game_Visual_Upgrade_Reference_Pack.zip` and its images, pr
 - `scripts/verdant_flora.gd`, `verdant_district.gd`, `world_activities.gd`, `destructible_mountains.gd` and the revised traveler and environmental shaders create original flowers, vines, furnishings, lore, shrine bell/seal, breakable karst formations and short-lived effects. The shrine bell is synthesized in memory. Hero powers use the existing original traveler and generic fantasy names.
 
 These additions are original project work under the repository MIT license. The superhero examples in the owner's request guide movement capabilities; no superhero likeness, costume, logo, music or model is bundled.
+
+## Jade Expanse expedition — version 0.6
+
+All new geometry, animation, procedural material code and residents are original repository MIT work. The uploaded reference pack remains outside exports.
+
+- `expedition_world.gd` creates deterministic bounded terrain, original grass/stone materials and arrangements of existing sanctuary, gate, pagoda and furniture modules.
+- `expedition_sanctuary.gd` creates the origin-only Lotus Cliff Sanctuary: an irregular shallow lotus basin, weathered cliffs, connected waterfalls, real bridge/stepping routes and a forty-riser pavilion path. It reuses original covered bridge/pergola/pavilion and water/foam/spray resources.
+- `expedition_garden.gd` creates 11 batches of original cherry/pine, wisteria, bamboo, ferns, flowers, lotus and bank cover: 43,309 highest-detail triangles over 3,517 instances. Existing project botanical atlases supply leaf shapes; no reference image pixels are used.
+- `expedition_atmosphere.gd` creates three original irregular horizon bands and reuses the existing animated celestial dragon. Highest aggregate geometry, including both mutually exclusive dragon LODs, is 23,256 triangles/15 surfaces.
+- `expedition_guardian_art.gd` creates an original cedar/jade guardian and wind cart. The encounter is a small original game mechanic, not an imported Wukong character or animation.
+- Traveler v5 adds shaped fingers (35 mesh draws/9,182 triangles), velocity-driven human gait, breathing, torso counterrotation, turn lean, landing and jump responses. `expedition_residents.gd` reuses this original traveler for two physically grounded patrolling residents and local greetings.
+
+The result remains stylized prototype artwork. The 200,000 km domain is procedurally generated with repeated modules; only the origin sanctuary has this particular authored composition. It does not establish historical authenticity, unique content across the whole domain, or reference-level photorealism.

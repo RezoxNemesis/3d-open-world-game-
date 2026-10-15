@@ -22,7 +22,7 @@ static func build(model: Node3D) -> Dictionary:
 		build_tail(model, side, palette, joints)
 	batch_static(fixed, [mantle])
 	model.set_meta("lantern_hip", LANTERN_HIP)
-	model.set_meta("original_art", "Temple Realm tailored wanderer v4, MIT")
+	model.set_meta("original_art", "Temple Realm tailored wanderer v5, MIT")
 	return joints
 
 
@@ -369,7 +369,20 @@ static func build_arm(model: Node3D, side: float, p: Dictionary, joints: Diction
 		ribbon(
 			elbow, [Vector3(-0.035, y, -0.050), Vector3(0.035, y - 0.022, -0.050)], 0.004, p.gold
 		)
-	ellipsoid(elbow, Vector3(0, -0.237, -0.009), Vector3(0.035, 0.062, 0.025), p.skin)
+	# A tapered palm and four relaxed fingers replace the mitten silhouette.
+	ellipsoid(elbow, Vector3(0, -0.226, -0.009), Vector3(0.031, 0.037, 0.021), p.skin)
+	for finger in range(4):
+		var digit := SphereMesh.new()
+		digit.radius = 1.0
+		digit.height = 2.0
+		digit.radial_segments = 8
+		digit.rings = 4
+		var length := 0.022 if finger in [0, 3] else 0.028
+		var hand := piece(
+			elbow, digit, p.skin, Vector3((finger - 1.5) * 0.014, -0.257 - length * 0.5, -0.013)
+		)
+		hand.scale = Vector3(0.008, length, 0.010)
+		hand.rotation.x = 0.18 + finger * 0.04
 	ellipsoid(elbow, Vector3(-side * 0.029, -0.22, -0.017), Vector3(0.012, 0.031, 0.016), p.skin)
 	batch_static(arm, [elbow])
 	batch_static(elbow)

@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Camera-relative movement with real physics and an original walking traveler.
 
 const TRAVELER_VISUAL := preload("res://scripts/traveler_visual.gd")
+const TRAVELER_MOTION := preload("res://scripts/traveler_motion.gd")
 const SPEED := 5.0
 const SPRINT_SPEED := 8.0
 const MIN_PITCH := -0.80
@@ -26,6 +27,7 @@ var knees: Array[Node3D] = []
 var elbows: Array[Node3D] = []
 var coat_tails: Array[Node3D] = []
 var gait_weight := 0.0
+var motion := TRAVELER_MOTION.new()
 
 
 func _ready() -> void:
@@ -165,37 +167,16 @@ func _physics_process(delta: float) -> void:
 		floor_snap_length = 0.0
 	move_and_slide()
 	floor_snap_length = snap_distance
-	var walking := direction.length() > 0.05 and is_on_floor()
-	if direction.length() > 0.05:
-		model.rotation.y = lerp_angle(
-			model.rotation.y, atan2(-direction.x, -direction.z), 1.0 - exp(-12.0 * delta)
-		)
-		step_time += delta * (10.0 if running else 7.5) * maxf(0.3, direction.length())
-	gait_weight = move_toward(
-		gait_weight, minf(direction.length(), 1.0) if walking else 0.0, delta * 8
-	)
-	model.position.y = absf(sin(step_time)) * (0.032 if running else 0.018) * gait_weight
-	for i in range(legs.size()):
-		var stride := sin(step_time + i * PI) * gait_weight
-		legs[i].rotation.x = stride * (0.48 if running else 0.34)
-		knees[i].rotation.x = maxf(0.0, -stride) * 0.42
-		arms[i].rotation.x = -stride * (0.40 if running else 0.25)
-		arms[i].rotation.z = 0.045 if i == 0 else -0.045
-		elbows[i].rotation.x = -0.16 - absf(stride) * 0.18
-		coat_tails[i].rotation.x = -0.08 - absf(stride) * 0.14
-	model.rotation.x = move_toward(model.rotation.x, -0.30 if flying else 0.0, delta * 3.0)
-	if flying:
-		model.position.y = 0.0
-		for index in range(arms.size()):
-			arms[index].rotation.x = 1.42
-			arms[index].rotation.z = 0.12 if index == 0 else -0.12
-			elbows[index].rotation.x = -0.10
-			legs[index].rotation.x = -0.08
-			knees[index].rotation.x = 0.12
-			coat_tails[index].rotation.x = -0.45
+	update_traveler_motion(delta, get_real_velocity(), is_on_floor(), flying)
 	if position.y < -15:
 		position = Vector3(0, 2, 12)
 		velocity = Vector3.ZERO
+
+
+func update_traveler_motion(
+	delta: float, actual_velocity: Vector3, grounded: bool, flying: bool
+) -> void:
+	motion.update(self, delta, actual_velocity, grounded, flying)
 
 
 func is_checkpoint_safe() -> bool:
