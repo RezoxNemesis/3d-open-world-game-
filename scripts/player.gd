@@ -16,6 +16,7 @@ var spring_arm: SpringArm3D
 var camera_distance := 5.4
 var sprint_enabled := false
 var powers: Node
+var water_motion: Node
 var model: Node3D
 var yaw := 0.0
 var pitch := -0.16
@@ -144,7 +145,10 @@ func _physics_process(delta: float) -> void:
 	)
 	var flying: bool = is_instance_valid(powers) and powers.flying
 	var fast: bool = is_instance_valid(powers) and powers.fast
-	if flying:
+	var swimming: bool = is_instance_valid(water_motion) and water_motion.is_swimming()
+	if swimming:
+		velocity = water_motion.swim_velocity(input, running, delta)
+	elif flying:
 		velocity = powers.flight_velocity(input, running, delta)
 	else:
 		var speed := SPRINT_SPEED if running else SPEED
@@ -160,15 +164,20 @@ func _physics_process(delta: float) -> void:
 			velocity.y = JUMP_SPEED
 	if is_instance_valid(powers):
 		powers.prepare_streaming(delta)
-	var stepped := not flying and try_step(Vector3(velocity.x, 0, velocity.z) * delta)
+	var stepped := (
+		not flying and not swimming and try_step(Vector3(velocity.x, 0, velocity.z) * delta)
+	)
 	var snap_distance := floor_snap_length
 	if stepped:
 		# Keep this lift for one frame; snapping to the old floor would undo the step.
 		floor_snap_length = 0.0
 	move_and_slide()
 	floor_snap_length = snap_distance
+	if is_instance_valid(powers) and powers.has_method("after_move"):
+		powers.after_move(delta, get_real_velocity())
 	update_traveler_motion(delta, get_real_velocity(), is_on_floor(), flying)
-	if position.y < -15:
+	var over_water: bool = is_instance_valid(water_motion) and water_motion.is_water_position()
+	if position.y < -15 and not over_water:
 		position = Vector3(0, 2, 12)
 		velocity = Vector3.ZERO
 

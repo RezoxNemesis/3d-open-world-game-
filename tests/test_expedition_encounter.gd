@@ -280,6 +280,7 @@ func run() -> void:
 		encounter.guardian.position == old_position - Vector3(128, 0, 0),
 		"guardian follows floating origin shift"
 	)
+	await check_special_attacks(encounter, world, player)
 	await check_encounter_lifecycle(encounter, world, player)
 	print("RESULT: %d expedition encounter checks, %d failures" % [checks, failures])
 	world.queue_free()
@@ -293,6 +294,13 @@ func check_encounter_lifecycle(encounter: Node3D, world: Node3D, player: Charact
 	if not encounter.has_signal("guardian_defeated"):
 		return
 	var victories: Array[Vector2i] = []
+	var victory_order: Array[String] = []
+	encounter.notice.connect(
+		func(message: String):
+			if message.begins_with("Cedar Sentinel calmed"):
+				victory_order.append("notice")
+	)
+	encounter.guardian_defeated.connect(func(_sector: Vector2i): victory_order.append("victory"))
 	encounter.guardian_defeated.connect(func(sector: Vector2i): victories.append(sector))
 	world.origin_sector = Vector2i(12, -9)
 	encounter.reset_for_destination(true)
@@ -357,6 +365,10 @@ func check_encounter_lifecycle(encounter: Node3D, world: Node3D, player: Charact
 		victories == [Vector2i(12, -9)],
 		"victory records guardian's original sector exactly once after rebase"
 	)
+	check(
+		victory_order == ["notice", "victory"],
+		"victory persistence callback follows generic notice so errors remain visible"
+	)
 	encounter.attack()
 	await frames(5)
 	check(victories.size() == 1, "extra attacks on calmed guardian cannot duplicate victory")
@@ -399,3 +411,225 @@ func check_encounter_lifecycle(encounter: Node3D, world: Node3D, player: Charact
 		"removing mounted encounter releases traveler controls and collision"
 	)
 	encounter.free()
+
+
+func check_special_attacks(encounter: Node3D, world: Node3D, player: CharacterBody3D) -> void:
+	check(
+		encounter.has_method("_select_pattern"),
+		"guardian provides distinct range-aware attack patterns"
+	)
+	if not encounter.has_method("_select_pattern"):
+		return
+	world.origin_sector = Vector2i.ZERO
+	encounter.reset_for_destination()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(2)
+	check(
+		encounter.attack_pattern == "shockwave", "distant approach selects advancing jade shockwave"
+	)
+	var locked_direction: Vector3 = encounter.attack_direction
+	var locked_origin: Vector3 = encounter.attack_origin
+	player.position.x += 4
+	await frames(155)
+	check(
+		encounter.attack_direction == locked_direction and encounter.attack_origin == locked_origin,
+		"shockwave keeps telegraphed origin and heading after traveler sidesteps"
+	)
+	check(encounter.player_health == 100, "sidestepping the warned lane avoids the shockwave")
+	encounter.restart_encounter()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(155)
+	check(
+		encounter.player_health == 72,
+		"advancing front reaches distant traveler and deals one shockwave hit"
+	)
+	await frames(30)
+	check(
+		encounter.player_health == 72, "shockwave cannot repeatedly damage after its front passes"
+	)
+	check(
+		not encounter.fx.wave_front.visible and not encounter.fx.lane_warning.visible,
+		"shockwave geometry clears during recovery"
+	)
+	encounter.restart_encounter()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(120)
+	Input.action_press("jump")
+	await frames(1)
+	Input.action_release("jump")
+	await frames(45)
+	check(encounter.player_health == 100, "timed real jump clears the low advancing jade crest")
+	encounter.restart_encounter()
+	encounter.last_pattern = "shockwave"
+	player.position = encounter.guardian.position + Vector3(0, 0, 6)
+	await frames(2)
+	check(
+		encounter.attack_pattern == "breath",
+		"middle distance changes previous shockwave into directional breath"
+	)
+	var breath_direction: Vector3 = encounter.attack_direction
+	await frames(125)
+	check(
+		encounter.player_health == 70 and encounter.attack_direction == breath_direction,
+		"locked breath cone deals one deliberate hit"
+	)
+	await frames(30)
+	check(encounter.player_health == 70, "lingering breath cannot stack damage every frame")
+	encounter.restart_encounter()
+	encounter.last_pattern = "shockwave"
+	player.position = encounter.guardian.position + Vector3(0, 0, 6)
+	await frames(2)
+	player.position.x += 4
+	await frames(155)
+	check(encounter.player_health == 100, "leaving the marked breath wedge avoids all damage")
+	for pattern in ["stomp", "shockwave", "breath"]:
+		encounter.restart_encounter()
+		encounter.last_pattern = "shockwave" if pattern == "breath" else ""
+		var distance := 4.0 if pattern == "stomp" else 9.0 if pattern == "shockwave" else 6.0
+		player.position = encounter.guardian.position + Vector3(0, 0, distance)
+		await frames(2)
+		var wall := box(
+			world, Vector3(12, 5, 0.4), encounter.guardian.position + Vector3(0, 2.5, 2.5)
+		)
+		await frames(170)
+		check(encounter.player_health == 100, "%s cannot damage through a solid wall" % pattern)
+		wall.queue_free()
+		await frames(2)
+	encounter.restart_encounter()
+	encounter.last_pattern = "shockwave"
+	player.position = encounter.guardian.position + Vector3(0, 0, 6)
+	await frames(92)
+	check(encounter.dodge(), "timed dodge is available during breath anticipation")
+	await frames(75)
+	check(
+		encounter.player_health == 100,
+		"timed dodge consumes one breath contact without delayed repeat hit"
+	)
+	encounter.restart_encounter()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(60)
+	var timer: float = encounter.state_time
+	var warning_transform: Transform3D = encounter.fx.global_transform
+	encounter.process_mode = Node.PROCESS_MODE_DISABLED
+	player.set_physics_process(false)
+	await frames(120)
+	check(
+		(
+			encounter.state_time == timer
+			and encounter.player_health == 100
+			and encounter.fx.global_transform == warning_transform
+		),
+		"pause freezes attack timer and warning without delayed damage"
+	)
+	encounter.process_mode = Node.PROCESS_MODE_INHERIT
+	player.set_physics_process(true)
+	# Real origin rebasing moves resident ground as well as the entities.
+	var shifted_ground := box(world, Vector3(150, 1, 150), Vector3(-128, -0.5, 0))
+	await frames(2)
+	var before_origin: Vector3 = encounter.attack_origin
+	var before_fx: Vector3 = encounter.fx.position
+	player.position -= Vector3(128, 0, 0)
+	encounter._on_rebased(Vector3(128, 0, 0))
+	check(
+		(
+			encounter.attack_origin == before_origin - Vector3(128, 0, 0)
+			and encounter.fx.position == before_fx - Vector3(128, 0, 0)
+		),
+		"rebase shifts directional attack origin and pooled warning together"
+	)
+	await frames(100)
+	check(
+		encounter.player_health == 72,
+		"rebased advancing shockwave still hits at the marked relative location"
+	)
+	encounter.reset_for_destination(true)
+	check(
+		(
+			not encounter.fx.lane_warning.visible
+			and not encounter.fx.breath_warning.visible
+			and not encounter.fx.wave_front.visible
+			and not encounter.fx.breath_cloud.visible
+		),
+		"pacified arrival clears every pooled special attack effect"
+	)
+	check(encounter.personality == "calm", "restored calm guardian stops hostile personality")
+	encounter.reset_for_destination()
+	encounter.guardian_health = 48
+	player.position = encounter.guardian.position + Vector3(0, 0, 4)
+	await frames(2)
+	check(
+		encounter.personality == "furious",
+		"wounded guardian expresses furious personality without hiding its anticipation"
+	)
+	check(encounter.windup_duration >= 1.35, "furious attacks preserve a fair minimum warning")
+
+	encounter.reset_for_destination()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(2)
+	var previous_tick_rate := Engine.physics_ticks_per_second
+	Engine.physics_ticks_per_second = 5
+	encounter.restart_encounter()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(15)
+	check(
+		encounter.player_health == 72,
+		"swept wave front cannot tunnel past traveler at five physics ticks per second"
+	)
+	Engine.physics_ticks_per_second = previous_tick_rate
+	encounter.restart_encounter()
+	player.position = encounter.guardian.position + Vector3(0, 0, 9)
+	await frames(2)
+	encounter.set_region_active(false)
+	check(
+		(
+			not encounter.guardian.visible
+			and not encounter.vehicle.visible
+			and not encounter.fx.visible
+		),
+		"open-ocean state hides guardian, cart and special effects"
+	)
+	check(
+		(
+			encounter.guardian.collision_layer == 0
+			and encounter.vehicle.collision_layer == 0
+			and encounter.vehicle.collision_mask == 0
+		),
+		"open-ocean state removes encounter bodies from collision"
+	)
+	check(
+		not encounter.attack() and not encounter.dodge() and not encounter.interact_vehicle(),
+		"inactive-region direct actions cannot start combat or ride"
+	)
+	await frames(200)
+	check(
+		encounter.player_health == 100 and encounter.state_time == 0,
+		"inactive encounter cannot advance a previously armed attack"
+	)
+	encounter.set_region_active(true)
+	encounter.reset_for_destination(true)
+	check(
+		(
+			encounter.guardian.visible
+			and encounter.vehicle.collision_layer != 0
+			and encounter.state == "defeated"
+		),
+		"land arrival restores collision while preserving pacified state"
+	)
+	encounter.reset_for_destination()
+	player.position = encounter.vehicle.position + Vector3(2.8, 0, 0)
+	await frames(2)
+	check(encounter.interact_vehicle(), "region-transition rider probe mounts successfully")
+	encounter.set_region_active(false)
+	check(
+		not encounter.mounted and player.collision_layer != 0 and player.is_physics_processing(),
+		"leaving a land region safely releases mounted player ownership"
+	)
+	encounter.set_region_active(true)
+	encounter.reset_for_destination()
+	await frames(2)
+	var airborne := player.global_transform
+	airborne.origin = encounter.guardian.global_transform * Vector3(0, 3, 5)
+	check(
+		player.test_move(airborne, -encounter.guardian.global_basis.z * 3),
+		"elevated snout collision blocks an airborne player capsule"
+	)

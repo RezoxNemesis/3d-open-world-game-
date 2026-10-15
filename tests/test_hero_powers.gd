@@ -208,8 +208,8 @@ func destruction(world: Node3D, player: CharacterBody3D, powers: Node) -> void:
 		not world.get_world_3d().direct_space_state.intersect_ray(query).is_empty(),
 		"unbroken mountain has actual ray-blocking collision"
 	)
-	check(powers.smash(), "forward mountain strike destroys a nearby marked formation")
-	await frames(2)
+	check(powers.smash(), "forward mountain strike begins a deliberate windup")
+	await frames(18)
 	check(
 		not mountains.targets.has("crag_east") and mountains.destroyed_ids() == ["crag_east"],
 		"strike removes actual mountain geometry from the scene"

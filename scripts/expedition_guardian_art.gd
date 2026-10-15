@@ -82,98 +82,30 @@ func finish(parent: Node3D, pivot := Vector3.ZERO) -> void:
 
 
 func guardian(parent: Node3D) -> Dictionary:
-	var forelegs: Array[Node3D] = []
-	# A broad four-legged silhouette, layered cedar ribs and jade armor.
-	part(0, 2, Vector3(0, 2.0, 0), Vector3(2.5, 2.1, 3.8))
-	part(0, 0, Vector3(0, 2.5, 0.5), Vector3(2.35, 1.8, 2.5))
-	for side in [-1.0, 1.0]:
-		for z in [-1.1, 1.1]:
-			var limb: Node3D
-			if z > 0:
-				finish(parent)
-				limb = Node3D.new()
-				limb.name = "Foreleg%d" % forelegs.size()
-				limb.position = Vector3(side * 0.94, 2.1, z)
-				parent.add_child(limb)
-				forelegs.append(limb)
-			part(
-				0,
-				0,
-				Vector3(side * 0.94, 1.2, z),
-				Vector3(0.85, 2.0, 1.1),
-				Vector3(0.18 * z, 0, side * -0.15)
-			)
-			part(1, 3, Vector3(side * 0.97, 0.3, z + 0.18), Vector3(0.75, 0.45, 1.0))
-			for claw in range(3):
-				part(
-					3,
-					1,
-					Vector3(side * 0.97 + (claw - 1) * 0.21, 0.24, z + 0.76),
-					Vector3(0.15, 0.42, 0.15),
-					Vector3(PI / 2, 0, 0)
-				)
-			if is_instance_valid(limb):
-				finish(limb, limb.position)
-		for rib in range(6):
-			part(
-				1,
-				3,
-				Vector3(side * 1.15, 2.0, -1.5 + rib * 0.5),
-				Vector3(0.16, 1.55, 0.24),
-				Vector3(0.05, 0, side * -0.25)
-			)
-			part(0, 1, Vector3(side * 1.18, 2.72, -1.5 + rib * 0.5), Vector3(0.34, 0.22, 0.4))
-	finish(parent)
-	var head := Node3D.new()
-	head.name = "Head"
-	head.position = Vector3(0, 3.0, 1.3)
-	parent.add_child(head)
-	# Shoulder mane and forward elongated dragon muzzle; guardian faces +Z.
-	part(0, 0, Vector3(0, 3.0, 1.3), Vector3(2.0, 2.25, 1.6))
-	part(0, 0, Vector3(0, 3.65, 1.9), Vector3(1.75, 1.4, 1.65))
-	part(1, 3, Vector3(0, 3.38, 2.75), Vector3(1.26, 0.6, 1.25))
-	part(1, 1, Vector3(0, 3.2, 2.96), Vector3(1.25, 0.14, 1.1))
-	part(0, 2, Vector3(0, 3.65, 3.24), Vector3(0.95, 0.34, 0.36))
-	for side in [-1.0, 1.0]:
-		part(0, 4, Vector3(side * 0.7, 3.87, 2.44), Vector3(0.25, 0.22, 0.32))
-		part(
-			1,
-			1,
-			Vector3(side * 0.64, 4.05, 2.34),
-			Vector3(0.58, 0.12, 0.25),
-			Vector3(0, 0, side * -0.2)
+	var sculpt: Node3D = preload("res://assets/models/heroes/jade_sentinel.glb").instantiate()
+	parent.add_child(sculpt)
+	for mesh: MeshInstance3D in sculpt.find_children("*", "MeshInstance3D", true, false):
+		var base := mesh.get_active_material(0) as StandardMaterial3D
+		if (
+			base == null
+			or base.resource_name not in ["GuardianJade", "GuardianGold", "GuardianIvory"]
+		):
+			continue
+		var surface: StandardMaterial3D = base.duplicate()
+		surface.normal_enabled = true
+		surface.normal_texture = preload(
+			"res://assets/materials/landscape_karst_original_normal.png"
 		)
-		rod(1, Vector3(side * 0.58, 4.12, 1.75), Vector3(side * 0.88, 5.35, 1.3), 0.19)
-		rod(1, Vector3(side * 0.88, 5.35, 1.3), Vector3(side * 1.5, 5.75, 1.5), 0.13)
-		rod(1, Vector3(side * 0.81, 4.97, 1.45), Vector3(side * 1.48, 5.3, 1.05), 0.13)
-		rod(1, Vector3(side * 0.65, 3.45, 3.1), Vector3(side * 1.8, 3.2, 3.25), 0.055)
-		rod(1, Vector3(side * 1.8, 3.2, 3.25), Vector3(side * 2.25, 3.6, 2.85), 0.04)
-		for strand in range(5):
-			part(
-				3,
-				3,
-				Vector3(side * (0.7 + strand * 0.12), 3.1 - strand * 0.2, 1.3 - strand * 0.15),
-				Vector3(0.5, 1.5, 0.5),
-				Vector3(0.5, 0, side * 0.6)
-			)
-	finish(head, head.position)
-	for plate in range(7):
-		part(
-			3,
-			1,
-			Vector3(0, 3.0, -1.5 + plate * 0.43),
-			Vector3(0.46, 0.8, 0.55),
-			Vector3(-0.4, 0, 0)
-		)
-	# Curving segmented tail with jade feather finial.
-	var last := Vector3(0, 2.0, -1.7)
-	for index in range(8):
-		var point := Vector3(sin(index * 0.36) * 1.65, 2.0 + index * 0.18, -2.0 - index * 0.39)
-		rod(0, last, point, 0.6 - index * 0.05)
-		last = point
-	part(3, 4, last + Vector3(0, 0.48, 0), Vector3(0.7, 1.25, 0.48), Vector3(0, 0, -0.4))
-	finish(parent)
-	return {"head": head, "forelegs": forelegs}
+		surface.normal_scale = 0.28
+		surface.roughness = 0.68 if base.resource_name == "GuardianGold" else 0.82
+		mesh.material_override = surface
+	for child in sculpt.get_children():
+		child.reparent(parent)
+	sculpt.queue_free()
+	return {
+		"head": parent.get_node("Head"),
+		"forelegs": [parent.get_node("Foreleg0"), parent.get_node("Foreleg1")]
+	}
 
 
 func vehicle(parent: Node3D) -> void:

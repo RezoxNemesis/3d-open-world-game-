@@ -13,16 +13,16 @@ static func build(model: Node3D) -> Dictionary:
 	model.add_child(fixed)
 	build_body(fixed, palette)
 	build_head(fixed, palette)
-	build_equipment(fixed, palette)
+	var sword := build_equipment(fixed, palette)
 	var mantle := build_mantle(fixed, palette)
 	var joints := {"arms": [], "elbows": [], "legs": [], "knees": [], "coat_tails": []}
 	for side in [-1.0, 1.0]:
 		build_arm(model, side, palette, joints)
 		build_leg(model, side, palette, joints)
 		build_tail(model, side, palette, joints)
-	batch_static(fixed, [mantle])
+	batch_static(fixed, [mantle, sword])
 	model.set_meta("lantern_hip", LANTERN_HIP)
-	model.set_meta("original_art", "Temple Realm tailored wanderer v5, MIT")
+	model.set_meta("original_art", "Temple Realm sculpted wanderer v7, MIT")
 	return joints
 
 
@@ -30,12 +30,12 @@ static func materials() -> Dictionary:
 	var weave := cloth_texture()
 	var result := {}
 	for entry in [
-		["teal", "17464b", 0.90],
-		["ivory", "e1d8bc", 0.94],
+		["teal", "143e49", 0.90],
+		["ivory", "c4c4ad", 0.94],
 		["trouser", "25363d", 0.95],
 		["leather", "493a32", 0.86],
-		["skin", "bb8769", 0.86],
-		["hair", "202422", 0.88],
+		["skin", "bf907a", 0.86],
+		["hair", "15212a", 0.88],
 		["gold", "c4a25a", 0.50],
 		["face", "614638", 0.95]
 	]:
@@ -46,6 +46,11 @@ static func materials() -> Dictionary:
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		if entry[0] in ["teal", "ivory", "trouser", "leather"]:
 			material.albedo_texture = weave
+			material.normal_enabled = true
+			material.normal_texture = preload(
+				"res://assets/materials/traveler_brocade_original_normal.png"
+			)
+			material.normal_scale = 0.35
 			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		if entry[0] == "gold":
 			material.metallic = 0.42
@@ -53,19 +58,8 @@ static func materials() -> Dictionary:
 	return result
 
 
-static func cloth_texture() -> ImageTexture:
-	# Fine woven crossing, occasional warp slubs and a restrained stitched border.
-	# One neutral 128px texture serves every cloth/leather color and is mipmapped.
-	var image := Image.create(128, 128, false, Image.FORMAT_RGB8)
-	for y in range(128):
-		for x in range(128):
-			var weave := 0.91 + 0.035 * sin(x * PI * 0.5) + 0.025 * cos(y * PI * 0.5)
-			weave += 0.018 * sin(x * 0.91 + y * 1.73)
-			if x % 32 == 0:
-				weave -= 0.035
-			image.set_pixel(x, y, Color(weave, weave, weave))
-	image.generate_mipmaps()
-	return ImageTexture.create_from_image(image)
+static func cloth_texture() -> Texture2D:
+	return preload("res://assets/materials/traveler_brocade_original.png")
 
 
 static func build_body(parent: Node3D, p: Dictionary) -> void:
@@ -216,109 +210,11 @@ static func build_mantle(parent: Node3D, p: Dictionary) -> Node3D:
 
 
 static func build_head(parent: Node3D, p: Dictionary) -> void:
-	# An oval cranium with an actual jaw/chin profile, not a round toy head.
-	piece(
-		parent,
-		rings_mesh(
-			[
-				Vector3(0.043, 1.445, 0.061),
-				Vector3(0.071, 1.465, 0.077),
-				Vector3(0.091, 1.51, 0.091),
-				Vector3(0.099, 1.565, 0.098),
-				Vector3(0.098, 1.62, 0.096),
-				Vector3(0.083, 1.67, 0.077),
-				Vector3(0.042, 1.69, 0.039),
-				Vector3(0.003, 1.693, 0.003)
-			],
-			24
-		),
-		p.skin
-	)
-	# Scalp wraps behind the ears and is open at the face, with carved swept locks.
-	piece(
-		parent,
-		sector_mesh(
-			[
-				Vector3(0.076, 1.47, 0.079),
-				Vector3(0.103, 1.55, 0.105),
-				Vector3(0.103, 1.625, 0.102),
-				Vector3(0.084, 1.678, 0.079),
-				Vector3(0.005, 1.698, 0.005)
-			],
-			-2.20,
-			2.20,
-			24,
-			0.002
-		),
-		p.hair
-	)
-	piece(
-		parent,
-		rings_mesh(
-			[
-				Vector3(0.102, 1.65, 0.099),
-				Vector3(0.084, 1.683, 0.082),
-				Vector3(0.006, 1.707, 0.006)
-			],
-			24
-		),
-		p.hair
-	)
-	ribbon(
-		parent,
-		[
-			Vector3(-0.06, 1.682, -0.074),
-			Vector3(-0.022, 1.655, -0.102),
-			Vector3(0.01, 1.633, -0.101)
-		],
-		0.037,
-		p.hair
-	)
-	ribbon(
-		parent,
-		[
-			Vector3(0.058, 1.682, -0.075),
-			Vector3(0.068, 1.64, -0.101),
-			Vector3(0.078, 1.608, -0.074)
-		],
-		0.021,
-		p.hair
-	)
-	for side in [-1.0, 1.0]:
-		ellipsoid(
-			parent, Vector3(side * 0.098, 1.555, -0.002), Vector3(0.017, 0.029, 0.022), p.skin
-		)
-		# Narrow shaded eye slits and angular eyebrows avoid oversized cartoon dots.
-		ribbon(
-			parent,
-			[Vector3(side * 0.022, 1.579, -0.096), Vector3(side * 0.064, 1.583, -0.077)],
-			0.006,
-			p.face
-		)
-		ribbon(
-			parent,
-			[Vector3(side * 0.024, 1.595, -0.095), Vector3(side * 0.065, 1.599, -0.080)],
-			0.006,
-			p.hair
-		)
-	# Small shaped nose, lower lip and tied hair knot.
-	ellipsoid(parent, Vector3(0, 1.551, -0.098), Vector3(0.017, 0.028, 0.022), p.skin)
-	ribbon(parent, [Vector3(-0.023, 1.508, -0.098), Vector3(0.023, 1.508, -0.098)], 0.004, p.face)
-	ellipsoid(parent, Vector3(0, 1.682, 0.082), Vector3(0.057, 0.046, 0.047), p.hair)
-	band(parent, 0.045, 0.036, 1.698, 0.013, p.gold, Vector3(0, 0, 0.083))
-	for side in [-1.0, 1.0]:
-		ribbon(
-			parent,
-			[
-				Vector3(side * 0.012, 1.682, 0.122),
-				Vector3(side * 0.045, 1.670, 0.124),
-				Vector3(side * 0.026, 1.641, 0.126)
-			],
-			0.014,
-			p.ivory
-		)
-	var pin := piece(parent, cylinder(0.006, 0.006, 0.167), p.gold, Vector3(0, 1.704, 0.085))
-	pin.rotation.z = PI / 2.0
+	var portrait: Node3D = preload("res://assets/models/heroes/traveler_portrait.glb").instantiate()
+	parent.add_child(portrait)
+	for item: MeshInstance3D in portrait.find_children("*", "MeshInstance3D", true, false):
+		var authored: Material = item.mesh.surface_get_material(0)
+		item.material_override = p[authored.resource_name]
 
 
 static func build_arm(model: Node3D, side: float, p: Dictionary, joints: Dictionary) -> void:
@@ -496,7 +392,7 @@ static func build_tail(model: Node3D, side: float, p: Dictionary, joints: Dictio
 	batch_static(tail)
 
 
-static func build_equipment(parent: Node3D, p: Dictionary) -> void:
+static func build_equipment(parent: Node3D, p: Dictionary) -> Node3D:
 	# Narrow cross-body strap and hip satchel replace a conspicuous rectangular pack.
 	for z_sign in [-1.0, 1.0]:
 		ribbon(
@@ -528,6 +424,7 @@ static func build_equipment(parent: Node3D, p: Dictionary) -> void:
 	ellipsoid(parent, Vector3(-0.236, 0.90, 0.096), Vector3(0.013, 0.013, 0.006), p.gold)
 	# The jian sits diagonally along the back, away from the lantern's right hip.
 	var sword := Node3D.new()
+	sword.name = "BackJian"
 	sword.position = Vector3(0.025, 1.08, 0.154)
 	sword.rotation.z = -0.42
 	parent.add_child(sword)
@@ -558,6 +455,9 @@ static func build_equipment(parent: Node3D, p: Dictionary) -> void:
 		0.036,
 		p.ivory
 	)
+
+	batch_static(sword)
+	return sword
 
 
 static func rings_mesh(rings: Array[Vector3], segments := SEGMENTS, pleat := 0.0) -> ArrayMesh:

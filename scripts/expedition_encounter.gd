@@ -4,6 +4,7 @@ extends Node3D
 signal notice(text: String)
 signal guardian_defeated(sector: Vector2i)
 
+const CREATURE_FX := preload("res://scripts/expedition_guardian_fx.gd")
 const ART := preload("res://scripts/expedition_guardian_art.gd")
 const GUARDIAN_HOME := Vector3(18, 0, 6)
 const VEHICLE_HOME := Vector3(8, 0.1, 12)
@@ -12,6 +13,11 @@ const ATTACK_RADIUS := 2.8
 const STRIKE_IMPACT_TIME := 0.12
 const STRIKE_DURATION := 0.36
 const MELEE_RANGE := 4.4
+const SHOCK_HALF_WIDTH := 1.65
+const SHOCK_REACH := 13.5
+const BREATH_REACH := 8.0
+const BREATH_SLOPE := 0.45
+const ATTACK_NEAR := 2.0
 var player: CharacterBody3D
 var world: Node3D
 var guardian: StaticBody3D
@@ -40,6 +46,20 @@ var vehicle_home := VEHICLE_HOME
 var stored_collision_layer := 1
 var stored_collision_mask := 1
 var animation_time := 0.0
+var fx: Node3D
+var attack_pattern := "stomp"
+var last_pattern := ""
+var personality := "calm"
+var attack_origin := Vector3.ZERO
+var attack_direction := Vector3.FORWARD
+var windup_duration := TELEGRAPH_TIME
+var active_duration := STRIKE_DURATION
+var recovery_duration := 1.15
+var previous_attack_time := 0.0
+var hit_reaction_time := 0.0
+var foreleg_rest: Array[Vector3] = []
+var head_rest := Vector3.ZERO
+var region_active := true
 
 
 func setup(traveler: CharacterBody3D, terrain: Node3D) -> void:
@@ -53,11 +73,20 @@ func setup(traveler: CharacterBody3D, terrain: Node3D) -> void:
 	capsule.radius = 1.25
 	capsule.height = 3.4
 	_add_shape(guardian, capsule, Vector3(0, 1.7, 0))
+	var torso := BoxShape3D.new()
+	torso.size = Vector3(2.3, 2.3, 3.2)
+	_add_shape(guardian, torso, Vector3(0, 1.85, -0.15))
+	var skull := BoxShape3D.new()
+	skull.size = Vector3(1.6, 1.5, 2.0)
+	_add_shape(guardian, skull, Vector3(0, 3.5, 2.3))
 	guardian_model = Node3D.new()
 	guardian.add_child(guardian_model)
 	var rig: Dictionary = ART.new().guardian(guardian_model)
 	guardian_head = rig.head
+	head_rest = guardian_head.position
 	guardian_forelegs.assign(rig.forelegs)
+	for limb in guardian_forelegs:
+		foreleg_rest.append(limb.position)
 	guardian_sector = _current_sector()
 	vehicle = CharacterBody3D.new()
 	vehicle.name = "WindCart"
@@ -95,6 +124,9 @@ func setup(traveler: CharacterBody3D, terrain: Node3D) -> void:
 	pulse_ring.material_override = material.duplicate()
 	pulse_ring.visible = false
 	add_child(pulse_ring)
+	fx = CREATURE_FX.new()
+	add_child(fx)
+	fx.setup(SHOCK_HALF_WIDTH, SHOCK_REACH, ATTACK_NEAR, BREATH_REACH, BREATH_SLOPE)
 	if world.has_signal("rebased"):
 		world.connect("rebased", _on_rebased)
 
@@ -107,39 +139,43 @@ func _add_shape(body: CollisionObject3D, shape: Shape3D, at: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(player):
+	if not is_instance_valid(player) or not region_active:
 		return
 	animation_time += delta
 	invulnerability = maxf(0.0, invulnerability - delta)
 	dodge_cooldown = maxf(0.0, dodge_cooldown - delta)
 	melee_cooldown = maxf(0.0, melee_cooldown - delta)
 	action_time = maxf(0.0, action_time - delta)
+	hit_reaction_time = maxf(0.0, hit_reaction_time - delta)
 	if action_time == 0.0 and not mounted:
 		player.set_meta("traveler_action", "idle")
 	_update_vehicle(delta)
+	_update_personality()
 	_update_guardian_pose()
 	if state == "defeated" or state == "player_defeated":
 		return
 	state_time += delta
 	match state:
 		"idle":
-			if player.global_position.distance_to(guardian.global_position) < 10.0:
+			if player.global_position.distance_to(guardian.global_position) < SHOCK_REACH:
 				_begin_telegraph()
 		"telegraph":
-			if state_time >= TELEGRAPH_TIME:
+			if state_time >= windup_duration:
 				state = "attack"
 				state_time = 0.0
+				previous_attack_time = 0.0
 		"attack":
 			if state_time >= STRIKE_IMPACT_TIME and not strike_resolved:
-				strike_resolved = true
 				_resolve_strike()
-			if state == "attack" and state_time >= STRIKE_DURATION:
+			previous_attack_time = state_time
+			if state == "attack" and state_time >= active_duration:
 				state = "recover"
 				state_time = 0.0
 				warning_ring.visible = false
 				pulse_ring.visible = false
+				fx.clear()
 		"recover":
-			if state_time >= 1.15:
+			if state_time >= recovery_duration:
 				state = "idle"
 				state_time = 0.0
 
@@ -148,36 +184,147 @@ func _begin_telegraph() -> void:
 	state = "telegraph"
 	state_time = 0.0
 	strike_resolved = false
+	attack_pattern = _select_pattern()
+	last_pattern = attack_pattern
+	windup_duration = (
+		1.65
+		if attack_pattern == "breath"
+		else 1.6 if attack_pattern == "shockwave" else TELEGRAPH_TIME
+	)
+	active_duration = (
+		0.95
+		if attack_pattern == "breath"
+		else 1.25 if attack_pattern == "shockwave" else STRIKE_DURATION
+	)
+	recovery_duration = (
+		1.45 if attack_pattern == "breath" else 1.25 if attack_pattern == "shockwave" else 1.15
+	)
+	attack_origin = guardian.global_position
+	attack_direction = player.global_position - attack_origin
+	attack_direction.y = 0
+	attack_direction = (
+		attack_direction.normalized() if attack_direction.length_squared() > 0.01 else Vector3.BACK
+	)
+	guardian.rotation.y = atan2(attack_direction.x, attack_direction.z)
 	attack_target = player.global_position
 	attack_target.y = _ground_at(attack_target)
 	warning_ring.global_position = attack_target + Vector3.UP * 0.1
-	warning_ring.visible = true
+	warning_ring.visible = attack_pattern == "stomp"
 	warning_ring.scale = Vector3.ONE
 	pulse_ring.global_position = attack_target + Vector3.UP * 0.14
-	pulse_ring.visible = true
+	pulse_ring.visible = attack_pattern == "stomp"
 	pulse_ring.scale = Vector3.ONE
-	notice.emit("Sentinel marks the ground — leave the amber circle or DODGE.")
+	fx.aim(attack_origin, attack_direction)
+	fx.present(attack_pattern, state, -1.0, ATTACK_NEAR)
+	if attack_pattern == "shockwave":
+		notice.emit("JADE WAVE — step out of the amber lane before the crest arrives.")
+	elif attack_pattern == "breath":
+		notice.emit("CEDAR BREATH — leave the marked wedge; the Sentinel cannot turn.")
+	else:
+		notice.emit("STONE STOMP — leave the amber circle or DODGE the impact.")
 
 
 func _resolve_strike() -> void:
-	var difference := player.global_position - attack_target
-	var within := Vector2(difference.x, difference.z).length() < ATTACK_RADIUS + 0.35
-	if within and absf(difference.y) < 2.3 and invulnerability <= 0:
-		player_health = maxi(0, player_health - 25)
-		invulnerability = 0.65
-		notice.emit("Stone pulse! Traveler health %d / 100" % player_health)
-		if player_health == 0:
-			state = "player_defeated"
-			warning_ring.visible = false
-			pulse_ring.visible = false
-			vehicle.velocity = Vector3.ZERO
-			player.set_physics_process(false)
-			player.velocity = Vector3.ZERO
-			notice.emit("You fell. RETRY restores you at the road; the world stays open.")
+	var inside := _inside_attack_zone(player.global_position)
+	if attack_pattern == "stomp":
+		strike_resolved = true
+	if not inside or not _clear_attack_line():
+		return
+	# A successful dodge consumes this one attack contact, including sustained breath.
+	strike_resolved = true
+	if invulnerability > 0:
+		return
+	var damage := 30 if attack_pattern == "breath" else 28 if attack_pattern == "shockwave" else 25
+	player_health = maxi(0, player_health - damage)
+	invulnerability = 0.65
+	notice.emit("%s! Traveler health %d / 100" % [attack_pattern.capitalize(), player_health])
+	if player_health == 0:
+		state = "player_defeated"
+		warning_ring.visible = false
+		pulse_ring.visible = false
+		fx.clear()
+		vehicle.velocity = Vector3.ZERO
+		player.set_physics_process(false)
+		player.velocity = Vector3.ZERO
+		notice.emit("You fell. RETRY restores you at the road; the world stays open.")
+
+
+func _inside_attack_zone(point: Vector3) -> bool:
+	if attack_pattern == "stomp":
+		var difference := point - attack_target
+		return (
+			Vector2(difference.x, difference.z).length() < ATTACK_RADIUS + 0.35
+			and absf(difference.y) < 2.3
+		)
+	var difference := point - attack_origin
+	var depth := difference.dot(attack_direction)
+	var side := absf(difference.dot(attack_direction.cross(Vector3.UP)))
+	if attack_pattern == "shockwave":
+		var before := lerpf(ATTACK_NEAR, SHOCK_REACH, _wave_progress(previous_attack_time))
+		var after := lerpf(ATTACK_NEAR, SHOCK_REACH, _wave_progress(state_time))
+		return (
+			depth >= before - 0.7
+			and depth <= after + 0.7
+			and side < SHOCK_HALF_WIDTH + 0.35
+			and absf(difference.y) < 1.05
+		)
+	return (
+		depth >= ATTACK_NEAR - 0.35
+		and depth <= _breath_depth() + 0.35
+		and side <= maxf(depth, ATTACK_NEAR) * BREATH_SLOPE + 0.35
+		and absf(difference.y) < 2.3
+	)
+
+
+func _clear_attack_line() -> bool:
+	# Keep this independent of the disabled rider collision mask.
+	var mask := stored_collision_mask if mounted else player.collision_mask
+	var excluded: Array[RID] = [guardian.get_rid(), player.get_rid()]
+	if mounted:
+		excluded.append(vehicle.get_rid())
+	var ray := PhysicsRayQueryParameters3D.create(
+		attack_origin + Vector3.UP, player.global_position + Vector3.UP, mask, excluded
+	)
+	return get_world_3d().direct_space_state.intersect_ray(ray).is_empty()
+
+
+func _wave_progress(time: float) -> float:
+	return clampf((time - STRIKE_IMPACT_TIME) / (1.25 - STRIKE_IMPACT_TIME), 0, 1)
+
+
+func _breath_depth() -> float:
+	return lerpf(ATTACK_NEAR, BREATH_REACH, clampf((state_time - STRIKE_IMPACT_TIME) / 0.3, 0, 1))
+
+
+func _select_pattern() -> String:
+	var distance := player.global_position.distance_to(guardian.global_position)
+	if distance > BREATH_REACH:
+		return "shockwave"
+	if last_pattern == "stomp" or (last_pattern == "shockwave" and distance > 4.5):
+		return "breath"
+	if distance > 6.0 or (personality == "furious" and last_pattern == "breath" and distance > 4.5):
+		return "shockwave"
+	return "stomp"
+
+
+func _update_personality() -> void:
+	if (
+		state == "defeated"
+		or player.global_position.distance_to(guardian.global_position) >= SHOCK_REACH
+	):
+		personality = "calm"
+	else:
+		personality = "furious" if guardian_health <= 48 else "alert"
 
 
 func attack() -> bool:
-	if mounted or player_health <= 0 or guardian_health <= 0 or melee_cooldown > 0:
+	if (
+		not region_active
+		or mounted
+		or player_health <= 0
+		or guardian_health <= 0
+		or melee_cooldown > 0
+	):
 		return false
 	var offset := guardian.global_position - player.global_position
 	if offset.length() > MELEE_RANGE:
@@ -200,20 +347,23 @@ func attack() -> bool:
 	melee_cooldown = 0.5
 	action_time = 0.3
 	player.set_meta("traveler_action", "attack")
+	hit_reaction_time = 0.24
 	guardian_health = maxi(0, guardian_health - 24)
 	if guardian_health == 0:
 		state = "defeated"
 		warning_ring.visible = false
 		pulse_ring.visible = false
-		guardian_defeated.emit(guardian_sector)
+		fx.clear()
+		personality = "calm"
 		notice.emit("Cedar Sentinel calmed. Explore freely, or RETRY the encounter.")
+		guardian_defeated.emit(guardian_sector)
 	else:
 		notice.emit("Strike! Sentinel %d / 120" % guardian_health)
 	return true
 
 
 func dodge() -> bool:
-	if mounted or player_health <= 0 or dodge_cooldown > 0:
+	if not region_active or mounted or player_health <= 0 or dodge_cooldown > 0:
 		return false
 	var direction := Input.get_vector(
 		"move_left", "move_right", "move_forward", "move_backward", 0.0
@@ -269,7 +419,7 @@ func _update_vehicle(delta: float) -> void:
 
 
 func interact_vehicle() -> bool:
-	if player_health <= 0:
+	if not region_active or player_health <= 0:
 		return false
 	if mounted:
 		for side in [
@@ -360,6 +510,12 @@ func restart_encounter() -> void:
 	warning_ring.visible = false
 	pulse_ring.visible = false
 	strike_resolved = false
+	last_pattern = ""
+	attack_pattern = "stomp"
+	personality = "calm"
+	hit_reaction_time = 0
+	fx.clear()
+	guardian.rotation.y = 0
 	action_time = 0
 	guardian_model.rotation = Vector3.ZERO
 	_update_guardian_pose()
@@ -388,6 +544,12 @@ func reset_for_destination(pacified: bool = false) -> void:
 	warning_ring.visible = false
 	pulse_ring.visible = false
 	strike_resolved = false
+	last_pattern = ""
+	attack_pattern = "stomp"
+	personality = "calm"
+	hit_reaction_time = 0
+	fx.clear()
+	guardian.rotation.y = 0
 	action_time = 0
 	guardian_model.rotation = Vector3.ZERO
 	_update_guardian_pose()
@@ -429,6 +591,8 @@ func _on_rebased(offset: Vector3) -> void:
 	warning_ring.global_position -= offset
 	pulse_ring.global_position -= offset
 	attack_target -= offset
+	attack_origin -= offset
+	fx.global_position -= offset
 	spawn_point -= offset
 	guardian_home -= offset
 	vehicle_home -= offset
@@ -455,8 +619,8 @@ func _update_guardian_pose() -> void:
 	var pulse_material: StandardMaterial3D = pulse_ring.material_override
 	pulse_material.albedo_color = Color("fff0b3") if state == "attack" else Color("ffb55e")
 	if state == "telegraph":
-		lift = smoothstep(0.0, 0.85, state_time / TELEGRAPH_TIME)
-		pulse_ring.scale = Vector3.ONE * maxf(0.12, 1.0 - state_time / TELEGRAPH_TIME)
+		lift = smoothstep(0.0, 0.85, state_time / windup_duration)
+		pulse_ring.scale = Vector3.ONE * maxf(0.12, 1.0 - state_time / windup_duration)
 	elif state == "attack":
 		lift = 1.0 - smoothstep(0.0, STRIKE_IMPACT_TIME, state_time)
 		stomp = sin(clampf((state_time - STRIKE_IMPACT_TIME) / 0.24, 0, 1) * PI)
@@ -465,14 +629,40 @@ func _update_guardian_pose() -> void:
 		)
 	elif state == "recover":
 		stomp = 0.15 * (1.0 - smoothstep(0.0, 0.5, state_time))
-	var calm := state == "defeated"
-	guardian_model.position.y = sin(animation_time * 1.8) * 0.035 - stomp * 0.12
+	var calm := personality == "calm"
+	var fierce := personality == "furious"
+	var recoil := sin(hit_reaction_time / 0.24 * PI) * 0.09
+	guardian_model.position = Vector3(
+		0, sin(animation_time * (2.8 if fierce else 1.8)) * 0.035 - stomp * 0.12, -recoil
+	)
 	guardian_model.rotation.x = -lift * 0.1 + stomp * 0.035
-	guardian_head.rotation.x = -lift * 0.3 + stomp * 0.1 + (0.16 if calm else 0.0)
+	guardian_head.rotation.x = -lift * 0.3 + stomp * 0.1 + (0.16 if calm else 0.0) + recoil
 	guardian_head.rotation.y = sin(animation_time * 0.65) * (0.08 if calm else 0.025)
-	for limb in guardian_forelegs:
+	guardian_head.rotation.z = 0
+	for index in range(guardian_forelegs.size()):
+		var limb := guardian_forelegs[index]
 		limb.rotation.x = -lift * 1.05 + stomp * 0.12
-		limb.position.y = 2.1 + lift * 0.1
+		limb.position = foreleg_rest[index] + Vector3.UP * lift * 0.1
+	if attack_pattern == "shockwave" and state in ["telegraph", "attack"]:
+		# One raised forepaw sweeps the jade crest down the locked lane.
+		guardian_forelegs[1].rotation.x *= 0.2
+		guardian_head.rotation.z = -lift * 0.16
+	elif attack_pattern == "breath" and state in ["telegraph", "attack"]:
+		guardian_head.rotation.x = -lift * 0.45 if state == "telegraph" else 0.18
+		guardian_head.position.z = head_rest.z + (0.12 if state == "attack" else -lift * 0.08)
+		for limb in guardian_forelegs:
+			limb.rotation.x = lift * 0.12
+		guardian_model.rotation.x = lift * 0.04 if state == "telegraph" else -0.035
+	else:
+		guardian_head.position.z = head_rest.z
+	if state == "recover":
+		guardian_head.rotation.x += sin(clampf(state_time / recovery_duration, 0, 1) * PI) * 0.18
+	fx.present(
+		attack_pattern,
+		state,
+		_wave_progress(state_time) if state_time >= STRIKE_IMPACT_TIME else -1.0,
+		_breath_depth()
+	)
 
 
 func _exit_tree() -> void:
@@ -487,3 +677,25 @@ func _exit_tree() -> void:
 			_release_player()
 		if is_instance_valid(player.spring_arm) and is_instance_valid(vehicle):
 			player.spring_arm.remove_excluded_object(vehicle.get_rid())
+
+
+func set_region_active(active: bool) -> void:
+	if not active and mounted:
+		_release_player()
+	region_active = active
+	guardian.visible = active
+	vehicle.visible = active
+	fx.visible = active
+	guardian.collision_layer = 1 if active else 0
+	guardian.collision_mask = 1 if active else 0
+	vehicle.collision_layer = 1 if active else 0
+	vehicle.collision_mask = 1 if active else 0
+	vehicle.velocity = Vector3.ZERO
+	warning_ring.visible = false
+	pulse_ring.visible = false
+	fx.clear()
+	if state not in ["defeated", "player_defeated"]:
+		state = "idle"
+	state_time = 0
+	strike_resolved = false
+	personality = "calm"

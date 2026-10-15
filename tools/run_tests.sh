@@ -55,6 +55,7 @@ checked_godot hero-streaming-tests --headless --script tests/test_hero_streaming
 rg -q 'HERO_STREAMING_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/hero-streaming-tests.log
 python tools/test_verdant_asset_contract.py
 python tools/test_residence_asset_contract.py
+python tools/test_hero_asset_contract.py
 python tools/check_skills.py
 
 checked_godot terrain-efficiency-tests --headless --script tests/test_terrain_efficiency.gd
@@ -76,3 +77,18 @@ rg -q 'EXPEDITION_RESIDENTS_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/ex
 
 checked_godot expedition-journal-tests --headless --fixed-fps 60 --script tests/test_expedition_journal.gd
 rg -q "EXPEDITION_JOURNAL_RESULT: [1-9][0-9]* checks, 0 failures" artifacts/expedition-journal-tests.log
+
+checked_godot hero-animation-tests --headless --fixed-fps 60 --script tests/test_hero_animation.gd
+rg -q 'HERO_ANIMATION_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/hero-animation-tests.log
+
+checked_godot expedition-realms-tests --headless --fixed-fps 60 --script tests/test_expedition_realms.gd
+rg -q 'EXPEDITION REALMS: [1-9][0-9]* checks, 0 failures' artifacts/expedition-realms-tests.log
+
+checked_godot expedition-ocean-tests --headless --fixed-fps 60 --script tests/test_expedition_ocean.gd
+rg -q 'OCEAN_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-ocean-tests.log
+
+checked_godot expedition-weather-tests --headless --fixed-fps 60 --script tests/test_expedition_weather.gd
+rg -q 'EXPEDITION WEATHER: [1-9][0-9]* checks, 0 failures' artifacts/expedition-weather-tests.log
+
+checked_godot expedition-expansion-tests --headless --fixed-fps 60 --script tests/test_expedition_expansion.gd
+rg -q 'EXPEDITION_EXPANSION_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-expansion-tests.log

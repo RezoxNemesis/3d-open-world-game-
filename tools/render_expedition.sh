@@ -12,5 +12,5 @@ for attempt in {1..50}; do
 done
 export DISPLAY=":$(cat artifacts/expedition-display)"
 export LIBGL_ALWAYS_SOFTWARE=1
-checked_godot expedition-render --rendering-method gl_compatibility --audio-driver Dummy --script tools/expedition_capture.gd
+checked_godot expedition-render --fixed-fps 60 --rendering-method gl_compatibility --audio-driver Dummy --script tools/expedition_capture.gd
 python tools/check_expedition_evidence.py

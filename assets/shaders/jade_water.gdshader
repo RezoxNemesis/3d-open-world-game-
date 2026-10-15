@@ -48,8 +48,8 @@ void fragment() {
 		EMISSION = color * 0.10;
 	}
 	ALBEDO=color;
-	ROUGHNESS=falling?0.35:0.19;
+	ROUGHNESS=falling?0.35:0.29;
 	METALLIC=0.03;
-	SPECULAR=0.66;
-	NORMAL_MAP=falling?vec3(0.5+(noise(vec2(UV.x*19.0,UV.y*24.0+TIME*4.5))-0.5)*0.08,0.5,1.0):vec3(0.5+ripple*0.065,0.5+sin(p.y*4.0+TIME)*0.045,1.0);
+	SPECULAR=0.42;
+	NORMAL_MAP=falling?vec3(0.5+(noise(vec2(UV.x*19.0,UV.y*24.0+TIME*4.5))-0.5)*0.08,0.5,1.0):vec3(0.5+ripple*0.018,0.5+sin(p.y*2.0+TIME)*0.012,1.0);
 }

@@ -37,6 +37,8 @@ func build(parent: Node3D) -> Node3D:
 	_tree(Vector3(-34, 0, 6), 9.5, 4.6, false)
 	_tree(Vector3(14, 0, -8), 8.4, 4.0, true)
 	_tree(Vector3(31, 0, 18), 9.0, 5.0, false)
+	_tree(Vector3(8, 0, 27), 8.0, 4.3, true)
+	_bamboo(Vector3(34, 0, -8))
 	_bamboo(Vector3(-35, 0, -13))
 	_bamboo(Vector3(-35, 0, 16))
 	_bamboo(Vector3(-11, 0, 22))

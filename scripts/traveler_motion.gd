@@ -11,6 +11,7 @@ var grounded_before := true
 var fall_speed := 0.0
 var last_heading := 0.0
 var turn_lean := 0.0
+var power_pose: Dictionary = {}
 
 
 func update(
@@ -19,6 +20,12 @@ func update(
 	var blend := 1.0 - exp(-12.0 * delta)
 	var speed := Vector2(actual.x, actual.z).length()
 	var action: String = player.get_meta("traveler_action", "")
+	power_pose = {}
+	var actor_powers: Node = player.get("powers")
+	if is_instance_valid(actor_powers) and actor_powers.has_method("motion_state"):
+		power_pose = actor_powers.motion_state()
+	if action in ["mounted", "attack", "dodge"]:
+		power_pose = {}
 	var moving := grounded and not flying and action != "mounted" and speed > 0.08
 	clock += delta
 	gait = lerpf(gait, clampf(speed / 2.0, 0.0, 1.0) if moving else 0.0, blend)
@@ -42,12 +49,30 @@ func update(
 	turn_lean = lerpf(turn_lean, clampf(-turning * speed * 0.008, -0.14, 0.14), blend)
 	player.model.rotation.z = lerpf(player.model.rotation.z, turn_lean, blend)
 	var lean := -0.30 if flying else -0.065 * run_blend * gait
+	var power: String = power_pose.get("action", "")
+	var strength: float = power_pose.get("strength", 0.0)
+	var crouch := 0.0
+	if power == "speed":
+		lean -= 0.40 * strength
+	elif power in ["flight", "flight_launch"]:
+		lean -= 0.30 * strength
+	elif power in ["flight_crouch", "leap_charge"]:
+		lean = -0.15 - strength * 0.14
+		crouch = 0.08 + strength * 0.16
+	elif power == "smash_windup":
+		lean = 0.12
+	elif power == "smash_impact":
+		lean = -0.42 * strength
+		crouch = 0.10 * strength
+	if player.get_meta("water_swimming", false) and not flying:
+		lean = -0.75
 	player.model.rotation.x = lerpf(player.model.rotation.x, lean, blend)
-	var bob := (1.0 - cos(phase * 2.0)) * 0.009 * gait
+	var bob := (1.0 - cos(phase * 2.0)) * 0.009 * gait - crouch
 	player.model.position.y = lerpf(player.model.position.y, bob - landing * 0.12, blend)
 	pose_chest(player, blend, flying)
 	for index in range(2):
 		pose_limb(player, index, blend, grounded, flying, action)
+	pose_weapon(player, action)
 	player.step_time = phase
 	player.gait_weight = gait
 
@@ -120,7 +145,56 @@ func pose_limb(
 		elbow = -0.10
 		splay = -side * 0.12
 		cloth = -0.45
-		player.model.position.y = lerpf(player.model.position.y, 0.0, blend)
+		if power_pose.get("action", "") != "flight_crouch":
+			player.model.position.y = lerpf(player.model.position.y, 0.0, blend)
+	var power: String = power_pose.get("action", "")
+	var strength: float = power_pose.get("strength", 0.0)
+	match power:
+		"leap_charge", "flight_crouch":
+			hip = 0.45 + strength * 0.40
+			knee = -0.90 - strength * 0.55
+			arm = -0.45 - strength * 0.35
+			elbow = 0.65
+			cloth = 0.08
+		"flight_launch":
+			hip = -0.12
+			knee = -0.20
+			arm = 2.0
+			elbow = 0.08
+			cloth = -0.75
+		"flight":
+			hip = -0.08 + sin(clock * 1.8 + index * 0.7) * 0.025
+			knee = 0.12
+			cloth = -0.45 - strength * 0.20
+		"leap":
+			hip = (0.55 if index == 0 else 0.18) if player.velocity.y > 0 else 0.23
+			knee = -0.80 if player.velocity.y > 0 else -0.38
+			arm = 1.75 if player.velocity.y > 0 else 0.30
+			elbow = 0.16
+			splay = -side * 0.22
+			cloth = -0.65
+		"speed":
+			arm -= strength * 0.18
+			elbow += strength * 0.35
+			cloth -= strength * 0.42
+		"smash_windup":
+			arm = -1.35 if index == 1 else 0.40
+			elbow = 1.25 if index == 1 else 0.55
+			hip = 0.35
+			knee = -0.70
+		"smash_impact":
+			arm = lerpf(0.0, 1.85 if index == 1 else -0.35, strength)
+			elbow = 0.12 if index == 1 else 0.60
+			hip += strength * 0.35
+			knee -= strength * 0.45
+	if player.get_meta("water_swimming", false) and not flying:
+		var stroke: float = player.get_meta("swim_stroke_phase", clock * 3.5)
+		arm = 0.85 + sin(stroke + index * PI) * 1.1
+		elbow = 0.38 + (1.0 + cos(stroke + index * PI)) * 0.24
+		hip = sin(stroke * 2.0 + index * PI) * 0.24
+		knee = -0.22 - maxf(0.0, -sin(stroke * 2.0 + index * PI)) * 0.30
+		splay = -side * 0.20
+		cloth = -0.30
 	player.legs[index].rotation.x = lerpf(player.legs[index].rotation.x, hip, blend)
 	player.knees[index].rotation.x = lerpf(player.knees[index].rotation.x, knee, blend)
 	player.arms[index].rotation.x = lerpf(player.arms[index].rotation.x, arm, blend)
@@ -133,3 +207,17 @@ func pose_limb(
 	var chest: Node3D = player.model.get_node("TailoredAttire")
 	player.arms[index].position = chest.transform * Vector3(side * 0.218, 1.325, 0)
 	player.arms[index].rotation.y = chest.rotation.y
+
+
+func pose_weapon(player: CharacterBody3D, action: String) -> void:
+	var chest: Node3D = player.model.get_node("TailoredAttire")
+	var sword := chest.get_node_or_null("BackJian") as Node3D
+	if sword == null:
+		return
+	if action == "attack":
+		var grip := Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, -0.25, -0.36))
+		sword.transform = (
+			chest.global_transform.affine_inverse() * player.elbows[1].global_transform * grip
+		)
+	else:
+		sword.transform = Transform3D(Basis(Vector3.FORWARD, 0.42), Vector3(0.025, 1.08, 0.154))

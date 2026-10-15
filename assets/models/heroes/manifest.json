@@ -1,0 +1,22 @@
+{
+  "generator": "tools/generate_hero_assets.py",
+  "license": "MIT \u2014 original project art",
+  "units": "meters",
+  "source": "Original mathematical sculpt/curves only; no external models or reference pixels",
+  "assets": [
+    {
+      "file": "jade_sentinel.glb",
+      "triangles": 16883,
+      "surfaces": 13,
+      "bytes": 1251768,
+      "verified": "Finite positions, unit normals, UVs and serialized indices"
+    },
+    {
+      "file": "traveler_portrait.glb",
+      "triangles": 4738,
+      "surfaces": 5,
+      "bytes": 510092,
+      "verified": "Finite positions, unit normals, UVs and serialized indices"
+    }
+  ]
+}

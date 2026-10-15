@@ -66,7 +66,10 @@ func run() -> void:
 				all_normals = (
 					all_normals and normal.is_finite() and absf(normal.length() - 1.0) < 0.02
 				)
-	check(meshes.size() <= 36, "traveler stays within 36 animated/static mesh draws")
+	check(
+		meshes.size() <= 40,
+		"traveler stays within 40 animated/static mesh draws including the drawn jian"
+	)
 	check(triangle_count > 1000 and triangle_count <= 12000, "traveler remains below 12k triangles")
 	check(palette.size() <= 8, "clothing and equipment share at most 8 palette materials")
 	check(textures.size() == 1, "one original weave texture serves all cloth colors")

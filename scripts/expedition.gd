@@ -1,9 +1,14 @@
 extends Node3D
 ## An independently saved expedition; the temple journey remains available on return.
 
+const OCEAN := preload("res://scripts/expedition_ocean.gd")
+const WEATHER := preload("res://scripts/expedition_weather.gd")
 const JOURNAL := preload("res://scripts/expedition_journal.gd")
 const DESTINATIONS := {
 	"Lotus Cliff Sanctuary · 0 km": Vector2i(0, 0),
+	"Dragonwall Pass · 8 km": Vector2i(64, 0),
+	"Imperial Terrace · 16 km": Vector2i(128, 0),
+	"Azure Sea · 33 km": Vector2i(256, 0),
 	"Cloud Monastery · 82 km": Vector2i(640, 0),
 	"Amber Highlands · 4,096 km": Vector2i(32000, 0),
 	"Eastern Frontier · 99,999 km": Vector2i(781249, 0),
@@ -13,6 +18,9 @@ var atmosphere: Node3D
 var world: Node3D
 var player: CharacterBody3D
 var encounter: Node3D
+var powers: Node
+var swimming: Node
+var climate_summary: Label
 var mobile: Control
 var controls: Control
 var atlas: Control
@@ -27,6 +35,7 @@ var route_distance: SpinBox
 var save_path := "user://expedition.json"
 var restore_on_start := true
 var settings := preload("res://scripts/game_settings.gd").new()
+var _sea_region := false
 var _hud_clock := 0.0
 var _save_clock := 0.0
 var _notice_clock := 0.0
@@ -63,6 +72,25 @@ func _ready() -> void:
 	encounter.setup(player, world)
 	encounter.notice.connect(show_notice)
 	encounter.guardian_defeated.connect(_guardian_defeated)
+	powers = preload("res://scripts/hero_powers.gd").new()
+	add_child(powers)
+	powers.setup(player, world, false)
+	powers.notice.connect(show_notice)
+	for pair in [
+		["power_flight", KEY_T],
+		["power_leap", KEY_L],
+		["power_speed", KEY_G],
+		["power_smash", KEY_R],
+		["power_descend", KEY_C]
+	]:
+		InputMap.action_erase_events(pair[0])
+		var key := InputEventKey.new()
+		key.physical_keycode = pair[1]
+		InputMap.action_add_event(pair[0], key)
+	swimming = preload("res://scripts/expedition_swimming.gd").new()
+	add_child(swimming)
+	swimming.setup(player, world)
+	swimming.submerged_changed.connect(atmosphere.weather.set_submerged)
 	mobile = preload("res://scripts/mobile_controls.gd").new()
 	mobile.name = "MobileControls"
 	add_child(mobile)
@@ -143,6 +171,20 @@ func _build_atlas(canvas: CanvasLayer) -> void:
 	route_distance.custom_minimum_size.y = 48
 	row.add_child(route_distance)
 	add_button(row, "TRAVEL", travel_custom)
+	climate_summary = label("", 16)
+	box.add_child(climate_summary)
+	var time_row := HBoxContainer.new()
+	box.add_child(time_row)
+	for pair in [["DAWN", 6.5], ["DAY", 11.0], ["SUNSET", 18.5], ["NIGHT", 23.0]]:
+		add_button(time_row, pair[0], set_world_time.bind(pair[1]))
+	var climate_row := HBoxContainer.new()
+	box.add_child(climate_row)
+	for value in ["auto", "clear", "rain", "snow"]:
+		add_button(climate_row, str(value).to_upper(), set_world_weather.bind(value))
+	var season_row := HBoxContainer.new()
+	box.add_child(season_row)
+	for value in ["summer", "autumn", "winter"]:
+		add_button(season_row, str(value).to_upper(), set_world_season.bind(value))
 	var quality_row := HBoxContainer.new()
 	box.add_child(quality_row)
 	for preset in ["performance", "balanced", "high"]:
@@ -218,6 +260,8 @@ func apply_quality(preset: String) -> void:
 func open_atlas() -> void:
 	mobile.release_all_actions()
 	controls.release_fingers()
+	powers.cancel_actions()
+	swimming.process_mode = Node.PROCESS_MODE_DISABLED
 	mobile.hide()
 	controls.hide()
 	hud.hide()
@@ -232,11 +276,20 @@ func close_atlas() -> void:
 	mobile.show()
 	controls.show()
 	hud.show()
-	encounter.process_mode = Node.PROCESS_MODE_INHERIT
-	player.set_physics_process(not encounter.mounted and encounter.player_health > 0)
+	encounter.process_mode = (
+		Node.PROCESS_MODE_DISABLED if _sea_region else Node.PROCESS_MODE_INHERIT
+	)
+	swimming.process_mode = Node.PROCESS_MODE_INHERIT
+	player.set_physics_process(
+		_sea_region or (not encounter.mounted and encounter.player_health > 0)
+	)
 
 
 func retry_encounter() -> void:
+	if _sea_region:
+		show_notice("Travel to guardian grounds to challenge the sentinel")
+		return
+	powers.cancel_actions()
 	encounter.restart_encounter()
 	player.set_physics_process(not atlas.visible and not encounter.mounted)
 	show_notice("Guardian encounter restored")
@@ -244,10 +297,15 @@ func retry_encounter() -> void:
 
 func travel(sector: Vector2i) -> void:
 	mobile.release_all_actions()
+	controls.release_fingers()
+	powers.cancel_actions()
+	powers.flying = false
 	encounter.reset_for_destination()
 	world.travel_to(sector)
 	journal.visit(world.origin_sector)
 	encounter.reset_for_destination(world.origin_sector in journal.pacified)
+	powers.relocate_for_world()
+	_sync_region()
 	close_atlas()
 	save_expedition()
 	show_notice("Arrived at " + world.biome_name())
@@ -263,7 +321,8 @@ func travel_custom() -> void:
 func save_expedition() -> bool:
 	var data: Dictionary = world.world_coordinates()
 	journal.visit(Vector2i(data.sector[0], data.sector[1]))
-	data["version"] = 2
+	data["version"] = 3
+	data["environment"] = atmosphere.weather.snapshot()
 	data["journal"] = journal.snapshot()
 	return preload("res://scripts/save_store.gd").new().write_atomic(data, save_path)
 
@@ -281,7 +340,7 @@ func _read_snapshot() -> Variant:
 	if not data is Dictionary:
 		return null
 	var version: Variant = data.get("version")
-	if not (version is int or version is float) or (version != 1 and version != 2):
+	if not (version is int or version is float) or (version != 1 and version != 2 and version != 3):
 		return null
 	return data
 
@@ -292,13 +351,22 @@ func restore_expedition() -> bool:
 		return false
 	var version: Variant = data.version
 	var restored_journal = JOURNAL.new()
-	if version == 2 and not restored_journal.restore(data.get("journal")):
+	if version >= 2 and not restored_journal.restore(data.get("journal")):
+		return false
+	var candidate_weather = WEATHER.new()
+	var valid_weather: bool = version < 3 or candidate_weather.restore(data.get("environment"))
+	candidate_weather.free()
+	if not valid_weather:
 		return false
 	if not world.restore_coordinates(data):
 		return false
+	if version >= 3:
+		atmosphere.weather.restore(data.environment)
 	journal = restored_journal
 	journal.visit(world.origin_sector)
 	encounter.reset_for_destination(world.origin_sector in journal.pacified)
+	powers.relocate_for_world()
+	_sync_region()
 	_refresh_hud()
 	return true
 
@@ -344,15 +412,33 @@ func _refresh_hud() -> void:
 	)
 	var east_km := (float(sector[0]) * 128.0 + float(local[0])) / 1000.0
 	heading.text = world.biome_name().to_upper()
-	detail.text = "%.3f km east · %s" % [east_km, encounter.status_text()]
+	var region_status: String = swimming.status_text() if _sea_region else encounter.status_text()
+	detail.text = "%.3f km east · %s" % [east_km, region_status]
+	var climate: Dictionary = atmosphere.weather.get_status()
+	climate_summary.text = (
+		"%02d:%02d · %s · %s · %s"
+		% [
+			int(climate.time_of_day),
+			int(fposmod(climate.time_of_day, 1.0) * 60),
+			str(climate.phase).capitalize(),
+			str(climate.season).capitalize(),
+			str(climate.resolved_weather).capitalize()
+		]
+	)
 	if _notice_clock <= 0:
 		feedback.text = (
-			"STRIKE nearby · DODGE the warning · RIDE by the skiff\n"
-			+ "MAP opens the world atlas and return route."
+			"FLY launches upward · Hold LEAP · SPEED boosts movement\n"
+			+ (
+				"Hold DIVE / JUMP to descend / rise in the sea."
+				if _sea_region
+				else "SMASH marked crags · MAP opens new realms."
+			)
 		)
 
 
 func _process(delta: float) -> void:
+	if OCEAN.is_sector(world.origin_sector) != _sea_region:
+		_sync_region()
 	_hud_clock += delta
 	_save_clock += delta
 	_notice_clock -= delta
@@ -370,21 +456,63 @@ func _process(delta: float) -> void:
 
 
 func autosave_supported() -> bool:
-	return encounter.vehicle.is_on_floor() if encounter.mounted else player.is_on_floor()
+	return (
+		swimming.is_swimming()
+		or (encounter.vehicle.is_on_floor() if encounter.mounted else player.is_on_floor())
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and not atlas.visible:
 		match event.physical_keycode:
 			KEY_F:
-				encounter.attack()
+				activate_combat("attack")
 			KEY_Q:
-				encounter.dodge()
+				activate_combat("dodge")
 			KEY_E:
-				encounter.interact_vehicle()
+				activate_combat("ride")
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(world):
 		save_expedition()
 		open_atlas()
+
+
+func _sync_region() -> void:
+	_sea_region = OCEAN.is_sector(world.origin_sector)
+	encounter.set_region_active(not _sea_region)
+	if atlas.visible:
+		encounter.process_mode = Node.PROCESS_MODE_DISABLED
+	powers.mountains.visible = not _sea_region
+	for collision in powers.mountains.find_children("*", "CollisionShape3D", true, false):
+		collision.set_deferred("disabled", _sea_region)
+
+
+func activate_combat(action: String) -> void:
+	if atlas.visible or _sea_region:
+		return
+	match action:
+		"attack":
+			encounter.attack()
+		"dodge":
+			encounter.dodge()
+		"ride":
+			powers.cancel_actions()
+			powers.flying = false
+			encounter.interact_vehicle()
+
+
+func set_world_time(hours: float) -> void:
+	atmosphere.weather.set_time(hours)
+	_refresh_hud()
+
+
+func set_world_weather(value: String) -> void:
+	atmosphere.weather.set_weather(value)
+	_refresh_hud()
+
+
+func set_world_season(value: String) -> void:
+	atmosphere.weather.set_season(value)
+	_refresh_hud()

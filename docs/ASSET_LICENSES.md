@@ -58,3 +58,16 @@ All new geometry, animation, procedural material code and residents are original
 - Traveler v5 adds shaped fingers (35 mesh draws/9,182 triangles), velocity-driven human gait, breathing, torso counterrotation, turn lean, landing and jump responses. `expedition_residents.gd` reuses this original traveler for two physically grounded patrolling residents and local greetings.
 
 The result remains stylized prototype artwork. The 200,000 km domain is procedurally generated with repeated modules; only the origin sanctuary has this particular authored composition. It does not establish historical authenticity, unique content across the whole domain, or reference-level photorealism.
+
+## Realms, climate and action animation — version 0.7
+
+New work uses the repository MIT license and original mathematical geometry. Reference images remain outside the exported game.
+
+- `tools/generate_hero_assets.py` creates `assets/models/heroes/jade_sentinel.glb` and `traveler_portrait.glb`: connected sculpted anatomy, horns, claws, whiskers, facial features and swept hair. The guardian has named head/foreleg pivots for gameplay articulation. The serialized manifest records actual triangles, surfaces and bytes; independent asset checks verify geometry, attributes, scale and pivots.
+- `tools/generate_hero_textures.py` creates original 512 px cloud-brocade albedo/normal maps. Traveler body, clothing, hands, sword and procedural animation remain original project work. The jian moves from the back into the hand during attacks.
+- `hero_power_fx.gd` creates pooled streaks, humanoid echoes and impact rings. Flight launch, leap charge/arc/landing, resolved-speed poses and delayed smash impact use actual character physics.
+- `expedition_realms.gd` creates original Great Wall-inspired fortifications and an imperial terrace using original project architectural modules. These are fantasy interpretations, not surveyed historical reconstructions.
+- `expedition_ocean.gd`, `expedition_swimming.gd` and `expedition_sea_creature.gd` create the bounded sea, seabed, ruins, swimming and tide-wyrm encounter. The original project dragon supplies the revised sea-creature visual.
+- `expedition_weather.gd` and associated shaders create sun/moon/stars, smoothly changing lighting, bounded rain/snow and summer/autumn/winter material responses. No weather footage, stock sky or third-party character is included.
+
+These remain stylized prototype assets. Large coordinate range does not mean every kilometer contains unique authored content; the new sea is a bounded 1,152 m region and the authored wall/imperial locations are specific destinations.

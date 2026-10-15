@@ -23,6 +23,8 @@ const SHELF := preload("res://assets/models/verdant/scroll_shelf.glb")
 const LANTERN := preload("res://assets/models/lantern.glb")
 const ORIGIN_SANCTUARY := preload("res://scripts/expedition_sanctuary.gd")
 const ORIGIN_GARDEN := preload("res://scripts/expedition_garden.gd")
+const REALMS := preload("res://scripts/expedition_realms.gd")
+const OCEAN := preload("res://scripts/expedition_ocean.gd")
 const BIOMES := ["Jade Highlands", "Amber Pilgrim Road", "Rosewood Sanctuary", "Mistpine Frontier"]
 const GROUND_COLORS := [Color("778b67"), Color("a9996b"), Color("8b8d77"), Color("667e76")]
 const LEAF_COLORS := [Color("89a575"), Color("d2a458"), Color("c996aa"), Color("69988a")]
@@ -43,7 +45,7 @@ void fragment() {
  float broad=noise21(p*0.13);
  float detail=noise21(p*1.8);
  float grain=noise21(p*19.0);
- vec3 meadow=mix(vec3(0.19,0.29,0.11),vec3(0.37,0.45,0.21),broad);
+ vec3 meadow=mix(vec3(0.12,0.23,0.10),vec3(0.33,0.41,0.18),broad);
  meadow*=biome_tint*(0.86+detail*0.22+grain*0.1);
  float soil=smoothstep(0.68,0.88,noise21(p*0.37+18.0));
  meadow=mix(meadow,vec3(0.31,0.27,0.17),soil*0.65);
@@ -64,7 +66,7 @@ void fragment() {
  float edge=min(min(f.x,1.0-f.x),min(f.y,1.0-f.y));
  float joint=1.0-smoothstep(0.008,0.035,edge);
  float grain=stonehash(floor(road_point.xz*45.0));
- vec3 stone=mix(vec3(0.40,0.43,0.37),vec3(0.60,0.61,0.50),stonehash(cell));
+ vec3 stone=mix(vec3(0.33,0.38,0.35),vec3(0.52,0.54,0.46),stonehash(cell));
  ALBEDO=mix(stone*(0.95+grain*0.08),vec3(0.22,0.27,0.16),joint*0.65);
  ROUGHNESS=0.9;
 }
@@ -118,7 +120,7 @@ func travel_to(sector: Vector2i, local_position: Vector3 = Vector3(0, 3, 12)) ->
 	origin_sector = target
 	_player.position = Vector3(
 		clampf(local_position.x, -64, 63.999),
-		clampf(local_position.y, 0.05, 500),
+		clampf(local_position.y, -24.0 if OCEAN.is_sector(target) else 0.05, 500),
 		clampf(local_position.z, -64, 63.999)
 	)
 	_clamp_domain()
@@ -170,16 +172,16 @@ func restore_coordinates(data: Dictionary) -> bool:
 		if not _number(value) or not is_finite(float(value)):
 			return false
 	var point := Vector3(local[0], local[1], local[2])
+	var key := Vector2i(int(sector[0]), int(sector[1]))
 	if (
 		point.x < -64
 		or point.x >= 64
 		or point.z < -64
 		or point.z >= 64
-		or point.y < -1
+		or point.y < (-24.0 if OCEAN.is_sector(key) else -1.0)
 		or point.y > 500
 	):
 		return false
-	var key := Vector2i(int(sector[0]), int(sector[1]))
 	if (
 		absi(key.x) == MAX_SECTOR and point.x * signi(key.x) > 0
 		or absi(key.y) == MAX_SECTOR and point.z * signi(key.y) > 0
@@ -194,6 +196,10 @@ func restore_coordinates(data: Dictionary) -> bool:
 func biome_name() -> String:
 	if origin_sector == Vector2i.ZERO:
 		return "Lotus Cliff Sanctuary"
+	if REALMS.is_sector(origin_sector):
+		return REALMS.label(origin_sector)
+	if OCEAN.is_sector(origin_sector):
+		return "Azure Sea"
 	return BIOMES[_biome(origin_sector)]
 
 
@@ -243,6 +249,10 @@ func ground_height(sector: Vector2i, local: Vector3) -> float:
 	if u + v <= 1.0:
 		return a + (b - a) * u + (c - a) * v
 	return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v)
+
+
+func height_at(x: float, z: float) -> float:
+	return ground_height(origin_sector, Vector3(x, 0, z))
 
 
 func _physics_process(_delta: float) -> void:
@@ -307,6 +317,9 @@ func _sync_regions() -> void:
 		add_child(region)
 		_regions[key] = region
 		_build_terrain(region, key)
+		if REALMS.is_sector(key) or OCEAN.is_sector(key):
+			_decoration_queue.append(key)
+			continue
 		_structure(region, "WalkableSanctuary", _hall_collision, HALL_POSITION, HALL_SCALE)
 		for side in [-1, 1]:
 			if key != Vector2i.ZERO or side == 1:
@@ -393,7 +406,17 @@ func _vertex_height(key: Vector2i, x: int, z: int) -> float:
 	var lz := float(posmod(z + GRID / 2, GRID) - GRID / 2) * CELL
 	var plaza := smoothstep(0, 14, maxf(absf(lx) - 34, absf(lz) - 40))
 	var roads := smoothstep(8, 18, absf(lx)) * smoothstep(8, 18, absf(lz - 12))
-	return noise * 17.0 * plaza * roads
+	var height := noise * 17.0 * plaza * roads
+	if REALMS.is_sector(key):
+		return REALMS.floor_height(key, Vector3(x * CELL, 0, z * CELL), height)
+	if absi(key.x - OCEAN.CENTER_SECTOR.x) <= 5 and absi(key.y - OCEAN.CENTER_SECTOR.y) <= 5:
+		var local := Vector3(x * CELL, 0, z * CELL)
+		var relative := OCEAN.relative_point(key, local)
+		var edge := maxf(absf(relative.x), absf(relative.z))
+		# The sea's shoreline meets the neighboring terrain exactly; fade only outside it.
+		var blend := 1.0 - smoothstep(OCEAN.BOUNDARY_METERS + 8, OCEAN.BOUNDARY_METERS + 64, edge)
+		return lerpf(height, OCEAN.floor_height(key, local), blend)
+	return height
 
 
 func _initialize_resources() -> void:
@@ -475,11 +498,13 @@ func _build_terrain(region: Node3D, key: Vector2i) -> void:
 	item.material_override = _ground_materials[_biome(key)]
 	region.add_child(item)
 	item.create_trimesh_collision()
+	if REALMS.is_sector(key) or OCEAN.is_sector(key):
+		return
 	if key == Vector2i.ZERO:
-		_add_road(region, Vector3(27, 0.018, 12), Vector3(74, 0.025, 7.5))
+		_add_road(region, Vector3(27, 0.018, 12), Vector3(74, 0.025, 5.8))
 	else:
-		_add_road(region, Vector3(0, 0.018, 12), Vector3(128, 0.025, 7.5))
-	_add_road(region, Vector3(0, 0.019, 0), Vector3(7.5, 0.025, 128))
+		_add_road(region, Vector3(0, 0.018, 12), Vector3(128, 0.025, 5.8))
+	_add_road(region, Vector3(0, 0.019, 0), Vector3(5.8, 0.025, 128))
 	_add_road(region, Vector3(0, 0.014, -18), Vector3(24 if key == Vector2i.ZERO else 30, 0.02, 24))
 
 
@@ -509,6 +534,16 @@ func _decorate(key: Vector2i) -> void:
 	if not _regions.has(key):
 		return
 	var region: Node3D = _regions[key]
+	if OCEAN.is_sector(key):
+		OCEAN.build(region, key, self)
+		_region_quality(region)
+		region.set_meta("decorated", true)
+		return
+	if REALMS.is_sector(key):
+		REALMS.new().build(region, key, self)
+		_region_quality(region)
+		region.set_meta("decorated", true)
+		return
 	_place(region, SANCTUARY, HALL_POSITION, HALL_SCALE)
 	# The side towers establish a distinct skyline without obstructing the road or arena.
 	for side in [-1, 1]:

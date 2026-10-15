@@ -142,6 +142,7 @@ func run() -> void:
 	world.get_node("Regions").update_regions(player.position)
 	await frames(4)
 	await tap(9, controls.hit_rects.power_smash.get_center())
+	await frames(18)
 	check(
 		powers.mountains.destroyed_ids().has("crag_east"),
 		"actual compact native SMASH removes a real mountain formation"

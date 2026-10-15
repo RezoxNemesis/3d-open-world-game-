@@ -27,15 +27,17 @@ func build(world: Node3D) -> void:
 	_stone = PALETTE.material_for("Stone").duplicate()
 	_stone.albedo_color = Color("a7b3a1")
 	_stone.uv1_triplanar = true
+	_stone.uv1_world_triplanar = true
 	_stone.uv1_scale = Vector3.ONE * 0.45
 	_rock = StandardMaterial3D.new()
-	_rock.albedo_texture = preload("res://assets/materials/karst_rock_original.png")
+	_rock.albedo_texture = preload("res://assets/materials/landscape_karst_original.png")
 	_rock.normal_enabled = true
-	_rock.normal_texture = preload("res://assets/materials/karst_rock_original_normal.png")
-	_rock.normal_scale = 0.45
-	_rock.albedo_color = Color("71806c")
+	_rock.normal_texture = preload("res://assets/materials/landscape_karst_original_normal.png")
+	_rock.normal_scale = 0.70
+	_rock.albedo_color = Color("c0cbb8")
 	_rock.roughness = 0.97
 	_rock.uv1_triplanar = true
+	_rock.uv1_world_triplanar = true
 	_rock.uv1_scale = Vector3.ONE * 0.32
 	_cliff = _cliff_mesh()
 	_pond()
@@ -44,11 +46,12 @@ func build(world: Node3D) -> void:
 	_crossing()
 	_pavilion_route()
 	_winding_path()
+	preload("res://scripts/expedition_scenery.gd").new().build(self, world, _cliff)
 	var residents := RESIDENTS.new()
 	add_child(residents)
 	residents.build()
 	for item: GeometryInstance3D in find_children("*", "GeometryInstance3D", true, false):
-		if not residents.is_ancestor_of(item):
+		if not residents.is_ancestor_of(item) and not item.get_meta("unshadowed_scenery", false):
 			item.set_meta("expedition_kind", "sanctuary")
 	set_meta("route_start", STAIR_START)
 	set_meta("route_end", STAIR_END)
