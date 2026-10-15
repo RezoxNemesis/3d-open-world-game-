@@ -41,7 +41,7 @@ for label, args in [('import', ['--editor', '--import']), ('export', ['--export-
     text = log.read_text()
     assert result.returncode == 0 and 'ERROR:' not in text, f'{label} failed; see {log}'
 assert output.exists()
-manifest = {'created_unix': time.time(), 'architecture': 'x86_64', 'source_hashes': source_hashes, 'apk_sha256': hashlib.sha256(output.read_bytes()).hexdigest(), 'limitation': 'Same application sources; different native ABI from the ARM64 phone APK.'}
+manifest = {'created_unix': time.time(), 'architecture': 'x86_64', 'export_presets_sha256': hashlib.sha256((root / 'export_presets.cfg').read_bytes()).hexdigest(), 'source_hashes': source_hashes, 'apk_sha256': hashlib.sha256(output.read_bytes()).hexdigest(), 'limitation': 'Same application sources; different native ABI from the ARM64 phone APK.'}
 (root / 'artifacts' / 'emulator-build.json').write_text(json.dumps(manifest, indent=2) + '\n')
 sdk = environment / 'android' / 'sdk'
 subprocess.run([str(sdk / 'build-tools/36.0.0/apksigner'), 'verify', str(output)], check=True)

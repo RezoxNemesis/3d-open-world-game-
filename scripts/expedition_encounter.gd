@@ -2,12 +2,15 @@ extends Node3D
 ## Optional Cedar Sentinel encounter and collision-driven wind cart.
 
 signal notice(text: String)
+signal guardian_defeated(sector: Vector2i)
 
 const ART := preload("res://scripts/expedition_guardian_art.gd")
 const GUARDIAN_HOME := Vector3(18, 0, 6)
 const VEHICLE_HOME := Vector3(8, 0.1, 12)
 const TELEGRAPH_TIME := 1.35
 const ATTACK_RADIUS := 2.8
+const STRIKE_IMPACT_TIME := 0.12
+const STRIKE_DURATION := 0.36
 const MELEE_RANGE := 4.4
 var player: CharacterBody3D
 var world: Node3D
@@ -16,6 +19,11 @@ var guardian_model: Node3D
 var vehicle: CharacterBody3D
 var vehicle_model: Node3D
 var warning_ring: MeshInstance3D
+var pulse_ring: MeshInstance3D
+var guardian_head: Node3D
+var guardian_forelegs: Array[Node3D] = []
+var guardian_sector := Vector2i.ZERO
+var strike_resolved := false
 var state := "idle"
 var state_time := 0.0
 var guardian_health := 120
@@ -47,7 +55,10 @@ func setup(traveler: CharacterBody3D, terrain: Node3D) -> void:
 	_add_shape(guardian, capsule, Vector3(0, 1.7, 0))
 	guardian_model = Node3D.new()
 	guardian.add_child(guardian_model)
-	ART.new().guardian(guardian_model)
+	var rig: Dictionary = ART.new().guardian(guardian_model)
+	guardian_head = rig.head
+	guardian_forelegs.assign(rig.forelegs)
+	guardian_sector = _current_sector()
 	vehicle = CharacterBody3D.new()
 	vehicle.name = "WindCart"
 	vehicle.floor_snap_length = 0.4
@@ -78,6 +89,12 @@ func setup(traveler: CharacterBody3D, terrain: Node3D) -> void:
 	warning_ring.material_override = material
 	warning_ring.visible = false
 	add_child(warning_ring)
+	pulse_ring = MeshInstance3D.new()
+	pulse_ring.name = "GroundPulse"
+	pulse_ring.mesh = ring
+	pulse_ring.material_override = material.duplicate()
+	pulse_ring.visible = false
+	add_child(pulse_ring)
 	if world.has_signal("rebased"):
 		world.connect("rebased", _on_rebased)
 
@@ -100,12 +117,8 @@ func _physics_process(delta: float) -> void:
 	if action_time == 0.0 and not mounted:
 		player.set_meta("traveler_action", "idle")
 	_update_vehicle(delta)
-	guardian_model.position.y = sin(animation_time * 1.8) * 0.045
-	guardian_model.rotation.x = -0.11 if state == "telegraph" else 0.0
-	if state == "defeated":
-		guardian_model.rotation.z = lerpf(guardian_model.rotation.z, 0.55, delta * 2)
-		return
-	if state == "player_defeated":
+	_update_guardian_pose()
+	if state == "defeated" or state == "player_defeated":
 		return
 	state_time += delta
 	match state:
@@ -113,16 +126,18 @@ func _physics_process(delta: float) -> void:
 			if player.global_position.distance_to(guardian.global_position) < 10.0:
 				_begin_telegraph()
 		"telegraph":
-			warning_ring.scale = Vector3.ONE * (1.0 + sin(state_time * 15) * 0.025)
 			if state_time >= TELEGRAPH_TIME:
 				state = "attack"
 				state_time = 0.0
-				_resolve_strike()
 		"attack":
-			if state_time >= 0.22:
+			if state_time >= STRIKE_IMPACT_TIME and not strike_resolved:
+				strike_resolved = true
+				_resolve_strike()
+			if state == "attack" and state_time >= STRIKE_DURATION:
 				state = "recover"
 				state_time = 0.0
 				warning_ring.visible = false
+				pulse_ring.visible = false
 		"recover":
 			if state_time >= 1.15:
 				state = "idle"
@@ -132,10 +147,15 @@ func _physics_process(delta: float) -> void:
 func _begin_telegraph() -> void:
 	state = "telegraph"
 	state_time = 0.0
+	strike_resolved = false
 	attack_target = player.global_position
 	attack_target.y = _ground_at(attack_target)
 	warning_ring.global_position = attack_target + Vector3.UP * 0.1
 	warning_ring.visible = true
+	warning_ring.scale = Vector3.ONE
+	pulse_ring.global_position = attack_target + Vector3.UP * 0.14
+	pulse_ring.visible = true
+	pulse_ring.scale = Vector3.ONE
 	notice.emit("Sentinel marks the ground — leave the amber circle or DODGE.")
 
 
@@ -149,6 +169,8 @@ func _resolve_strike() -> void:
 		if player_health == 0:
 			state = "player_defeated"
 			warning_ring.visible = false
+			pulse_ring.visible = false
+			vehicle.velocity = Vector3.ZERO
 			player.set_physics_process(false)
 			player.velocity = Vector3.ZERO
 			notice.emit("You fell. RETRY restores you at the road; the world stays open.")
@@ -182,6 +204,8 @@ func attack() -> bool:
 	if guardian_health == 0:
 		state = "defeated"
 		warning_ring.visible = false
+		pulse_ring.visible = false
+		guardian_defeated.emit(guardian_sector)
 		notice.emit("Cedar Sentinel calmed. Explore freely, or RETRY the encounter.")
 	else:
 		notice.emit("Strike! Sentinel %d / 120" % guardian_health)
@@ -207,6 +231,9 @@ func dodge() -> bool:
 
 
 func _update_vehicle(delta: float) -> void:
+	if player_health <= 0:
+		vehicle.velocity = Vector3.ZERO
+		return
 	# Park beyond the resident terrain so unloaded ground cannot swallow the cart.
 	if not mounted and player.global_position.distance_to(vehicle.global_position) > 80.0:
 		vehicle.velocity = Vector3.ZERO
@@ -317,7 +344,8 @@ func _release_player() -> void:
 	player.set_meta("traveler_action", "idle")
 	player.set_physics_process(true)
 	player.velocity = Vector3.ZERO
-	vehicle.velocity = Vector3.ZERO
+	if is_instance_valid(vehicle):
+		vehicle.velocity = Vector3.ZERO
 
 
 func restart_encounter() -> void:
@@ -330,13 +358,18 @@ func restart_encounter() -> void:
 	dodge_cooldown = 0
 	melee_cooldown = 0
 	warning_ring.visible = false
+	pulse_ring.visible = false
+	strike_resolved = false
+	action_time = 0
 	guardian_model.rotation = Vector3.ZERO
+	_update_guardian_pose()
 	player.global_position = spawn_point
 	notice.emit("Restored at the road. Approach the Sentinel whenever you choose.")
 
 
-func reset_for_destination() -> void:
+func reset_for_destination(pacified: bool = false) -> void:
 	_release_player()
+	guardian_sector = _current_sector()
 	guardian_home = _destination_anchor(GUARDIAN_HOME)
 	vehicle_home = _destination_anchor(VEHICLE_HOME)
 	guardian.global_position = guardian_home
@@ -346,14 +379,18 @@ func reset_for_destination() -> void:
 	guardian.global_position = guardian_home
 	vehicle.global_position.y = _ground_at(vehicle_home) + 0.1
 	player_health = 100
-	guardian_health = 120
-	state = "idle"
+	guardian_health = 0 if pacified else 120
+	state = "defeated" if pacified else "idle"
 	state_time = 0
 	invulnerability = 1
 	dodge_cooldown = 0
 	melee_cooldown = 0
 	warning_ring.visible = false
+	pulse_ring.visible = false
+	strike_resolved = false
+	action_time = 0
 	guardian_model.rotation = Vector3.ZERO
+	_update_guardian_pose()
 
 
 func _keep_vehicle_in_domain() -> void:
@@ -390,6 +427,7 @@ func _on_rebased(offset: Vector3) -> void:
 	guardian.global_position -= offset
 	vehicle.global_position -= offset
 	warning_ring.global_position -= offset
+	pulse_ring.global_position -= offset
 	attack_target -= offset
 	spawn_point -= offset
 	guardian_home -= offset
@@ -405,3 +443,47 @@ func status_text() -> String:
 		"Traveler %d / 100 · Sentinel %d / 120 · %s"
 		% [player_health, guardian_health, "RIDING" if mounted else state.to_upper()]
 	)
+
+
+func _current_sector() -> Vector2i:
+	return world.get("origin_sector") if world.has_method("ground_height") else Vector2i.ZERO
+
+
+func _update_guardian_pose() -> void:
+	var lift := 0.0
+	var stomp := 0.0
+	var pulse_material: StandardMaterial3D = pulse_ring.material_override
+	pulse_material.albedo_color = Color("fff0b3") if state == "attack" else Color("ffb55e")
+	if state == "telegraph":
+		lift = smoothstep(0.0, 0.85, state_time / TELEGRAPH_TIME)
+		pulse_ring.scale = Vector3.ONE * maxf(0.12, 1.0 - state_time / TELEGRAPH_TIME)
+	elif state == "attack":
+		lift = 1.0 - smoothstep(0.0, STRIKE_IMPACT_TIME, state_time)
+		stomp = sin(clampf((state_time - STRIKE_IMPACT_TIME) / 0.24, 0, 1) * PI)
+		pulse_ring.scale = (
+			Vector3.ONE * lerpf(0.12, 1.0, clampf(state_time / STRIKE_DURATION, 0, 1))
+		)
+	elif state == "recover":
+		stomp = 0.15 * (1.0 - smoothstep(0.0, 0.5, state_time))
+	var calm := state == "defeated"
+	guardian_model.position.y = sin(animation_time * 1.8) * 0.035 - stomp * 0.12
+	guardian_model.rotation.x = -lift * 0.1 + stomp * 0.035
+	guardian_head.rotation.x = -lift * 0.3 + stomp * 0.1 + (0.16 if calm else 0.0)
+	guardian_head.rotation.y = sin(animation_time * 0.65) * (0.08 if calm else 0.025)
+	for limb in guardian_forelegs:
+		limb.rotation.x = -lift * 1.05 + stomp * 0.12
+		limb.position.y = 2.1 + lift * 0.1
+
+
+func _exit_tree() -> void:
+	if (
+		is_instance_valid(world)
+		and world.has_signal("rebased")
+		and world.is_connected("rebased", _on_rebased)
+	):
+		world.disconnect("rebased", _on_rebased)
+	if is_instance_valid(player):
+		if mounted:
+			_release_player()
+		if is_instance_valid(player.spring_arm) and is_instance_valid(vehicle):
+			player.spring_arm.remove_excluded_object(vehicle.get_rid())

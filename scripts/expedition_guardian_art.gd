@@ -64,14 +64,16 @@ func rod(material: int, start: Vector3, end: Vector3, width: float) -> void:
 	)
 
 
-func finish(parent: Node3D) -> void:
+func finish(parent: Node3D, pivot := Vector3.ZERO) -> void:
 	for key: Vector2i in batches:
 		var multimesh := MultiMesh.new()
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		multimesh.mesh = meshes[key.x]
 		multimesh.instance_count = batches[key].size()
 		for index in range(multimesh.instance_count):
-			multimesh.set_instance_transform(index, batches[key][index])
+			var placement: Transform3D = batches[key][index]
+			placement.origin -= pivot
+			multimesh.set_instance_transform(index, placement)
 		var instance := MultiMeshInstance3D.new()
 		instance.multimesh = multimesh
 		instance.material_override = materials[key.y]
@@ -79,12 +81,21 @@ func finish(parent: Node3D) -> void:
 	batches.clear()
 
 
-func guardian(parent: Node3D) -> void:
+func guardian(parent: Node3D) -> Dictionary:
+	var forelegs: Array[Node3D] = []
 	# A broad four-legged silhouette, layered cedar ribs and jade armor.
 	part(0, 2, Vector3(0, 2.0, 0), Vector3(2.5, 2.1, 3.8))
 	part(0, 0, Vector3(0, 2.5, 0.5), Vector3(2.35, 1.8, 2.5))
 	for side in [-1.0, 1.0]:
 		for z in [-1.1, 1.1]:
+			var limb: Node3D
+			if z > 0:
+				finish(parent)
+				limb = Node3D.new()
+				limb.name = "Foreleg%d" % forelegs.size()
+				limb.position = Vector3(side * 0.94, 2.1, z)
+				parent.add_child(limb)
+				forelegs.append(limb)
 			part(
 				0,
 				0,
@@ -101,6 +112,8 @@ func guardian(parent: Node3D) -> void:
 					Vector3(0.15, 0.42, 0.15),
 					Vector3(PI / 2, 0, 0)
 				)
+			if is_instance_valid(limb):
+				finish(limb, limb.position)
 		for rib in range(6):
 			part(
 				1,
@@ -110,6 +123,11 @@ func guardian(parent: Node3D) -> void:
 				Vector3(0.05, 0, side * -0.25)
 			)
 			part(0, 1, Vector3(side * 1.18, 2.72, -1.5 + rib * 0.5), Vector3(0.34, 0.22, 0.4))
+	finish(parent)
+	var head := Node3D.new()
+	head.name = "Head"
+	head.position = Vector3(0, 3.0, 1.3)
+	parent.add_child(head)
 	# Shoulder mane and forward elongated dragon muzzle; guardian faces +Z.
 	part(0, 0, Vector3(0, 3.0, 1.3), Vector3(2.0, 2.25, 1.6))
 	part(0, 0, Vector3(0, 3.65, 1.9), Vector3(1.75, 1.4, 1.65))
@@ -138,6 +156,7 @@ func guardian(parent: Node3D) -> void:
 				Vector3(0.5, 1.5, 0.5),
 				Vector3(0.5, 0, side * 0.6)
 			)
+	finish(head, head.position)
 	for plate in range(7):
 		part(
 			3,
@@ -154,6 +173,7 @@ func guardian(parent: Node3D) -> void:
 		last = point
 	part(3, 4, last + Vector3(0, 0.48, 0), Vector3(0.7, 1.25, 0.48), Vector3(0, 0, -0.4))
 	finish(parent)
+	return {"head": head, "forelegs": forelegs}
 
 
 func vehicle(parent: Node3D) -> void:

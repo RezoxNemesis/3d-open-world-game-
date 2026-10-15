@@ -73,3 +73,6 @@ checked_godot expedition-transition-tests --headless --fixed-fps 60 --script tes
 rg -q 'EXPEDITION_TRANSITION_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-transition-tests.log
 checked_godot expedition-residents-tests --headless --fixed-fps 60 --script tests/test_expedition_residents.gd
 rg -q 'EXPEDITION_RESIDENTS_RESULT: [1-9][0-9]* checks, 0 failures' artifacts/expedition-residents-tests.log
+
+checked_godot expedition-journal-tests --headless --fixed-fps 60 --script tests/test_expedition_journal.gd
+rg -q "EXPEDITION_JOURNAL_RESULT: [1-9][0-9]* checks, 0 failures" artifacts/expedition-journal-tests.log

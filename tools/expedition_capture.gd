@@ -60,9 +60,17 @@ func run() -> void:
 	scene.player.update_camera()
 	scene.encounter._begin_telegraph()
 	scene.encounter.set_physics_process(false)
+	scene.encounter.state_time = 0.9
+	scene.encounter._update_guardian_pose()
 	scene.get_node("HUD").show()
 	scene.mobile.show()
 	await capture("08-encounter-gameplay.png", true)
+	scene.player.position = scene.encounter.guardian.position + Vector3(0, 0, 3)
+	scene.player.model.rotation.y = 0
+	await physics_frame
+	for strike in range(5):
+		scene.encounter.melee_cooldown = 0
+		assert(scene.encounter.attack())
 	scene.open_atlas()
 	await capture("09-world-atlas.png", true)
 	var file := FileAccess.open(OUTPUT + "render-evidence.json", FileAccess.WRITE)

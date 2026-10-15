@@ -41,9 +41,27 @@ def record_foreground_block(root, path, error, window_text, evidence, runtime_lo
     """Demote only a proven stock ANR obscuring the foreground check, never app failures."""
     if not isinstance(error, AssertionError) or not str(error).startswith('Android game is not foreground;'):
         return None
-    if any(marker in runtime_log for marker in ['FATAL EXCEPTION', 'SCRIPT ERROR:', 'ERROR:']):
+    if any(marker in runtime_log for marker in ['FATAL EXCEPTION', 'Fatal signal', 'SCRIPT ERROR:', 'ERROR:']):
         return None
     try:
         return record_block(root, path, window_text, evidence)
     except ValueError:
         return None
+
+
+def verify_emulator_build(root, manifest, apk):
+    """Do not attribute an old binary's runtime result to changed application sources."""
+    current = {}
+    for name in ['project.godot', 'scenes', 'scripts', 'assets']:
+        path = root / name
+        files = [path] if path.is_file() else sorted(p for p in path.rglob('*') if p.is_file())
+        current.update({str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files})
+    if not current or manifest.get('source_hashes') != current:
+        raise ValueError('Emulator APK sources are stale; rebuild before runtime validation')
+    preset_hash = hashlib.sha256((root / 'export_presets.cfg').read_bytes()).hexdigest()
+    if manifest.get('export_presets_sha256') != preset_hash:
+        raise ValueError('Emulator APK export settings are stale; rebuild before runtime validation')
+    digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+    if manifest.get('apk_sha256') != digest:
+        raise ValueError('Emulator APK does not match its verified build manifest')
+    return digest

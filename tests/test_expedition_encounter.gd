@@ -280,8 +280,122 @@ func run() -> void:
 		encounter.guardian.position == old_position - Vector3(128, 0, 0),
 		"guardian follows floating origin shift"
 	)
+	await check_encounter_lifecycle(encounter, world, player)
 	print("RESULT: %d expedition encounter checks, %d failures" % [checks, failures])
 	world.queue_free()
 	await process_frame
 	await process_frame
 	quit(1 if failures else 0)
+
+
+func check_encounter_lifecycle(encounter: Node3D, world: Node3D, player: CharacterBody3D) -> void:
+	check(encounter.has_signal("guardian_defeated"), "guardian exposes persisted victory signal")
+	if not encounter.has_signal("guardian_defeated"):
+		return
+	var victories: Array[Vector2i] = []
+	encounter.guardian_defeated.connect(func(sector: Vector2i): victories.append(sector))
+	world.origin_sector = Vector2i(12, -9)
+	encounter.reset_for_destination(true)
+	player.position = encounter.guardian.position + Vector3(0, 0, 4)
+	await frames(200)
+	check(
+		(
+			encounter.state == "defeated"
+			and encounter.guardian_health == 0
+			and encounter.player_health == 100
+		),
+		"persisted pacification restores calm guardian without attacks"
+	)
+	check(victories.is_empty(), "restoring a pacified guardian does not award another victory")
+	encounter.reset_for_destination()
+	player.position = encounter.guardian.position + Vector3(0, 0, 4)
+	await frames(60)
+	var head: Node3D = encounter.guardian_model.get_node("Head")
+	var foreleg: Node3D = encounter.guardian_model.get_node("Foreleg0")
+	check(
+		head.rotation.x < -0.1 and foreleg.rotation.x < -0.3,
+		"telegraph raises articulated head and forelegs before impact"
+	)
+	check(
+		encounter.warning_ring.scale.is_equal_approx(Vector3.ONE),
+		"warning boundary stays at actual strike radius during windup"
+	)
+	var node_count: int = encounter.get_child_count()
+	var relative_target: Vector3 = encounter.attack_target - player.position
+	var warning_offset: Vector3 = encounter.warning_ring.position - encounter.attack_target
+	player.position -= Vector3(128, 0, 0)
+	world.origin_sector += Vector2i(1, 0)
+	encounter._on_rebased(Vector3(128, 0, 0))
+	check(
+		(
+			(encounter.attack_target - player.position).is_equal_approx(relative_target)
+			and (encounter.warning_ring.position - encounter.attack_target).is_equal_approx(
+				warning_offset
+			)
+		),
+		"rebase preserves locked strike and visible warning relative to traveler"
+	)
+	await frames(35)
+	check(
+		encounter.player_health == 75 and encounter.pulse_ring.visible,
+		"animated ground strike deals one hit with bounded impact pulse"
+	)
+	await frames(40)
+	check(
+		encounter.player_health == 75 and absf(foreleg.rotation.x) < 0.2,
+		"recovery lowers limbs without duplicate strike damage"
+	)
+	check(
+		encounter.get_child_count() == node_count and not encounter.pulse_ring.visible,
+		"strike effect reuses fixed geometry and expires after impact"
+	)
+	encounter.guardian_health = 24
+	player.position = encounter.guardian.position + Vector3(0, 0, 3)
+	player.model.rotation.y = 0
+	check(encounter.attack(), "final melee calms guardian after rebased attack")
+	check(
+		victories == [Vector2i(12, -9)],
+		"victory records guardian's original sector exactly once after rebase"
+	)
+	encounter.attack()
+	await frames(5)
+	check(victories.size() == 1, "extra attacks on calmed guardian cannot duplicate victory")
+	world.origin_sector = Vector2i.ZERO
+	encounter.reset_for_destination()
+	encounter.vehicle.position = encounter.guardian.position + Vector3(0, 0.1, 5)
+	player.position = encounter.vehicle.position + Vector3(2.8, 0, 0)
+	await frames(2)
+	check(encounter.interact_vehicle(), "rider defeat probe starts mounted")
+	encounter.player_health = 25
+	await frames(105)
+	check(
+		encounter.state == "player_defeated" and encounter.mounted,
+		"guardian can defeat mounted traveler without dropping collision ownership"
+	)
+	var stopped_position: Vector3 = encounter.vehicle.position
+	Input.action_press("move_right")
+	await frames(20)
+	Input.action_release("move_right")
+	check(
+		encounter.vehicle.position.is_equal_approx(stopped_position),
+		"defeated rider's cart cannot drift or accept movement"
+	)
+	encounter.restart_encounter()
+	check(
+		not encounter.mounted and player.collision_layer != 0 and player.is_physics_processing(),
+		"retry restores rider collision and on-foot controls"
+	)
+	player.position = encounter.vehicle.position + Vector3(2.8, 0, 0)
+	await frames(2)
+	check(encounter.interact_vehicle(), "scene-exit probe starts mounted")
+	world.remove_child(encounter)
+	check(
+		(
+			player.collision_layer != 0
+			and player.collision_mask != 0
+			and player.is_physics_processing()
+			and not player.get_meta("expedition_mounted")
+		),
+		"removing mounted encounter releases traveler controls and collision"
+	)
+	encounter.free()

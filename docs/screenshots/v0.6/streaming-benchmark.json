@@ -1,0 +1,239 @@
+{
+  "method": "Same full-world headless CPU sequence: 4 world instances, 12 distant trips, 12 origin returns, 12 boundary rebases; all decoration drained. No render or physical-device claim.",
+  "geometry_hashes_match": true,
+  "comparison": {
+    "rebase": {
+      "before_median_ms": 6.381,
+      "after_median_ms": 3.535,
+      "before_worst_ms": 7.712,
+      "after_worst_ms": 3.897,
+      "median_reduction_percent": 44.6
+    },
+    "travel_distant": {
+      "before_median_ms": 20.598,
+      "after_median_ms": 12.21,
+      "before_worst_ms": 25.3,
+      "after_worst_ms": 16.458,
+      "median_reduction_percent": 40.72
+    },
+    "travel_origin": {
+      "before_median_ms": 85.316,
+      "after_median_ms": 41.597,
+      "before_worst_ms": 87.486,
+      "after_worst_ms": 64.46,
+      "median_reduction_percent": 51.24
+    },
+    "terrain": {
+      "before_median_ms": 1.616,
+      "after_median_ms": 0.94,
+      "before_worst_ms": 3.702,
+      "after_worst_ms": 2.345,
+      "median_reduction_percent": 41.83
+    },
+    "rocks": {
+      "before_median_ms": 0.31,
+      "after_median_ms": 0.043,
+      "before_worst_ms": 0.474,
+      "after_worst_ms": 0.188,
+      "median_reduction_percent": 86.13
+    },
+    "setup": {
+      "before_median_ms": 212.566,
+      "after_median_ms": 54.469,
+      "before_worst_ms": 263.199,
+      "after_worst_ms": 255.028,
+      "median_reduction_percent": 74.38
+    }
+  },
+  "source_sha256": {
+    "scripts/expedition_world.gd": "63caa0d53baeb33b6777a6e12db57ab59a5aaca7821c28185e09d2aa01b98da1",
+    "tests/test_expedition_world.gd": "149e4a565c4bce97b7b16db9afddc0bdaba5709bb7486ce0bd60f11d4d99aad1"
+  },
+  "records": {
+    "before": {
+      "timings": {
+        "decorate_origin": {
+          "count": 16,
+          "mean_ms": 72.5320625,
+          "median_ms": 67.878,
+          "total_ms": 1160.513,
+          "worst_ms": 104.247
+        },
+        "decorate_other": {
+          "count": 272,
+          "mean_ms": 2.04788970588235,
+          "median_ms": 1.989,
+          "total_ms": 557.026,
+          "worst_ms": 4.609
+        },
+        "rebase": {
+          "count": 12,
+          "mean_ms": 6.47458333333333,
+          "median_ms": 6.381,
+          "total_ms": 77.695,
+          "worst_ms": 7.712
+        },
+        "rocks": {
+          "count": 272,
+          "mean_ms": 0.317047794117647,
+          "median_ms": 0.31,
+          "total_ms": 86.2369999999999,
+          "worst_ms": 0.474
+        },
+        "scene_collision": {
+          "count": 104,
+          "mean_ms": 7.24690384615385,
+          "median_ms": 3.153,
+          "total_ms": 753.678,
+          "worst_ms": 50.688
+        },
+        "setup": {
+          "count": 4,
+          "mean_ms": 224.201,
+          "median_ms": 212.566,
+          "total_ms": 896.804,
+          "worst_ms": 263.199
+        },
+        "terrain": {
+          "count": 288,
+          "mean_ms": 1.64240277777778,
+          "median_ms": 1.616,
+          "total_ms": 473.012,
+          "worst_ms": 3.702
+        },
+        "travel_distant": {
+          "count": 12,
+          "mean_ms": 21.0069166666667,
+          "median_ms": 20.598,
+          "total_ms": 252.083,
+          "worst_ms": 25.3
+        },
+        "travel_origin": {
+          "count": 12,
+          "mean_ms": 85.3850833333333,
+          "median_ms": 85.316,
+          "total_ms": 1024.621,
+          "worst_ms": 87.486
+        }
+      },
+      "geometry": {
+        "(-1, -1)": [
+          1771972984,
+          3154270651,
+          2791825000,
+          307239126
+        ],
+        "(0, 0)": [
+          1094707187,
+          3770879459,
+          2791825000,
+          303226720
+        ],
+        "(1, 0)": [
+          1345133573,
+          554716950,
+          2791825000,
+          180574631
+        ],
+        "hall_collision": 1837450963,
+        "rock_faces": 3248303800
+      }
+    },
+    "after": {
+      "timings": {
+        "decorate_origin": {
+          "count": 16,
+          "mean_ms": 40.4325,
+          "median_ms": 32.803,
+          "total_ms": 646.92,
+          "worst_ms": 102.898
+        },
+        "decorate_other": {
+          "count": 272,
+          "mean_ms": 2.02353676470588,
+          "median_ms": 1.986,
+          "total_ms": 550.402,
+          "worst_ms": 4.25
+        },
+        "rebase": {
+          "count": 12,
+          "mean_ms": 3.53266666666667,
+          "median_ms": 3.535,
+          "total_ms": 42.392,
+          "worst_ms": 3.897
+        },
+        "rocks": {
+          "count": 272,
+          "mean_ms": 0.047797794117647,
+          "median_ms": 0.043,
+          "total_ms": 13.001,
+          "worst_ms": 0.188
+        },
+        "scene_collision": {
+          "count": 104,
+          "mean_ms": 1.37925961538462,
+          "median_ms": 0.001,
+          "total_ms": 143.443,
+          "worst_ms": 51.015
+        },
+        "setup": {
+          "count": 4,
+          "mean_ms": 104.1135,
+          "median_ms": 54.469,
+          "total_ms": 416.454,
+          "worst_ms": 255.028
+        },
+        "terrain": {
+          "count": 288,
+          "mean_ms": 0.98054513888889,
+          "median_ms": 0.94,
+          "total_ms": 282.397,
+          "worst_ms": 2.345
+        },
+        "travel_distant": {
+          "count": 12,
+          "mean_ms": 12.504,
+          "median_ms": 12.21,
+          "total_ms": 150.048,
+          "worst_ms": 16.458
+        },
+        "travel_origin": {
+          "count": 12,
+          "mean_ms": 44.0856666666667,
+          "median_ms": 41.597,
+          "total_ms": 529.028,
+          "worst_ms": 64.46
+        }
+      },
+      "geometry": {
+        "(-1, -1)": [
+          1771972984,
+          3154270651,
+          2791825000,
+          307239126
+        ],
+        "(0, 0)": [
+          1094707187,
+          3770879459,
+          2791825000,
+          303226720
+        ],
+        "(1, 0)": [
+          1345133573,
+          554716950,
+          2791825000,
+          180574631
+        ],
+        "hall_collision": 1837450963,
+        "rock_faces": 3248303800
+      },
+      "setup_instances_ms": [
+        255.028,
+        54.469,
+        53.054,
+        53.903
+      ]
+    }
+  },
+  "tests": "73 checks, 0 failures; expedition-stream-world-tests.log"
+}

@@ -1,13 +1,12 @@
 """Run an isolated Android emulator, launch the ABI-matched APK and exercise real input."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import time
 from PIL import Image, ImageChops, ImageStat
-from android_runtime_cache import record_foreground_block
+from android_runtime_cache import record_foreground_block, fingerprint, verify_emulator_build
 from android_label_ocr import locate_label
 
 parser = argparse.ArgumentParser()
@@ -61,6 +60,10 @@ def tap_label(name, label):
 (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 
 try:
+    apk = root / 'artifacts/TempleRealm-emulator-x86_64.apk'
+    expected = verify_emulator_build(root, json.loads((root / 'artifacts/emulator-build.json').read_text()), apk)
+    report['apk_sha256'] = expected
+    report['source_fingerprint'] = fingerprint(root)
     if not args.serial:
         acceleration = subprocess.run([str(sdk / 'emulator/emulator'), '-accel-check'], capture_output=True, env=env, timeout=20).returncode == 0
         report['hardware_acceleration'] = acceleration
@@ -91,8 +94,6 @@ try:
         launcher = 'com.android.launcher3'  # The pinned AOSP API29 image's stock launcher; resolver can still be warming up.
     adb('shell', 'am', 'force-stop', launcher, timeout=60)
     report['checks'].append('Stopped stock launcher on dedicated software-emulated test device')
-    apk = root / 'artifacts/TempleRealm-emulator-x86_64.apk'
-    expected = hashlib.sha256(apk.read_bytes()).hexdigest()
     existing = adb('shell', 'pm', 'path', 'org.templerealm.prototype', timeout=60)
     actual = ''
     if existing.startswith('package:'):
@@ -164,12 +165,29 @@ try:
     report['status'] = 'PASS'
     print('PASS: actual Android runtime, rendering and touch smoke; x86_64 software emulator, not Realme hardware', flush=True)
 except Exception as error:
+    # Capture the state at failure, not only the startup log. A later surface loss,
+    # native crash or ANR must remain distinguishable from a boot failure.
+    for filename, arguments in [
+        ('failure-logcat.log', ('logcat', '-d', '-v', 'brief', '-t', '2000')),
+        ('failure-runtime.log', ('logcat', '-d', '-v', 'brief', 'godot:V', 'AndroidRuntime:E', 'DEBUG:F', 'libc:F', '*:S')),
+        ('failure-window.txt', ('shell', 'dumpsys', 'window', 'displays')),
+        ('failure-process.txt', ('shell', 'pidof', 'org.templerealm.prototype')),
+        ('failure-activity.txt', ('shell', 'dumpsys', 'activity', 'activities')),
+    ] if emulator is not None or args.serial else []:
+        try:
+            (output / filename).write_text(adb(*arguments, timeout=30))
+        except (RuntimeError, subprocess.TimeoutExpired) as diagnostic_error:
+            report.setdefault('diagnostic_errors', []).append(str(diagnostic_error))
     if report['status'] == 'RUNNING':
         report['status'] = 'BLOCKED' if isinstance(error, subprocess.TimeoutExpired) else 'FAIL'
-        window = output / 'before.png.window.txt'
-        if window.exists() and window.stat().st_mtime >= report['started_unix']:
-            log_path = output / 'logcat.log'
+        window = output / 'failure-window.txt'
+        if (window.exists() and window.stat().st_mtime >= report['started_unix']
+                and report.get('source_fingerprint') == fingerprint(root)):
+            log_path = output / 'failure-logcat.log'
             runtime_log = log_path.read_text() if log_path.exists() else ''
+            tagged = output / 'failure-runtime.log'
+            if tagged.exists() and tagged.stat().st_mtime >= report['started_unix']:
+                runtime_log += '\n' + tagged.read_text()
             block = record_foreground_block(root, environment / 'autonomy/android-host-block.json',
                 error, window.read_text(), str(window), runtime_log)
             if block:

@@ -17,14 +17,14 @@
 					0
 				]
 			},
-			"draws": 456,
+			"draws": 477,
 			"file": "01-expedition-gameplay.png",
 			"gameplay_hud": true,
 			"size": [
 				1600,
 				720
 			],
-			"triangles": 357395
+			"triangles": 356007
 		},
 		{
 			"camera": [
@@ -43,7 +43,7 @@
 					0
 				]
 			},
-			"draws": 301,
+			"draws": 331,
 			"file": "02-temple-road.png",
 			"gameplay_hud": false,
 			"size": [
@@ -95,7 +95,7 @@
 					0
 				]
 			},
-			"draws": 341,
+			"draws": 371,
 			"file": "04-guardian.png",
 			"gameplay_hud": false,
 			"size": [
@@ -147,7 +147,7 @@
 					0
 				]
 			},
-			"draws": 267,
+			"draws": 282,
 			"file": "06-frontier-overlook.png",
 			"gameplay_hud": false,
 			"size": [
@@ -225,14 +225,14 @@
 					0
 				]
 			},
-			"draws": 309,
+			"draws": 323,
 			"file": "12-pavilion-view.png",
 			"gameplay_hud": false,
 			"size": [
 				1600,
 				720
 			],
-			"triangles": 274349
+			"triangles": 270877
 		},
 		{
 			"camera": [
@@ -277,7 +277,7 @@
 					0
 				]
 			},
-			"draws": 239,
+			"draws": 269,
 			"file": "07-eastern-frontier.png",
 			"gameplay_hud": false,
 			"size": [
@@ -303,40 +303,40 @@
 					0
 				]
 			},
-			"draws": 396,
+			"draws": 428,
 			"file": "08-encounter-gameplay.png",
 			"gameplay_hud": true,
 			"size": [
 				1600,
 				720
 			],
-			"triangles": 316685
+			"triangles": 317645
 		},
 		{
 			"camera": [
 				0.0,
-				0.0,
-				6.00000095367432
+				0.000000119209289550781,
+				6.0
 			],
 			"coordinates": {
 				"local": [
 					18.0,
-					0.000703126192092896,
-					10.0
+					0.0,
+					9.0
 				],
 				"sector": [
 					0,
 					0
 				]
 			},
-			"draws": 375,
+			"draws": 401,
 			"file": "09-world-atlas.png",
 			"gameplay_hud": true,
 			"size": [
 				1600,
 				720
 			],
-			"triangles": 345585
+			"triangles": 338435
 		}
 	],
 	"coverage": "Actual desktop Compatibility render; not Realme performance.",
@@ -557,15 +557,16 @@
 		"scripts/celestial_district.gd": "429d788230072747326bf5853bf4b6edb38c1772a87be6eb8c481c4eccab65b8",
 		"scripts/celestial_dragon.gd": "43bdce0dab67bd660bb690aafed515dd4f636c1208326d1b2157ab392a3e9192",
 		"scripts/destructible_mountains.gd": "c96ae14da5c11bbfb7182e56048fd7e0d1287fa182247e07465aa44eb24988da",
-		"scripts/expedition.gd": "335b5854115c7d6590085d7940bcfb5b795ce8c21890b0b9f0ae3774997d99ac",
+		"scripts/expedition.gd": "009fe0f1951a82d2178192d0142657da6b7b8c1d76027900b4199418921d7af6",
 		"scripts/expedition_atmosphere.gd": "25048266f9300398d98a92b2bee8aaaadfb801812552e862957877f0f581922b",
 		"scripts/expedition_controls.gd": "0e9c6e937b5bac0efc4fa14adf4630537300da9e3f8d24fffe674d1245065b6f",
-		"scripts/expedition_encounter.gd": "c96fbd0fcd1a66169e951ec49a7db169324bd4d00eb70d03646629a326750a36",
+		"scripts/expedition_encounter.gd": "92b0e718590848b27f52b4638102c7967582734cd9c11922f3d403af6a30e63f",
 		"scripts/expedition_garden.gd": "532fe49f7b8852c95949ffe9da61c8455f4069f829b59271e44726af3ed3f2d7",
-		"scripts/expedition_guardian_art.gd": "2bea03028291b72b9429249f90cb891857806f7ce9c75b944d81b52256005b23",
+		"scripts/expedition_guardian_art.gd": "dd5ccbd04c06a8d0b275d3a810b109f84914579e3d002eb86d9084e001b2fc74",
+		"scripts/expedition_journal.gd": "e9b0276e91bada40b7cfd301435abe0c6ffc66e57b2c37825d5e889a19fc2b45",
 		"scripts/expedition_residents.gd": "2b4bc62953e14a1c5a4f96b580a4d970dea64892015480b4e41cb568a8e79838",
 		"scripts/expedition_sanctuary.gd": "fe4abed4d37e03ce96e6f61d32e2d38bfebaa377030f5c9ded45f33e9f73cb9e",
-		"scripts/expedition_world.gd": "feb90c01c2e98c79448448b46473e6482d578fe195c3455eb2357d83a0641a18",
+		"scripts/expedition_world.gd": "63caa0d53baeb33b6777a6e12db57ab59a5aaca7821c28185e09d2aa01b98da1",
 		"scripts/exploration.gd": "17c75908e35ebb2d85fb902c30c68469f7d0a3016284183044ec16b18a7f47f2",
 		"scripts/game_settings.gd": "e4d005344e48a4713b995433410acdbf97d87f6257a3e5b799cd1167896ebd99",
 		"scripts/hero_power_controls.gd": "3f4a9388fdd2c5b4f25c2a2a5117f5f76aa165b9380c9724087617763fff07f1",
@@ -574,7 +575,7 @@
 		"scripts/landscape_visuals.gd": "5eb0b564bca6c7187494194278ba14b82d94ceaf156120e216300979899f8f45",
 		"scripts/lantern_quest.gd": "8a772bc5ba2d4170c3f041d8b38ee39e7939d5fab8c9e5d769989059268a1d28",
 		"scripts/main.gd": "0eedba5717609b68991f9aeb44c6726990f83e106b595df0eae0bfad2451b159",
-		"scripts/mobile_controls.gd": "0b9f7e129c3748d4647b634ea7b92d8fca54cf4e177c0f6f466d05bbb6932137",
+		"scripts/mobile_controls.gd": "63934aa325db132a26fe09f0a5c0773e628750617cefe1aff00846850e3e2467",
 		"scripts/nature.gd": "2fb9ede1774b627b7b4dd240f3d924e0b69f39d99b60684d8778b9e5d39d7456",
 		"scripts/player.gd": "9d22861029818f476fb07451b0c95869d9b863ae2df17cae9761d225d22a426f",
 		"scripts/quest_interface.gd": "43fd68e60d19b36a9849777baa5227f30ee748d6ee3e2c1dd26d28e506167476",

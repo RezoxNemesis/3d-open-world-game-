@@ -1,0 +1,7 @@
+{
+  "source_validation": "1141 assertions / 35 suites PASS",
+  "lifecycle_stress": "184 checks / 20 scene disposals PASS",
+  "runtime_safeguards": "7 tests PASS",
+  "renderer": "Desktop Mesa llvmpipe; not Realme performance",
+  "native_android": "v0.6 blank-frame failure retained; diagnostic retry blocked by stock SystemUI ANR. v0.6.1 final runtime validation pending."
+}

@@ -44,6 +44,13 @@ func run() -> void:
 	scene.add_child(world)
 	world.rebased.connect(func(offset: Vector3): rebases.append(offset))
 	world.setup(player)
+	cache_contract()
+	if "--cache-check" in OS.get_cmdline_user_args():
+		print("EXPEDITION CACHE: %d checks, %d failures" % [checks, failures])
+		scene.queue_free()
+		await process_frame
+		quit(1 if failures else 0)
+		return
 	await settle(100)
 	check(player.is_on_floor(), "initial synchronous terrain supports actual capsule")
 	check(world.active_sector_count() == 9, "initial streaming has exactly nine sectors")
@@ -158,6 +165,61 @@ func run() -> void:
 	scene.queue_free()
 	await process_frame
 	quit(1 if failures else 0)
+
+
+func cache_contract() -> void:
+	var original: ConcavePolygonShape3D = world._scene_collision(WORLD.SANCTUARY)
+	check(
+		original == world._scene_collision(WORLD.SANCTUARY),
+		"repeated authored collision lookup shares immutable shape"
+	)
+	var rock_shape: Shape3D
+	var shared_rocks := true
+	for region: Node3D in world.get_children():
+		for body: Node3D in region.get_children():
+			if not str(body.name).begins_with("KarstCollision"):
+				continue
+			var shape: Shape3D = body.get_child(0).shape
+			if rock_shape == null:
+				rock_shape = shape
+			shared_rocks = shared_rocks and shape == rock_shape
+	check(
+		rock_shape != null and shared_rocks,
+		"all resident karst bodies share one collision resource"
+	)
+	check(
+		world._rock_collision.get_faces() == world._rock_mesh.get_faces(),
+		"shared karst collision retains the rendered triangle geometry"
+	)
+	var second := WORLD.new()
+	second._initialize_resources()
+	check(second._hall_collision == original, "reentering expedition reuses authored collision")
+	check(
+		second._rock_mesh == world._rock_mesh, "reentering expedition reuses immutable karst mesh"
+	)
+	check(
+		second._ground_materials[0] == world._ground_materials[0],
+		"reentering expedition reuses terrain shader material"
+	)
+	check(
+		second._road_material == world._road_material,
+		"reentering expedition reuses road shader material"
+	)
+	second.free()
+	# Unrecognized future modules may be built, but cannot grow the resident cache forever.
+	for index in range(WORLD.MAX_SCENE_COLLISIONS + 2):
+		var model := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(1 + index * 0.1, 1, 1)
+		model.mesh = mesh
+		var packed := PackedScene.new()
+		packed.pack(model)
+		world._scene_collision(packed)
+		model.free()
+	check(
+		WORLD._scene_collision_cache.size() == WORLD.MAX_SCENE_COLLISIONS,
+		"authored collision cache remains bounded when extra modules are requested"
+	)
 
 
 func walk_real(action: String, frames: int) -> void:

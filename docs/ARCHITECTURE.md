@@ -65,3 +65,14 @@ Sector(0,0) owns the specifically composed Lotus Cliff Sanctuary, water garden, 
 The original guardian encounter uses telegraphed area strikes, facing/range/occlusion checked melee, swept-collision dodge, recoverable defeat and retry. Wind cart motion uses a real CharacterBody3D, conservative hull/mast clearance, grounded safe dismount, parked-state handling and fall recovery. Encounter and mount state reset on atlas travel/reload; the expedition save currently preserves coordinates, not vehicle posture or guardian progress.
 
 Conservative real-render QA thresholds at1600x720 Balanced are500total draws and400,000 total-pass triangles for thirteen named expedition views. These are software renderer counters, not phone FPS. Existing district thresholds and million-triangle highest-detail architecture remain unchanged. Shared terrain grids reduce redundant vertex/derivative construction while retaining the same ground triangles and smooth seam normals.
+
+
+## Stability and durable expedition progress — v0.6.1
+
+The expedition journal stores the latest128 distinct visited regions and their calmed-guardian flags. Oldest records are evicted together at the bound. Save schema2 migrates schema1 coordinate-only saves; a checked parser, numeric version check and complete journal/coordinate validation reject malformed snapshots before altering live state. The journal is independent of the temple district's existing journey save. Atlas travel/reload restores a recorded peaceful guardian; RETRY is a practice encounter and does not erase prior completion. Walking sector transitions keep the existing encounter and vehicle lifecycle.
+
+Authored collision resources are immutable and cached up to16 shapes across expedition instances. Rock mesh/collision and ground materials are shared. Terrain height sampling uses289 unique grid points per region, retaining identical triangles/normals/collision. No unbounded terrain cache is retained. Mobile control disposal releases analog input even when a scene is replaced directly.
+
+The guardian's existing head and foreleg geometry now articulates through warning, strike, recovery and calm poses. A shared ring mesh provides a countdown and impact pulse. The timing remains dodgeable; victory signals include the encounter's original sector even after floating-origin movement. Rider defeat immediately stops the cart; mounted encounter disposal restores collision/control ownership.
+
+The owner's GTA/Genshin benchmark means cohesive art, responsive locomotion/combat, meaningful activities, inhabitants and world interactions. The current procedural prototype remains well below those games. Next production slice: one polished sanctuary-to-village route with authored terrain/materials, humanoid animation, resident activity and a complete quest, profiled on the Android target before increasing world density. Increasing the coordinate span alone does not add authored content or visual quality.

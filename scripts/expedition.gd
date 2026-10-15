@@ -1,6 +1,7 @@
 extends Node3D
 ## An independently saved expedition; the temple journey remains available on return.
 
+const JOURNAL := preload("res://scripts/expedition_journal.gd")
 const DESTINATIONS := {
 	"Lotus Cliff Sanctuary · 0 km": Vector2i(0, 0),
 	"Cloud Monastery · 82 km": Vector2i(640, 0),
@@ -20,6 +21,8 @@ var hud: PanelContainer
 var heading: Label
 var detail: Label
 var feedback: Label
+var journal = JOURNAL.new()
+var journal_summary: Label
 var route_distance: SpinBox
 var save_path := "user://expedition.json"
 var restore_on_start := true
@@ -59,6 +62,7 @@ func _ready() -> void:
 	add_child(encounter)
 	encounter.setup(player, world)
 	encounter.notice.connect(show_notice)
+	encounter.guardian_defeated.connect(_guardian_defeated)
 	mobile = preload("res://scripts/mobile_controls.gd").new()
 	mobile.name = "MobileControls"
 	add_child(mobile)
@@ -123,6 +127,9 @@ func _build_atlas(canvas: CanvasLayer) -> void:
 	scroll.add_child(box)
 	box.add_child(label("WORLD ATLAS · 200,000 km span", 24))
 	box.add_child(label("Generated regions with temples, roads and guardian grounds.", 16))
+	journal_summary = label("", 16)
+	journal_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(journal_summary)
 	for title in DESTINATIONS:
 		add_button(box, title, travel.bind(DESTINATIONS[title]))
 	var row := HBoxContainer.new()
@@ -239,7 +246,8 @@ func travel(sector: Vector2i) -> void:
 	mobile.release_all_actions()
 	encounter.reset_for_destination()
 	world.travel_to(sector)
-	encounter.reset_for_destination()
+	journal.visit(world.origin_sector)
+	encounter.reset_for_destination(world.origin_sector in journal.pacified)
 	close_atlas()
 	save_expedition()
 	show_notice("Arrived at " + world.biome_name())
@@ -254,23 +262,53 @@ func travel_custom() -> void:
 
 func save_expedition() -> bool:
 	var data: Dictionary = world.world_coordinates()
-	data["version"] = 1
+	journal.visit(Vector2i(data.sector[0], data.sector[1]))
+	data["version"] = 2
+	data["journal"] = journal.snapshot()
 	return preload("res://scripts/save_store.gd").new().write_atomic(data, save_path)
 
 
-func restore_expedition() -> bool:
+func _read_snapshot() -> Variant:
 	if not FileAccess.file_exists(save_path):
-		return false
+		return null
 	var file := FileAccess.open(save_path, FileAccess.READ)
-	if file == null or file.get_length() > 2048:
+	if file == null or file.get_length() > 16384:
+		return null
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK:
+		return null
+	var data: Variant = parser.data
+	if not data is Dictionary:
+		return null
+	var version: Variant = data.get("version")
+	if not (version is int or version is float) or (version != 1 and version != 2):
+		return null
+	return data
+
+
+func restore_expedition() -> bool:
+	var data: Variant = _read_snapshot()
+	if not data is Dictionary:
 		return false
-	var data: Variant = JSON.parse_string(file.get_as_text())
-	if not data is Dictionary or data.get("version") != 1:
+	var version: Variant = data.version
+	var restored_journal = JOURNAL.new()
+	if version == 2 and not restored_journal.restore(data.get("journal")):
 		return false
 	if not world.restore_coordinates(data):
 		return false
-	encounter.reset_for_destination()
+	journal = restored_journal
+	journal.visit(world.origin_sector)
+	encounter.reset_for_destination(world.origin_sector in journal.pacified)
+	_refresh_hud()
 	return true
+
+
+func _guardian_defeated(sector: Vector2i) -> void:
+	journal.calm(sector)
+	show_notice("Guardian calmed · recorded in your journal")
+	if not save_expedition():
+		show_notice("Guardian calmed · save failed; use SAVE in the atlas")
+	_refresh_hud()
 
 
 func save_with_notice() -> void:
@@ -296,6 +334,14 @@ func _refresh_hud() -> void:
 	var coordinates: Dictionary = world.world_coordinates()
 	var sector: Array = coordinates.sector
 	var local: Array = coordinates.local
+	journal.visit(Vector2i(sector[0], sector[1]))
+	journal_summary.text = (
+		(
+			"JOURNAL · %d regions recorded · %d guardians calmed\n"
+			% [journal.visited.size(), journal.pacified.size()]
+		)
+		+ "Remembers your latest 128 regions. Calmed guardians stay peaceful on return."
+	)
 	var east_km := (float(sector[0]) * 128.0 + float(local[0])) / 1000.0
 	heading.text = world.biome_name().to_upper()
 	detail.text = "%.3f km east · %s" % [east_km, encounter.status_text()]

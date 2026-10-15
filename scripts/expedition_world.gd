@@ -9,6 +9,7 @@ const MAX_SECTOR := 781250
 const HALF_WORLD_METERS := 100000000.0
 const GRID := 16
 const CELL := 8.0
+const MAX_SCENE_COLLISIONS := 16
 const HALL_POSITION := Vector3(0, -0.944, -20)
 const HALL_SCALE := 1.6
 const PALETTE := preload("res://scripts/architectural_palette.gd")
@@ -69,6 +70,14 @@ void fragment() {
 }
 """
 
+# Immutable authored resources survive leaving and reentering the expedition.
+# Keep this independent of region keys: distant travel must never grow a terrain cache.
+static var _scene_collision_cache: Dictionary = {}
+static var _shared_ground_materials: Array[ShaderMaterial] = []
+static var _shared_road_material: ShaderMaterial
+static var _shared_rock_mesh: ArrayMesh
+static var _shared_rock_collision: ConcavePolygonShape3D
+
 var origin_sector := Vector2i.ZERO
 var _player: CharacterBody3D
 var _regions: Dictionary = {}
@@ -77,6 +86,7 @@ var _hall_collision: ConcavePolygonShape3D
 var _tower_collision: ConcavePolygonShape3D
 var _gate_collision: ConcavePolygonShape3D
 var _rock_mesh: ArrayMesh
+var _rock_collision: ConcavePolygonShape3D
 var _furniture_shapes: Dictionary = {}
 var _quality := "balanced"
 var _ground_materials: Array[ShaderMaterial] = []
@@ -387,26 +397,35 @@ func _vertex_height(key: Vector2i, x: int, z: int) -> float:
 
 
 func _initialize_resources() -> void:
-	var ground_shader := Shader.new()
-	ground_shader.code = GROUND_SHADER
-	for color in GROUND_COLORS:
-		var material := ShaderMaterial.new()
-		material.shader = ground_shader
-		material.set_shader_parameter("biome_tint", color.lightened(0.45))
-		_ground_materials.append(material)
-	var road_shader := Shader.new()
-	road_shader.code = ROAD_SHADER
-	_road_material = ShaderMaterial.new()
-	_road_material.shader = road_shader
+	if _shared_road_material == null:
+		var ground_shader := Shader.new()
+		ground_shader.code = GROUND_SHADER
+		for color in GROUND_COLORS:
+			var material := ShaderMaterial.new()
+			material.shader = ground_shader
+			material.set_shader_parameter("biome_tint", color.lightened(0.45))
+			_shared_ground_materials.append(material)
+		var road_shader := Shader.new()
+		road_shader.code = ROAD_SHADER
+		_shared_road_material = ShaderMaterial.new()
+		_shared_road_material.shader = road_shader
+	_ground_materials = _shared_ground_materials
+	_road_material = _shared_road_material
 	_hall_collision = _scene_collision(SANCTUARY)
 	_tower_collision = _scene_collision(PAGODA)
 	_gate_collision = _scene_collision(GATE)
 	for packed in [DESK, SHELF, LANTERN]:
 		_furniture_shapes[packed] = _scene_collision(packed)
-	_rock_mesh = _make_rock_mesh()
+	if _shared_rock_mesh == null:
+		_shared_rock_mesh = _make_rock_mesh()
+		_shared_rock_collision = _shared_rock_mesh.create_trimesh_shape()
+	_rock_mesh = _shared_rock_mesh
+	_rock_collision = _shared_rock_collision
 
 
 func _scene_collision(packed: PackedScene) -> ConcavePolygonShape3D:
+	if _scene_collision_cache.has(packed):
+		return _scene_collision_cache[packed]
 	var model: Node3D = packed.instantiate()
 	var faces := PackedVector3Array()
 	_collect_faces(model, Transform3D.IDENTITY, faces)
@@ -414,6 +433,8 @@ func _scene_collision(packed: PackedScene) -> ConcavePolygonShape3D:
 	shape.set_faces(faces)
 	shape.backface_collision = true
 	model.free()
+	if _scene_collision_cache.size() < MAX_SCENE_COLLISIONS:
+		_scene_collision_cache[packed] = shape
 	return shape
 
 
@@ -428,14 +449,21 @@ func _collect_faces(node: Node3D, parent_transform: Transform3D, faces: PackedVe
 
 
 func _build_terrain(region: Node3D, key: Vector2i) -> void:
+	# Adjacent triangles share grid points. Sample each point once, preserving
+	# exactly the original vertex order and float conversion in the final mesh.
+	var vertices := PackedVector3Array()
+	for z in range(-8, 9):
+		for x in range(-8, 9):
+			vertices.append(Vector3(x * CELL, _vertex_height(key, x, z), z * CELL))
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for z in range(-8, 8):
 		for x in range(-8, 8):
-			var a := Vector3(x * CELL, _vertex_height(key, x, z), z * CELL)
-			var b := Vector3((x + 1) * CELL, _vertex_height(key, x + 1, z), z * CELL)
-			var c := Vector3(x * CELL, _vertex_height(key, x, z + 1), (z + 1) * CELL)
-			var d := Vector3((x + 1) * CELL, _vertex_height(key, x + 1, z + 1), (z + 1) * CELL)
+			var index := (z + 8) * (GRID + 1) + x + 8
+			var a := vertices[index]
+			var b := vertices[index + 1]
+			var c := vertices[index + GRID + 1]
+			var d := vertices[index + GRID + 2]
 			for vertex in [a, b, c, b, d, c]:
 				surface.set_uv(Vector2(vertex.x, vertex.z) / SECTOR_SIZE)
 				surface.add_vertex(vertex)
@@ -558,9 +586,7 @@ func _build_rocks(parent: Node3D, key: Vector2i) -> void:
 			var basis := Basis.IDENTITY.scaled(Vector3(7, height, 8))
 			transforms.append(Transform3D(basis, point))
 			colors.append(Color.WHITE)
-			var body := _structure(
-				parent, "KarstCollision", _rock_mesh.create_trimesh_shape(), point
-			)
+			var body := _structure(parent, "KarstCollision", _rock_collision, point)
 			body.basis = basis
 	_nature.batch_group(parent, "KarstSpiredRidges", _rock_mesh, transforms, colors, false)
 

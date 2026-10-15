@@ -260,11 +260,15 @@ func _notification(what: int) -> void:
 		release_all_actions()
 
 
+func _exit_tree() -> void:
+	release_all_actions()
+
+
 func release_all_actions() -> void:
 	release_movement()
 	look_finger = -1
 	for action in BUTTON_ACTIONS:
-		if buttons.has(action):
+		if buttons.has(action) and is_instance_valid(buttons[action]):
 			var button: TouchScreenButton = buttons[action]
 			if button.is_pressed():
 				# Clear the native finger latch too: merely releasing Input leaves

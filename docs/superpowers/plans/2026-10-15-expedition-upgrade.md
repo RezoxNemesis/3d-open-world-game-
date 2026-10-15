@@ -21,3 +21,14 @@ Review focus: distant float precision; stale collision during rebase; touch owne
 - [x] Add original residents with grounded patrol, breathing, and proximity greetings in expedition_residents.gd.
 - [x] Recompose distant ridge atmosphere; capture both actual gameplay and garden/interior vistas after final changes.
 - [x] Verify sanctuary navigation and budgets, then rerun final build checks. Keep first rejected screenshots as development evidence, not final presentation.
+
+
+### Stability follow-up requested by owner
+
+- [x] Stress travel, mounted crossings, save/reload, sanctuary reentry and scene disposal.
+- [x] Fix malformed save version script errors and held joystick input after disposal.
+- [x] Profile and cache repeated authored collision construction; preserve exact terrain geometry.
+- [x] Add articulated guardian timing/pulse and persist calmed regions in a bounded journal.
+- [ ] Complete current-source validation/render/native evidence and deliver a successful workflow artifact.
+
+GTA and Genshin are quality references, not claims about the present build. Native v0.6 black capture remains an unresolved failure until fresh diagnostic evidence establishes its cause.
