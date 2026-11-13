@@ -289,7 +289,7 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
   // clump of 3 blades
   const P = [], C = [];
   for (let b = 0; b < 3; b++) {
-    const a = b * 2.1 + 0.3, ox = Math.cos(a * 1.7) * 0.12, oz = Math.sin(a * 1.3) * 0.12, w = 0.07;
+    const a = b * 2.1 + 0.3, ox = Math.cos(a * 1.7) * 0.12, oz = Math.sin(a * 1.3) * 0.12, w = 0.045;
     const dx = Math.cos(a) * w, dz = Math.sin(a) * w, seg = 3;
     for (let s = 0; s < seg; s++) {
       const t0 = s / seg, t1 = (s + 1) / seg, w0 = 1 - t0, w1 = 1 - t1;
@@ -327,7 +327,7 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
       float slopeOk = 1.0 - smoothstep(0.6, 1.4, abs(hAt(wp+vec2(2.,0.)) - y) + abs(hAt(wp+vec2(0.,2.)) - y));
       dens *= slopeOk;
       vec2 fc = floor((wp + vec2(13.,7.)) / vec2(70., 48.)); float fh = fract(sin(dot(mod(fc,289.), vec2(12.9898,78.233)))*43758.5453);
-      float ht = mix(0.35 + r2*0.35, fh < 0.25 ? 2.3 : fh < 0.45 ? 0.55 : fh < 0.62 ? 0.0 : fh < 0.8 ? 1.1 : 0.85, field);
+      float ht = mix(0.22 + r2*0.3, fh < 0.25 ? 2.3 : fh < 0.45 ? 0.55 : fh < 0.62 ? 0.0 : fh < 0.8 ? 1.1 : 0.85, field);
       ht *= mix(1.0, 1.35, uSeason.x) * mix(1.0, 0.7, uSeason.y);
       vec3 base = mix(vec3(0.11,0.2,0.05), vec3(0.18,0.24,0.06), uSeason.y);
       vec3 tip = mix(mix(vec3(0.38,0.58,0.16), vec3(0.62,0.6,0.28), uSeason.y), vec3(0.32,0.62,0.14), uSeason.x);

@@ -30,10 +30,11 @@ export class HUD {
     $('h1', { text: 'DAMAN DUO' }, t); $('h2', { text: 'OPEN-WORLD ACTION · DAMAN, INDIA' }, t);
     const play = $('button', { class: 'btn', text: opts.hasSave ? 'CONTINUE' : 'PLAY' }, t);
     $('div', { class: 'lbl', text: 'GRAPHICS' }, t);
-    const r1 = $('div', { class: 'row' }, t), r2 = $('div', { class: 'row' }, t);
+    const r1 = $('div', { class: 'row' }, t);
     const chips = (row, list, cur, cb) => { const els = list.map(([k, label]) => { const b = $('button', { class: 'btn alt' + (k === cur ? ' on' : ''), text: label }, row); b.onclick = () => { els.forEach((e) => e.classList.remove('on')); b.classList.add('on'); cb(k); }; return b; }); };
     chips(r1, [['low', 'Low'], ['mobile', 'Mobile'], ['high', 'High'], ['ultra', 'Ultra']], opts.preset, (k) => (opts.preset = k));
     $('div', { class: 'lbl', text: 'CROWD (PEOPLE ON THE MAP)' }, t);
+    const r2 = $('div', { class: 'row' }, t);
     chips(r2, [[50000, '50K'], [100000, '1 LAKH'], [200000, '2 LAKH'], [300000, '3 LAKH']], opts.crowd, (k) => (opts.crowd = k));
     const r3 = $('div', { class: 'row', style: 'margin-top:12px' }, t);
     if (opts.hasSave) { const nb = $('button', { class: 'btn alt', text: 'NEW GAME' }, r3); nb.onclick = () => { opts.newGame = true; go(); }; }
