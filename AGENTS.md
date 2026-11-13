@@ -1,18 +1,8 @@
-# Temple Realm
+# Daman Duo — agent notes
 
-- Use the existing isolated checkout; do not create a worktree unless requested.
-- Android and touch are primary; the owner only has a Realme P1 Speed phone. Build APKs in cloud.
-- APK delivery must come from a successful GitHub Actions build and its uploaded workflow artifact. Give the actual artifact download URL; do not substitute workspace paths, raw repository files or release links. See `docs/AUTONOMOUS_WORKFLOW.md` for delivery.
-- Read `docs/DEVELOPMENT.md` and `docs/TEST_RESULTS.md` before changes.
-- Run `tools/setup_environment.sh`, then `tools/validate_environment.sh` and `tools/security_audit.sh`.
-- Keep changes small, add real behavior tests, and preserve assets and user changes.
-- Consult `.agents/skills/` for Godot engineering, generation, art, cinematics, performance and QA/security workflows.
-- Pin official stable Godot and matching templates; use inherited TLS/proxy trust and never disclose secrets.
-- Report actual rendering/device coverage. Do not publish, purchase, force-push or delete remote history without authorization.
-- Make recoverable local commits after verified milestones. See `docs/DEVELOPMENT.md` for recovery and backlog.
-
-## Autonomous working preference
-
-The owner requests ordinary implementation decisions, builds, tests, fixes and Git checkpoints without repeated confirmation. Do not wait for phone testing before doing independent work. After a meaningful change, run `tools/autonomous_cycle.sh`; inspect its current report and diagnose failures before retrying. Use the next in-scope item from `docs/ARCHITECTURE.md` during development tasks. Preserve the last-good artifact and record the next step in `docs/AUTONOMOUS_WORKFLOW.md` when handing off.
-
-Work within the active task and platform limits. The cycle is a bounded validator, not an AI worker that continues after a session ends. Use supported corrections and alternatives; never circumvent access controls, disable integrity checks or claim emulator results establish Realme performance. Routine repository work is authorized by the owner; paid services, store publication and destructive history changes remain separate actions.
+- Open-world 3D game set in Daman, India, written entirely in code (Three.js / WebGL2). No external art assets.
+- One codebase, three shells: `dist/` (web), Electron desktop (`electron/`, Ultra graphics) and Capacitor Android (generated in CI, patched by `tools/patch_android.py`, Mobile graphics + touch controls).
+- Build: `npm ci && npm run build`. Test: `python3 tools/render_test.py --ci` (headless Chrome, screenshots in `test-out/`). Every new system should register a scenario on `window.__TEST`.
+- Delivery: GitHub Actions workflow **Build Daman Duo** builds the APK and desktop apps on every PR/push; tags `v*` publish a GitHub Release with all downloads.
+- The previous Godot project (Temple Realm) is preserved on branch `temple-realm-archive`.
+- Owner works from an Android phone (Realme P1 Speed) and a Windows PC; keep the mobile preset fast.
