@@ -5,6 +5,7 @@ export const U = {
   uSunColor: { value: new THREE.Color(1, 1, 1) }, uZenith: { value: new THREE.Color(0.3, 0.5, 0.9) },
   uHorizon: { value: new THREE.Color(0.7, 0.8, 0.9) }, uFogColor: { value: new THREE.Color(0.7, 0.8, 0.9) },
   uFogDensity: { value: 0.00011 }, uAmbient: { value: new THREE.Color(0.4, 0.45, 0.5) },
+  uSeason: { value: new THREE.Vector4(0.5, 0.3, 0, 0) }, uWet: { value: 0 }, uRain: { value: 0 },
 };
 export const NOISE = /* glsl */`
 float h21(vec2 p){ p = fract(p*vec2(0.1031,0.1030)); p += dot(p, p.yx+33.33); return fract((p.x+p.y)*p.x); }
@@ -15,4 +16,5 @@ float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
 float fbm2(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*vn(p); p*=2.03; a*=.5;} return s/0.9375; }
 `;
 // inject helper into a material
-export function patch(mat, fn) { mat.onBeforeCompile = (s) => { fn(s); }; mat.customProgramCacheKey = () => fn.toString().slice(0, 200) + mat.uuid.slice(0, 4); return mat; }
+function hashStr(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+export function patch(mat, fn, key = '') { const k = hashStr(fn.toString()) + key + JSON.stringify(mat.defines || {}); mat.onBeforeCompile = (s) => { fn(s); }; mat.customProgramCacheKey = () => k; return mat; }

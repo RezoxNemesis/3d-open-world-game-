@@ -21,10 +21,12 @@ jobs:
       - run: npm ci
         env: { ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }
       - run: npm run build
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
       - name: Headless smoke test (game boots, renders, no JS errors)
         run: |
-          python3 -m pip install --quiet playwright==1.49.1
-          python3 tools/render_test.py --ci
+          python -m pip install --quiet playwright
+          python tools/render_test.py --ci
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: DamanDuo-Screenshots, path: test-out/*.png, if-no-files-found: ignore }

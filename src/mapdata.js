@@ -1,8 +1,11 @@
 // Daman geography + road network + building lots (all procedural, seeded)
-import { fbm, smooth, clamp, lerp, R, rr, ri, pick } from './util.js';
+import { fbm, vnoise, smooth, clamp, lerp, R, rr, ri, pick } from './util.js';
 
-export const HALF = 5000, N = 512, CELL = (2 * HALF) / N, W1 = N + 1;
-export const H = new Float32Array(W1 * W1);
+// 20 km x 20 km island world. Daman city on the west coast, jungle + Ghats mountains to the east.
+export const HALF = 10000;
+export let N = 1024, CELL = (2 * HALF) / N, W1 = N + 1;
+export let H = null;
+export function setRes(n) { N = n; CELL = (2 * HALF) / N; W1 = N + 1; H = new Float32Array(W1 * W1); }
 
 // ---------- coast, river, lake ----------
 export function coastX(z) {
@@ -10,11 +13,41 @@ export function coastX(z) {
 }
 export const coastRoadX = (z) => coastX(z) + 200;
 export function rivZ(x) { const u = x + 3150; return smooth(0, 1800, u) * (170 * Math.sin(u / 1150) + 60 * Math.sin(u / 420)); }
+export const RIVER_END = 6000;
+export function kolZ(x) { return -7300 + 150 * Math.sin((x + 3000) / 900) + 60 * Math.sin((x + 3000) / 330); }
+export function kolHalfW(x) { return lerp(70, 26, smooth(-3200, 1200, x)); }
+export const KOLAK_END = 1600;
+export const PLAT = { x: 6650, z: 0, r: 640, h: 160, lx: 6720, lz: 0, lr: 270, water: 158 };
+export const ISLAND = { x: -6400, z: 1800, r: 560 };
+export const PANI = { x: 0, z: 0, r: 40 };
+function edgeDist(x, z) { return Math.min(z + 9300, 9300 - z, 9650 - x) + (fbm(x * 0.0007 + 5, z * 0.0007, 3) - 0.5) * 600; }
+function ridged(x, z) {
+  let s = 0, a = 1, f = 0.00034, w = 0;
+  for (let i = 0; i < 5; i++) { let n = 1 - Math.abs(2 * vnoise(x * f + 13.7 * i, z * f - 7.1 * i) - 1); n *= n; s += n * a; w += a; a *= 0.5; f *= 2.13; }
+  return Math.pow(s / w, 1.55);
+}
 export function rivHalfW(x) { return lerp(165, 80, smooth(-3200, -1200, x)); }
 export const LAKE = { x: -1350, z: -1700, r: 170, ir: 40 };
 
 const flats = [];
-function baseLand(x, z) { return 3.5 + fbm(x * 0.0011 + 3.1, z * 0.0011 - 1.7, 4) * 7 + smooth(-2500, 5000, x) * 7; }
+function baseLand(x, z) {
+  let h = 3.5 + fbm(x * 0.0011 + 3.1, z * 0.0011 - 1.7, 4) * 7 + smooth(-2500, 5000, x) * 7;
+  const f = smooth(3800, 7200, x);
+  if (f > 0) h += f * (35 + 150 * fbm(x * 0.0008 + 11, z * 0.0008 + 4, 4));
+  const mm = smooth(6900, 8700, x);
+  if (mm > 0) h += mm * (140 + 1650 * ridged(x, z));
+  // plateau with lake (Naag Sarovar). Gentle on the north/east, a sheer cliff on the west (waterfall).
+  const dx = x - PLAT.x, dz = z - PLAT.z, dp = Math.hypot(dx, dz);
+  const west = smooth(0.25, 0.75, -dx / (dp + 1e-3)), wd = lerp(520, 55, west);
+  if (dp < PLAT.r + wd) {
+    const t = smooth(PLAT.r + wd, PLAT.r, dp);
+    h = lerp(h, PLAT.h + (fbm(x * 0.01, z * 0.01, 2) - 0.5) * 4, t);
+    const dl = Math.hypot(x - PLAT.lx, z - PLAT.lz);
+    if (dl < PLAT.lr + 40) h = lerp(h, PLAT.h - 16, smooth(PLAT.lr + 40, PLAT.lr - 25, dl));
+    if (x < PLAT.lx && x > PLAT.x - PLAT.r - 10 && Math.abs(z - PLAT.z) < 30) h = lerp(h, PLAT.water - 2.5, smooth(30, 12, Math.abs(z - PLAT.z)));
+  }
+  return h;
+}
 function addFlat(x0, z0, x1, z1, b = 60) { flats.push({ x0, z0, x1, z1, h: baseLand((x0 + x1) / 2, (z0 + z1) / 2), b }); }
 
 export function rawHeight(x, z) {
@@ -24,15 +57,26 @@ export function rawHeight(x, z) {
     const d = Math.hypot(dx, dz);
     if (d < f.b) land = lerp(f.h, land, smooth(0, f.b, d));
   }
-  const cx = coastX(z), dc = x - cx;
+  const cx = coastX(z), dc = Math.min(x - cx, edgeDist(x, z));
   let h;
   if (dc < 0) h = Math.max(-30, -0.7 + dc * 0.035);
   else if (dc < 75) h = lerp(-0.7, 1.4, dc / 75);
   else h = lerp(1.4, land, smooth(75, 260, dc));
-  if (x > cx - 400) {
-    const hw = rivHalfW(x), dr = Math.abs(z - rivZ(x));
+  if (x > cx - 400 && x < RIVER_END + 120) {
+    const hw = rivHalfW(x);
+    let dr = Math.abs(z - rivZ(x));
+    if (x > RIVER_END - 60) dr = Math.hypot(x - (RIVER_END - 60), z - rivZ(RIVER_END - 60));
     if (dr < hw + 50) { const t = smooth(hw + 50, hw - 12, dr); const bed = -0.8 - 4 * smooth(hw, 0, dr); h = lerp(h, bed, t); }
   }
+  if (x > cx - 400 && x < KOLAK_END + 80) {
+    const hw = kolHalfW(x);
+    let dr = Math.abs(z - kolZ(x)); if (x > KOLAK_END) dr = Math.hypot(x - KOLAK_END, z - kolZ(KOLAK_END));
+    if (dr < hw + 35) h = lerp(h, -0.6 - 2.5 * smooth(hw, 0, dr), smooth(hw + 35, hw - 8, dr));
+  }
+  const di = Math.hypot(x - ISLAND.x, z - ISLAND.z);
+  if (di < ISLAND.r) h = Math.max(h, lerp(-0.7, 5 + 32 * fbm(x * 0.004, z * 0.004, 3) * smooth(ISLAND.r, 0, di), smooth(ISLAND.r, ISLAND.r - 140, di)));
+  const dpk = Math.hypot(x - PANI.x, z - PANI.z);
+  if (dpk < PANI.r + 20) h = Math.max(h, lerp(-1.5, 2.4, smooth(PANI.r + 12, PANI.r - 6, dpk)));
   const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
   if (dl < LAKE.r + 40) h = lerp(h, -2.5, smooth(LAKE.r + 40, LAKE.r - 8, dl));
   if (dl < LAKE.ir + 15) h = lerp(h, 2.2, smooth(LAKE.ir + 15, LAKE.ir - 5, dl));
@@ -63,6 +107,20 @@ export function excluded(x, z, m = 0, roadOnly = false) {
 }
 
 function computeLandmarks() {
+  PLAT.z = rivZ(RIVER_END); PLAT.lz = PLAT.z - 20;
+  PANI.x = coastX(0) + 160; PANI.z = rivZ(PANI.x);
+  L.falls = { x: PLAT.x - PLAT.r - 8, z: PLAT.z, top: PLAT.water, pool: RIVER_END - 60 };
+  L.plateau = { x: PLAT.x, z: PLAT.z };
+  L.caveFalls = { x: RIVER_END - 30, z: PLAT.z + 70 };
+  L.caveNaag = { x: 8150, z: 2600 };
+  L.island = { x: ISLAND.x, z: ISLAND.z };
+  L.pani = { x: PANI.x, z: PANI.z };
+  L.temple = { x: PLAT.lx + 120, z: PLAT.lz - 300 };
+  L.jungleCamp = { x: 5200, z: 3600 };
+  L.peak = { x: 8600, z: -2600 };
+  L.saltPans = { x0: -3000, z0: -6600, x1: -2300, z1: -5600 };
+  L.wind = { z0: 6300, z1: 9000 };
+  L.kolak = { x: -2350, z: -7800 };
   let mx = -1e9; for (let z = 300; z <= 770; z += 10) mx = Math.max(mx, coastRoadX(z));
   const mx0 = mx + 45; L.motiFort = { x0: mx0, z0: 330, x1: Math.min(mx0 + 430, -2305), z1: 760 };
   mx = -1e9; for (let z = -540; z <= -290; z += 10) mx = Math.max(mx, coastRoadX(z));
@@ -90,6 +148,8 @@ function computeLandmarks() {
   exRect(L.airport.x0, L.airport.z0, L.airport.x1, L.airport.z1, true, 'airport');
   exRect(L.hideout.x - 90, L.hideout.z - 70, L.hideout.x + 90, L.hideout.z + 70, false, 'hideout');
   exRect(L.hospital.x - 30, L.hospital.z - 25, L.hospital.x + 30, L.hospital.z + 25);
+  exRect(L.saltPans.x0, L.saltPans.z0, L.saltPans.x1, L.saltPans.z1, true, 'salt');
+  exCirc(L.temple.x, L.temple.z, 60);
   addFlat(L.airport.x0, L.airport.z0, L.airport.x1, L.airport.z1, 80);
   addFlat(mf.x0, mf.z0, mf.x1, mf.z1, 40);
   addFlat(L.stadium.x - 95, L.stadium.z - 80, L.stadium.x + 95, L.stadium.z + 80, 40);
@@ -135,12 +195,16 @@ export function zoneAt(x, z) {
 }
 
 const MAJ = [
-  { axis: 'x', v: -2250, a: -4950, b: 4950, w: 14, lanes: 2, bridge: true, name: 'Rajiv Gandhi Setu Road' },
-  { axis: 'z', v: -1150, a: -2250, b: 4950, w: 14, lanes: 2, name: 'Vapi Road' },
-  { axis: 'z', v: 900, a: -2250, b: 4950, w: 11, lanes: 1, name: 'Dalwada Road' },
-  { axis: 'x', v: 1000, a: -4950, b: 4950, w: 11, lanes: 1, bridge: true, name: 'Kachigam Bridge Road' },
-  { axis: 'x', v: 3500, a: -4950, b: 4950, w: 14, lanes: 2, bridge: true, name: 'Ring Road' },
-  { axis: 'z', v: -3600, a: -2250, b: 4950, w: 10, lanes: 1, name: 'Devka-Dabhel Road' },
+  { axis: 'x', v: -2250, a: -9000, b: 9000, w: 14, lanes: 2, bridge: true, name: 'Rajiv Gandhi Setu Road' },
+  { axis: 'z', v: -1150, a: -2250, b: 4600, w: 14, lanes: 2, name: 'Vapi Road' },
+  { axis: 'z', v: 900, a: -2250, b: 4500, w: 11, lanes: 1, name: 'Dalwada Road' },
+  { axis: 'x', v: 1000, a: -8800, b: 8800, w: 11, lanes: 1, bridge: true, name: 'Kachigam Bridge Road' },
+  { axis: 'x', v: 3500, a: -8800, b: 8800, w: 14, lanes: 2, bridge: true, name: 'Ring Road' },
+  { axis: 'z', v: -3600, a: -2250, b: 4500, w: 10, lanes: 1, name: 'Devka-Dabhel Road' },
+  { axis: 'z', v: -6000, a: -2250, b: 3500, w: 10, lanes: 1, name: 'Kolak Road' },
+  { axis: 'z', v: 6000, a: -2250, b: 3500, w: 10, lanes: 1, name: 'Umbergaon Road' },
+  { axis: 'z', v: -8400, a: -2250, b: 3500, w: 9, lanes: 1, name: 'North Farm Road' },
+  { axis: 'z', v: 8200, a: -2250, b: 3500, w: 9, lanes: 1, name: 'South Farm Road' },
   { axis: 'z', v: 3400, a: -2250, b: 3500, w: 10, lanes: 1, name: 'Jampore Road' },
   { axis: 'z', v: 1800, a: -2250, b: 3500, w: 10, lanes: 1, name: 'Airport Road' },
 ];
@@ -230,6 +294,39 @@ function connectChain(chain, maxD, w) {
     }
     if (best >= 0 && segLand(C.x, C.z, nodes[best].x, nodes[best].z, 0.9) && !nodes[best].elev && !C.elev) { if (addEdge(ci, best, w, 1, 'link') >= 0) used.add(best); }
   }
+}
+
+function ghatRoad(pts) {
+  const n = pts.length, ys = pts.map((p) => terrainH(p.x, p.z));
+  for (let it = 0; it < 6; it++) for (let i = 1; i < n - 1; i++) ys[i] = (ys[i - 1] + ys[i] * 2 + ys[i + 1]) / 4;
+  ys[n - 1] = terrainH(pts[n - 1].x, pts[n - 1].z);
+  const g = 0.085;
+  for (let i = 1; i < n; i++) { const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z); ys[i] = clamp(ys[i], ys[i - 1] - g * d, ys[i - 1] + g * d); }
+  for (let i = n - 2; i >= 0; i--) { const d = Math.hypot(pts[i].x - pts[i + 1].x, pts[i].z - pts[i + 1].z); ys[i] = clamp(ys[i], ys[i + 1] - g * d, ys[i + 1] + g * d); }
+  // cut & fill the terrain grid along the road
+  const half = 6, band = 22;
+  for (let i = 0; i < n - 1; i++) {
+    const A = pts[i], B = pts[i + 1];
+    const i0 = Math.max(0, Math.floor((Math.min(A.x, B.x) - band + HALF) / CELL)), i1 = Math.min(N, Math.ceil((Math.max(A.x, B.x) + band + HALF) / CELL));
+    const j0 = Math.max(0, Math.floor((Math.min(A.z, B.z) - band + HALF) / CELL)), j1 = Math.min(N, Math.ceil((Math.max(A.z, B.z) + band + HALF) / CELL));
+    const dx = B.x - A.x, dz = B.z - A.z, l2 = dx * dx + dz * dz;
+    for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) {
+      const x = -HALF + ii * CELL, z = -HALF + j * CELL;
+      const t = clamp(((x - A.x) * dx + (z - A.z) * dz) / l2, 0, 1), d = Math.hypot(A.x + dx * t - x, A.z + dz * t - z);
+      if (d > band) continue;
+      const yr = lerp(ys[i], ys[i + 1], t) - 0.15, k = ii + j * W1, w = smooth(band, half, d);
+      if (w > (H[k + 0] === undefined ? 0 : 0)) H[k] = lerp(H[k], yr, w);
+    }
+  }
+  const ids = pts.map((p) => addNode(p.x, p.z));
+  for (let i = 0; i < ids.length; i++) nodes[ids[i]].y = terrainH(pts[i].x, pts[i].z) + 0.12;
+  for (let i = 1; i < ids.length; i++) addEdge(ids[i - 1], ids[i], 10, 1, 'major');
+  L.ghatEnd = { x: pts[n - 1].x, z: pts[n - 1].z };
+}
+export function waterLevelAt(x, z) {
+  const dl = Math.hypot(x - PLAT.lx, z - PLAT.lz);
+  if (dl < PLAT.lr + 30 || (x < PLAT.lx && x > PLAT.x - PLAT.r - 6 && Math.abs(z - PLAT.z) < 22)) return PLAT.water;
+  return 0;
 }
 
 export const villages = [];
@@ -322,7 +419,7 @@ export function nearestRoad(x, z) {
 }
 
 // ---------- occupancy (4m grid) ----------
-const OC = 4, ON = (2 * HALF) / OC;
+const OC = 5, ON = (2 * HALF) / OC;
 export const occ = new Uint8Array(ON * ON);
 const oi = (x, z) => { const i = Math.floor((x + HALF) / OC), j = Math.floor((z + HALF) / OC); return i < 0 || j < 0 || i >= ON || j >= ON ? -1 : i + j * ON; };
 export function occFree(x0, z0, x1, z1) {
@@ -410,14 +507,15 @@ function placeTowers() {
 }
 
 // ---------- vegetation / props ----------
-export const trees = { palm: [], cas: [], round: [] };
+export const trees = { palm: [], cas: [], round: [], teak: [], bamboo: [], bush: [] };
+export function isJungle(x, z) { return x > 4100 && x < 7600 && z > -7600 && z < 8200 && Math.hypot(x - PLAT.x, z - PLAT.z) > PLAT.r - 30; }
 function plantTrees() {
   const tryAdd = (arr, x, z, sMin, sMax) => {
     const h = terrainH(x, z), o = occAt(x, z); if (h < 0.6 || (o && o !== 3)) return false;
+    if (waterLevelAt(x, z) > 1 && h < PLAT.water + 0.5) return false;
     arr.push({ x, z, y: h, s: rr(sMin, sMax), r: R() * Math.PI * 2, lean: rr(-0.18, 0.18) }); return true;
   };
-  // coastal palms & casuarina
-  for (let z = -4950; z < 4950; z += 6) {
+  for (let z = -9200; z < 9200; z += 6) {
     const c = coastX(z), jam = z > 2300 && z < 4500, dev = z < -2900 && z > -4900;
     const n = jam ? 3 : dev ? 2 : 1;
     for (let k = 0; k < n; k++) {
@@ -426,27 +524,43 @@ function plantTrees() {
       else if (R() < 0.6) tryAdd(trees.palm, c + d, z + rr(-3, 3), 0.75, 1.25);
     }
   }
-  // river banks + lake
-  for (let x = -2900; x < 4900; x += 9) {
-    for (const s of [-1, 1]) { if (R() < 0.55) { const z = rivZ(x) + s * (rivHalfW(x) + rr(30, 90)); tryAdd(R() < 0.6 ? trees.palm : trees.round, x, z, 0.8, 1.3); } }
-  }
+  for (let x = -2900; x < RIVER_END - 100; x += 9) for (const sg of [-1, 1]) if (R() < 0.55) { const z = rivZ(x) + sg * (rivHalfW(x) + rr(30, 90)); tryAdd(R() < 0.6 ? trees.palm : trees.round, x, z, 0.8, 1.3); }
+  for (let x = -2900; x < KOLAK_END; x += 7) for (const sg of [-1, 1]) if (R() < 0.7) { const z = kolZ(x) + sg * (kolHalfW(x) + rr(8, 40)); tryAdd(trees.bush, x, z, 0.8, 1.6); }
   for (let a = 0; a < Math.PI * 2; a += 0.05) { const r = LAKE.r + rr(25, 60); tryAdd(trees.palm, LAKE.x + Math.cos(a) * r, LAKE.z + Math.sin(a) * r, 0.8, 1.2); }
   for (let a = 0; a < Math.PI * 2; a += 0.35) tryAdd(trees.palm, LAKE.x + Math.cos(a) * 25, LAKE.z + Math.sin(a) * 25, 0.7, 1.0);
+  for (let k = 0; k < 900; k++) { const a = R() * 6.283, r = Math.sqrt(R()) * (ISLAND.r - 60); tryAdd(R() < 0.7 ? trees.palm : trees.round, ISLAND.x + Math.cos(a) * r, ISLAND.z + Math.sin(a) * r, 0.8, 1.3); }
   // countryside + town gaps
-  for (let k = 0; k < 26000; k++) {
-    const x = rr(-3100, 4950), z = rr(-4950, 4950), zn = zoneAt(x, z);
+  for (let k = 0; k < 52000; k++) {
+    const x = rr(-3100, 4300), z = rr(-9200, 9200), zn = zoneAt(x, z);
     const town = zn === 'nani' || zn === 'moti' || zn === 'devka' || zn === 'jampore';
     if (town && R() < 0.5) continue;
     if (zn === 'industry' && R() < 0.85) continue;
     const f = fbm(x * 0.002, z * 0.002, 3);
     if (!town && f < 0.42 && R() < 0.75) continue;
-    tryAdd(R() < 0.45 ? trees.palm : trees.round, x, z, 0.7, 1.4);
+    tryAdd(R() < 0.45 ? trees.palm : R() < 0.8 ? trees.round : trees.bush, x, z, 0.7, 1.4);
   }
-  // roadside avenue trees
+  // the jungle (teak, banyan, bamboo, undergrowth)
+  for (let k = 0; k < 150000; k++) {
+    const x = rr(4100, 7600), z = rr(-7600, 8200);
+    if (!isJungle(x, z)) continue;
+    const f = fbm(x * 0.003 + 2, z * 0.003, 3); if (f < 0.32) continue;
+    const h = terrainH(x, z); if (h > 700) continue;
+    const r = R();
+    if (r < 0.42) tryAdd(trees.teak, x, z, 0.8, 1.5); else if (r < 0.62) tryAdd(trees.round, x, z, 1.1, 1.9);
+    else if (r < 0.8) tryAdd(trees.bamboo, x, z, 0.8, 1.3); else tryAdd(trees.bush, x, z, 0.8, 1.6);
+  }
+  // mountain scrub + plateau groves
+  for (let k = 0; k < 30000; k++) {
+    const x = rr(6800, 9600), z = rr(-9000, 9000), h = terrainH(x, z);
+    if (h < 40 || h > 1050) continue;
+    const slope = Math.abs(terrainH(x + 6, z) - h) + Math.abs(terrainH(x, z + 6) - h); if (slope > 7) continue;
+    tryAdd(h > 650 ? trees.bush : R() < 0.5 ? trees.teak : trees.bush, x, z, 0.7, 1.3);
+  }
+  for (let k = 0; k < 2500; k++) { const a = R() * 6.283, r = PLAT.lr + 40 + R() * 280; tryAdd(R() < 0.4 ? trees.round : R() < 0.6 ? trees.bamboo : trees.teak, PLAT.lx + Math.cos(a) * r, PLAT.lz + Math.sin(a) * r, 0.9, 1.5); }
   for (const e of edges) {
     if (e.type !== 'major' || e.elev) continue;
     const A = nodes[e.a], B = nodes[e.b], dx = (B.x - A.x) / e.len, dz = (B.z - A.z) / e.len;
-    for (let t = 10; t < e.len - 10; t += 24) for (const s of [-1, 1]) if (R() < 0.5) tryAdd(trees.round, A.x + dx * t + dz * s * (e.w / 2 + 4.5), A.z + dz * t - dx * s * (e.w / 2 + 4.5), 0.7, 1.1);
+    for (let t = 10; t < e.len - 10; t += 24) for (const sg of [-1, 1]) if (R() < 0.5) tryAdd(trees.round, A.x + dx * t + dz * sg * (e.w / 2 + 4.5), A.z + dz * t - dx * sg * (e.w / 2 + 4.5), 0.7, 1.1);
   }
 }
 export const lights = []; // street lights {x,z,y,ang}
@@ -472,6 +586,7 @@ function addRamp(x, z, ang, w, len, h) { ramps.push({ x, z, ang, w, len, h, y: t
 export const spawns = {};
 
 export async function buildMap(progress) {
+  if (!H) setRes(1024);
   computeLandmarks();
   for (let j = 0; j <= N; j++) { for (let i = 0; i <= N; i++) H[i + j * W1] = rawHeight(-HALF + i * CELL, -HALF + j * CELL); if (j % 64 === 0) await progress('Shaping Daman coastline', j / N); }
   // grids
@@ -486,12 +601,20 @@ export async function buildMap(progress) {
   for (const m of MAJ) majorChains.push(...buildMajor(m));
   // coastal highways
   const cn = [], cs = [];
-  for (let z = -4950; z <= -300; z += 55) cn.push({ x: coastRoadX(z), z });
-  for (let z = 330; z <= 4950; z += 55) cs.push({ x: coastRoadX(z), z });
-  const coastChains = [...chainBuild(cn, 12, 1, 'coast', false), ...chainBuild(cs, 12, 1, 'coast', false)];
+  for (let z = -8900; z <= -300; z += 55) cn.push({ x: coastRoadX(z), z });
+  for (let z = 330; z <= 8900; z += 55) cs.push({ x: coastRoadX(z), z });
+  const coastChains = [...chainBuild(cn, 12, 1, 'coast', true), ...chainBuild(cs, 12, 1, 'coast', true)];
+  // ghat road up to the plateau (Naag Sarovar), grade-limited
+  {
+    const pts = [], wp = [[4600, -1150], [5000, -1080], [5450, -900], [5800, -820], [6150, -720], [6450, -560], [PLAT.x - 60, PLAT.z - PLAT.r + 60]];
+    for (let k = 0; k < wp.length - 1; k++) { const [ax, az] = wp[k], [bx, bz] = wp[k + 1], n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 40)); for (let i = 0; i < n; i++) pts.push({ x: lerp(ax, bx, i / n), z: lerp(az, bz, i / n) }); }
+    pts.push({ x: wp[wp.length - 1][0], z: wp[wp.length - 1][1] });
+    ghatRoad(pts);
+  }
   for (const c of coastChains) connectChain(c, 95, 9);
   await progress('Connecting villages', 0.4);
-  const vs = [[1900, 600], [2900, 1400], [1800, 3600], [3900, 3000], [-300, 3700], [2600, 4400], [4300, 1900], [-600, -3400], [300, 300], [4200, -3300], [-1100, 3300], [-200, 4500], [4400, 4300], [2400, 2600]];
+  const vs = [[1900, 600], [2900, 1400], [1800, 3600], [3900, 3000], [-300, 3700], [2600, 4400], [4300, 1900], [-600, -3400], [300, 300], [4200, -3300], [-1100, 3300], [-200, 4500], [4400, 4300], [2400, 2600],
+    [-2300, -7900], [-1200, -6800], [600, -7600], [2200, -6600], [3300, -8200], [-1500, -8900], [-1800, 6900], [-400, 7600], [1300, 6800], [2600, 7900], [-1000, 8700], [3600, 6600], [-2600, 7600], [4100, -5200]];
   for (const [x, z] of vs) village(x + rr(-60, 60), z + rr(-60, 60));
   // forts
   const mf = fortLanes(L.motiFort, 75), nf = fortLanes(L.naniFort, 70);
@@ -513,8 +636,11 @@ export async function buildMap(progress) {
   occMark(L.bomJesus.x - 20, L.bomJesus.z - 35, L.bomJesus.x + 20, L.bomJesus.z + 40);
   for (const ex of EXCL) { if (ex.r !== undefined) occMark(ex.x - ex.r, ex.z - ex.r, ex.x + ex.r, ex.z + ex.r); else if (ex.tag !== 'motiFort' && ex.tag !== 'naniFort') occMark(ex.x0, ex.z0, ex.x1, ex.z1); }
   // beaches: no buildings on sand
-  for (let z = -4996; z < 4996; z += 4) { const c = coastX(z); occMark(c - 400, z, c + 120, z, 3); }
-  for (let x = -3300; x < 4996; x += 4) { const rz = rivZ(x), hw = rivHalfW(x); occMark(x, rz - hw - 30, x, rz + hw + 30); }
+  for (let z = -9996; z < 9996; z += 5) { const c = coastX(z); occMark(c - 400, z, c + 120, z, 3); }
+  for (let x = -3300; x < RIVER_END + 60; x += 5) { const rz = rivZ(x), hw = rivHalfW(x); occMark(x, rz - hw - 30, x, rz + hw + 30); }
+  for (let x = -3300; x < KOLAK_END + 60; x += 5) { const rz = kolZ(x), hw = kolHalfW(x); occMark(x, rz - hw - 12, x, rz + hw + 12); }
+  occMark(PLAT.lx - PLAT.lr - 30, PLAT.lz - PLAT.lr - 30, PLAT.lx + PLAT.lr + 30, PLAT.lz + PLAT.lr + 30);
+  occMark(L.falls.x - 80, PLAT.z - 40, PLAT.lx, PLAT.z + 40);
   placeTowers();
   for (const e of edges) lotsAlong(e);
   await progress('Raising buildings', 0.65);
@@ -531,11 +657,11 @@ export async function buildMap(progress) {
   placeLights();
   await progress('Planting palms', 0.8);
   // spawns
-  spawns.start = { x: -2238, z: -760, ang: Math.PI };
+  spawns.start = { x: -2241.6, z: -760, ang: Math.PI };
   spawns.cars = [
-    { x: -2235.5, z: -800, ang: Math.PI, kind: 'super', color: 0xff6a00 }, { x: -2235.5, z: -815, ang: Math.PI, kind: 'gt', color: 0xd01020 },
-    { x: -2235.5, z: -830, ang: Math.PI, kind: 'super', color: 0x1a8cff }, { x: 120, z: 2440, ang: Math.PI / 2, kind: 'super', color: 0xffd400 },
-    { x: -2264, z: -3560, ang: 0, kind: 'gt', color: 0x22cc66 }, { x: -2265, z: 600, ang: 0, kind: 'muscle', color: 0x111111 },
+    { x: -2244.6, z: -790, ang: Math.PI, kind: 'super', color: 0xff6a00 }, { x: -2244.6, z: -805, ang: Math.PI, kind: 'gt', color: 0xd01020 },
+    { x: -2244.6, z: -820, ang: Math.PI, kind: 'super', color: 0x1a8cff }, { x: 120, z: 2440, ang: Math.PI / 2, kind: 'super', color: 0xffd400 },
+    { x: -2255.4, z: -3560, ang: 0, kind: 'gt', color: 0x22cc66 }, { x: -2255.4, z: 600, ang: 0, kind: 'muscle', color: 0x111111 },
     { x: 1250, z: 2440, ang: Math.PI / 2, kind: 'muscle', color: 0xffffff },
   ];
   spawns.heli = [{ x: L.helipad.x, z: L.helipad.z }, { x: -2420, z: -3080 }];
@@ -545,6 +671,10 @@ export async function buildMap(progress) {
     { x: coastX(-3950) + 40, z: -3950 }, { x: coastX(-4000) + 42, z: -4000 },
   ];
   spawns.hospital = { x: L.hospital.x, z: L.hospital.z + 32 };
+  spawns.horses.push({ x: 5200, z: 3500 }, { x: 5230, z: 3530 }, { x: 5180, z: 3570 }, { x: 4900, z: -2600 }, { x: 4950, z: -2650 });
+  spawns.heli.push({ x: ISLAND.x + 60, z: ISLAND.z - 80 }, { x: PLAT.x - 200, z: PLAT.z - 300 });
+  spawns.jet = [{ x: L.airport.runX0 + 140, z: L.airport.runZ + 70, ang: Math.PI / 2 }];
+  spawns.boats = [{ x: L.jetty.x + 10, z: L.jetty.z + 80 }, { x: coastX(-3800) - 60, z: -3800 }];
 }
 
 // ---------- surface query (terrain + elevated roads + ramps + roofs) ----------

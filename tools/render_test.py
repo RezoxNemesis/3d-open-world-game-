@@ -50,7 +50,7 @@ async def main():
         for n in names:
             try:
                 r = await pg.evaluate(f'window.__TEST.run({json.dumps(n)})')
-                await pg.screenshot(path=os.path.join(OUT, f'{n}.png'))
+                await pg.screenshot(path=os.path.join(OUT, f'{n}.png'), timeout=240000)
                 report[n] = r
                 print('scenario', n, json.dumps(r)[:300])
             except Exception as e:

@@ -94,12 +94,13 @@ export class SkySystem {
     this.scene.fog.color.copy(fogc); U.uFogColor.value.copy(fogc);
     const amb = new THREE.Color(0.35, 0.42, 0.55).multiplyScalar(lerp(0.12, 1, day)).lerp(new THREE.Color(0.6, 0.4, 0.35), golden * 0.3);
     U.uAmbient.value.copy(amb);
-    this.hemi.color.setRGB(0.55, 0.68, 0.9).lerp(new THREE.Color(0.08, 0.1, 0.22), night); this.hemi.groundColor.setRGB(0.42, 0.36, 0.28).lerp(new THREE.Color(0.04, 0.04, 0.06), night);
+    this.hemi.color.setRGB(0.55, 0.68, 0.9).lerp(new THREE.Color(0.2, 0.25, 0.42), night); this.hemi.groundColor.setRGB(0.42, 0.36, 0.28).lerp(new THREE.Color(0.08, 0.08, 0.1), night);
     this.hemi.intensity = lerp(0.45, 1.0, day) * (golden > 0.3 ? 0.9 : 1);
     const useMoon = sy < -0.04;
     const L = useMoon ? this.moonDir : this.sunDir;
     this.sun.color.copy(useMoon ? new THREE.Color(0.55, 0.65, 1.0) : sunCol);
-    this.sun.intensity = useMoon ? 0.45 * smooth(0, 0.25, this.moonDir.y) : 3.2 * smooth(-0.04, 0.15, sy);
+    this.sun.intensity = useMoon ? 0.7 * smooth(0, 0.25, this.moonDir.y) : 3.2 * smooth(-0.04, 0.15, sy);
+    this.sun.castShadow = !useMoon;
     // stable shadow: snap target to texel grid
     const tex = (this.range * 2) / this.sun.shadow.mapSize.x;
     const fx = Math.round(focus.x / tex) * tex, fz = Math.round(focus.z / tex) * tex;
