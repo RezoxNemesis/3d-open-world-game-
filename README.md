@@ -83,7 +83,7 @@ python3 tools/render_test.py  # headless screenshot tests (needs playwright + Ch
 
 - **Android:** CI runs `npx cap add android`, `tools/patch_android.py`, `npx cap sync` and `./gradlew assembleDebug`.
 - **Desktop installers:** `npm run dist:win`, `npm run dist:linux` or `npm run dist:mac`.
-- **Releases:** pushing a tag `v*` builds everything and publishes a GitHub Release.
+- **Releases:** every push to `main` (or a `v*` tag) builds everything and publishes a GitHub Release.
 
 ## Notes
 
