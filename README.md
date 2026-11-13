@@ -1,19 +1,94 @@
-# Temple Realm
+# Daman Duo
 
-Android-first Godot 4.7.2 open-world starter for a mobile-only developer. Target phone: Realme P1 Speed. All build work runs in Codex Cloud; no personal computer is required.
+An open-world 3D action game set in a 20 km × 20 km island version of **Daman, India**. You play as a duo, Veer and Mira, and switch between them at any time. Everything is generated in code with Three.js and WebGL2: terrain, buildings, people, cars, animals, the serpent, sky, music and sound. There are no external art or audio files.
 
-The playable slice is the Eastern Temple District. Version 0.5 adds a furnished scholar hall, an elevated western covered bridge and Fox Shrine, wisteria gardens, a two-room home, a swimming sky dragon and modeled roof tiles and joinery. Both elevated temples have real walkable stair routes. Five landmarks unlock discovered-waypoint travel. Terrain streams through a bounded 3×3 region grid. Near buildings use richer shared geometry with distance-based detail. Visuals remain stylized; reference-level realism remains in development.
+## Download
 
-Speak to Keeper Sen in the starting courtyard, recover the jade lantern from the upper Sky Temple, and return to earn a visible lantern for your traveler. The contextual action appears when you are close enough. The live north-up minimap shows nearby routes, landmarks, your camera heading and the quest destination.
+Get the latest build from the **[Releases page](../../releases/latest)**:
 
-Read three original inscriptions in the scholar hall, western bridge and shrine. After completing the lantern errand, ring the nearby shrine bell to earn a visible jade seal. SETTINGS → JOURNAL revisits earned records. The house south of the courtyard has two furnished rooms reached by a side path and front steps.
+| Device | File | How to install |
+|---|---|---|
+| Android phone | `DamanDuo-Android.apk` | Open the file on your phone. If asked, allow "Install unknown apps" for your browser or file manager. |
+| Windows PC | `DamanDuo-Windows-Setup.exe` | Run the installer. Windows SmartScreen may warn because the app is unsigned: click **More info → Run anyway**. |
+| Windows (no install) | `DamanDuo-Windows-Portable.exe` | Double-click to play. |
+| Linux | `DamanDuo-Linux.AppImage` | `chmod +x DamanDuo-Linux.AppImage`, then run it. |
+| macOS | `DamanDuo-macOS.dmg` | Drag to Applications. The app is unsigned: the first time, right-click it and choose **Open**. |
+| Any browser | `DamanDuo-Web.html` | Open it in Chrome or Edge. |
 
-On phone: drag in the lower-left movement zone for the floating analog joystick; swipe the right side to look; hold RUN to sprint; JUMP jumps; VIEW changes camera; MAP shows discovered-waypoint travel. FLY toggles collision-aware flight, with JUMP to rise, DOWN to descend and RUN to boost. Hold and release LEAP for a huge charged jump. SPEED toggles fast ground travel; RUN boosts it further. SMASH breaks nearby marked mountain formations, including their collision. Three specific crags can be broken; general terrain excavation is not implemented.
+Every push also builds these files as workflow artifacts under **Actions → Build Daman Duo**.
 
-SETTINGS contains quality presets, look sensitivity, camera distance, pad size, optional edge-of-pad sprint assistance and SAVE/LOAD. Android automatically checkpoints earned milestones. Schema5 saves location, discoveries, quest/journal/reward progress, hero modes and destroyed formations; older saves migrate safely. Opening dialogue, map or settings releases gestures and pauses character movement. Keyboard cloud-test controls: WASD/arrows, Shift, Space, V, E, F5/F9, M, Esc; F toggles flight, Q charges a leap, G toggles speed, R smashes and C descends.
+The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows, ambient occlusion, bloom, MSAA, dense grass and the full crowd. The **phone** build starts on the **Mobile** preset with touch controls. You can switch presets (Low / Mobile / High / Ultra) and the crowd size (50K – 3 lakh) on the title screen or in the pause menu.
 
-Cloud setup: `tools/setup_environment.sh`. Validate: `tools/validate_environment.sh`. Build APK: `tools/export_android.sh`. The local APK is `artifacts/TempleRealm-Android-debug.apk`. Delivery uses the GitHub Actions **Temple Realm Android APK** workflow: sign into GitHub, download its APK artifact ZIP, extract it on Android, and open the APK. The workflow summary contains the actual artifact download link. A debug build is for testing, not store distribution.
+## The world
 
-Use SETTINGS → RESTORE MOUNTAIN CRAGS to rebuild the three formations for another round of smashing while keeping earned journey progress.
+- **Daman Ganga river** splits **Nani Daman** from **Moti Daman**, with bridges, the jetty and the Kachigam docks.
+- **Landmarks:** Moti Daman Fort, Nani Daman Fort (St. Jerome), Bom Jesus Church, Our Lady of the Sea, the lighthouse, Devka and Jampore beaches, the Sky Tower (260 m), the ferris wheel, the stadium, the airport and helipad, and the hospital.
+- **Kolak river**, salt pans, a wind farm, and 28 villages linked by farm roads, with crop fields worked by farmers.
+- **Jungle** in the eastern hills, home to horses, deer, elephants, tigers, langurs and peacocks.
+- **High mountains:** ridged peaks up to about 1.8 km, a grade-limited ghat road up to a **plateau lake**, a **waterfall**, and caves to explore.
+- **Kalpa Island** resort and the **Pani Kotha** sea fort.
+- More than 17,000 buildings, each with procedural windows, balconies, shop signs and lit rooms at night. Homes, shops and cafés can be entered and have interiors.
+- Up to **3 lakh (300,000) people** on the map, animated on the GPU, plus live traffic driving on the left.
 
-See [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [test evidence](docs/TEST_RESULTS.md), [security](docs/SECURITY.md) and [asset licenses](docs/ASSET_LICENSES.md). Six workflows are discoverable in `.agents/skills/`.
+## What you can do
+
+- **Drive** fictional supercars, hypercars, classics, premium sedans, SUVs, a 4x4, autos, buses, trucks and scooters. Includes nitro, drifting and jumps off ramps.
+- **Fly** a plane, a helicopter and a **fighter jet** with cannon and missiles. You can also take boats.
+- **Ride horses**, with walk, trot, canter, gallop and jumps.
+- **Parkour:** climb walls, mantle, vault, roll, flip and swim.
+- **Web-swing** between towers, Spider-Man style.
+- **Skydive** and open a **parachute**, or glide.
+- **Fight** with jabs, crosses, hooks, uppercuts, kicks, roundhouses, flying kicks and blocks. Use a pistol or rifle. A wanted-star system brings the police after you.
+- **Make masala chai:** at a chai tapri or on the stove in any home kitchen. It heals both heroes.
+- **Fight the Naag:** a 500 m long giant serpent with a hood, venom spit and body crush. Its forehead gem is the weak point.
+- **Play 8 story missions:** Chai Pe Charcha, Fort Run, Kaala Naag Gang, Devka Dash, Sky Tower Dive, Wings Over Daman, Into the Jungle, and The Serpent Awakens.
+- **Time and weather:** a day–night cycle (morning, afternoon, golden-hour evening, starry night). Four seasons: summer, **monsoon** (rain, wet roads, lightning), post-monsoon and winter mist.
+- **Music and voices:** a procedural Indian soundtrack (sitar, tabla, dhol, bansuri, drones) that changes raga with the time of day and the action. The heroes speak through the device's text-to-speech, with subtitles.
+- **Fast travel** by tapping a place on the full map. The game autosaves every minute.
+
+## Controls
+
+**On foot**
+
+| Action | Keyboard / mouse | Gamepad | Touch |
+|---|---|---|---|
+| Move · look | WASD · mouse | Left stick · right stick | Left stick · drag on the right side |
+| Jump · sprint | Space · Shift | A · press left stick | JUMP · SPRINT |
+| Punch (or fire a gun) · aim | Left click · right click | X or RT · LT | PUNCH / FIRE · AIM |
+| Kick · roll · drop down | E · X · C or Ctrl | B · — · — | KICK · ROLL |
+| Interact: enter a vehicle, mount, make chai, doors, caves | F | Y | F (appears when available) |
+| Web swing · parachute | R · G | RB · — | WEB · CHUTE |
+| Switch hero | Q | LB | ⇄ |
+| Change weapon | Tab or 1–4 | Back/View | GUN |
+| Map · pause menu | M · Esc | D-pad up · Start/Menu | MAP · ❚❚ |
+| Camera · horn | V · H | Press right stick · — | CAM · HORN |
+
+**In vehicles**
+
+| Vehicle | Controls |
+|---|---|
+| Car | W/S accelerate and brake, A/D steer, Space handbrake for drifting, Shift nitro, F exit |
+| Helicopter | Space climb, C descend, WASD fly, Z/Y turn, left click fire |
+| Plane / fighter jet | Space throttle up, C throttle down, WASD pitch and roll, Shift afterburner; on the jet, left click cannon and E missile |
+| Horse | W ride, Shift gallop, Space jump, F dismount |
+
+## Building from source
+
+```bash
+npm ci
+npm run build                 # dist/index.html + dist/game.js, and dist-single/index.html (one file)
+npm start                     # run the desktop (Electron) build
+python3 tools/render_test.py  # headless screenshot tests (needs playwright + Chrome)
+```
+
+- **Android:** CI runs `npx cap add android`, `tools/patch_android.py`, `npx cap sync` and `./gradlew assembleDebug`.
+- **Desktop installers:** `npm run dist:win`, `npm run dist:linux` or `npm run dist:mac`.
+- **Releases:** pushing a tag `v*` builds everything and publishes a GitHub Release.
+
+## Notes
+
+- All vehicle brands (Vayu, Agni, Shera, Bison, Royal Amba, Sterling…) are fictional and inspired by real car classes.
+- The game aims for a stylized-realistic look. Because everything is generated by code, there are no scanned textures or motion capture.
+- The previous project in this repository, *Temple Realm* (Godot), is preserved on the `temple-realm-archive` branch.
+
+MIT License.

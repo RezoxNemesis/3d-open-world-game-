@@ -1,0 +1,7 @@
+{
+  "appId": "com.rezoxnemesis.damanduo",
+  "appName": "Daman Duo",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#000000", "allowMixedContent": false, "webContentsDebuggingEnabled": false },
+  "plugins": { "SplashScreen": { "launchShowDuration": 0 } }
+}
