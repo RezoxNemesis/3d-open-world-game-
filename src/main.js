@@ -28,6 +28,17 @@ async function start(opts) {
   presetKey = opts.preset; try { localStorage.setItem('damanduo.preset', presetKey); localStorage.setItem('damanduo.crowd', String(opts.crowd)); } catch (e) {}
   const q = { ...PRESETS[presetKey], crowd: TEST ? Math.min(opts.crowd, 60000) : opts.crowd };
   if (!TEST) { initAudio(); if (platform !== 'desktop' && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); }
+  // cinematic colour grade baked into the ACES tone mapper: costs nothing extra (no post pass) and applies on every
+  // device and path (direct rendering on phones, OutputPass on desktop): richer saturation, cool shadows,
+  // warm highlights and a gentle filmic S-curve
+  THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+    /color = ACESOutputMat \* color;\s*(\/\/[^\n]*\n\s*)?return saturate\( color \);/,
+    `\tcolor = saturate( ACESOutputMat * color );
+\tfloat gl = dot( color, vec3( 0.2126, 0.7152, 0.0722 ) );
+\tcolor = max( mix( vec3( gl ), color, 1.13 ), 0.0 );
+\tcolor *= mix( vec3( 0.95, 1.0, 1.06 ), vec3( 1.045, 1.0, 0.94 ), smoothstep( 0.03, 0.55, gl ) );
+\tcolor = mix( color, color * color * ( 3.0 - 2.0 * color ), 0.22 );
+\treturn saturate( color );`);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !q.bloom && !q.ao && !TEST, powerPreference: 'high-performance', stencil: false });
   const basePR = TEST ? 1 : Math.min(devicePixelRatio || 1, q.pixelRatio);
   renderer.setPixelRatio(basePR); renderer.setSize(innerWidth, innerHeight);
@@ -132,6 +143,8 @@ function setupTests(game) {
       const u = game.police.units[0]; if (u) game.camOverride = () => ({ pos: u.v.pos.clone().add(new THREE.Vector3(6, 3.2, 8)), look: u.v.pos.clone().add(new THREE.Vector3(0, 0.8, 0)) }); step(2); game.npcs.wanted = 0; },
     freeflow: () => { const p = game.player; at(-2238, -760, 0); game.sky.hour = 17.4; const foes = game.npcs.spawnGang(5, -2238, -752, false); for (const e of foes) { e.weapon = 0; e.pos.set(-2238 + (Math.random() - 0.5) * 7, p.pos.y, -755 + Math.random() * 5); }
       for (let i = 0; i < 110; i++) { if (game.counterTarget(p)) window.__press('counter'); else if (i % 6 === 0) window.__press('click'); game.update(1 / 30); } game.rig.zoom = 1.3; game.rig.pitch = 0.18; step(1); },
+    street_wires: () => { const n = M.poles[Math.floor(M.poles.length * 0.31)]; at(n.x + 4, n.z + 4, n.ang); game.sky.hour = 17.8; game.rig.pitch = -0.12; game.rig.zoom = 1.4; step(4); game.rig.zoom = 1; },
+    photo_mode: () => { at(-2238, -770, Math.PI); game.sky.hour = 18.1; step(2); game.startPhoto(); input.my = 0; game.photo.pitch = -0.05; game.photo.pos.y += 6; for (let i = 0; i < 4; i++) { game.update(1 / 30); game.render(); } game.stopPhoto(); },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

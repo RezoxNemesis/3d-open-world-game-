@@ -236,6 +236,40 @@ function buildRoads(scene, stoneMat, q) {
   kit.build({ concrete: stoneMat.concrete }, scene);
 }
 
+// ---------------- electric poles + sagging overhead wires ----------------
+function buildPoles(scene, q) {
+  if (!M.poles.length) return;
+  const parts = [];
+  parts.push(prep(new THREE.CylinderGeometry(0.11, 0.17, 8.6, 8).translate(0, 4.3, 0), 0xb9b4a8));
+  parts.push(prep(new THREE.BoxGeometry(1.7, 0.12, 0.12).translate(0, 7.7, 0), 0x6b6b6b));
+  for (const x of [-0.7, 0, 0.7]) parts.push(prep(new THREE.CylinderGeometry(0.04, 0.05, 0.22, 6).translate(x, 7.87, 0), 0xd8d8d8));
+  parts.push(prep(new THREE.BoxGeometry(0.9, 0.12, 0.12).translate(0, 6.9, 0), 0x6b6b6b));
+  const geo = mergeGeometries(parts), tgeo = mergeGeometries([...parts.map((g) => g.clone()), prep(new THREE.BoxGeometry(0.85, 1.1, 0.6).translate(0, 5.4, 0.42), 0x7d8a80), prep(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5).translate(0.2, 6.2, 0.42), 0x333333)]);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+  const far = q.desktop ? 900 : 420;
+  for (const [g, list] of [[geo, M.poles.filter((p) => !p.tr)], [tgeo, M.poles.filter((p) => p.tr)]]) {
+    instTiles(scene, g, mat, list, 500, far, (m, p, i) => { _m.compose(_p.set(p.x, p.y, p.z), _q.setFromEuler(_e.set(0, p.ang + Math.PI / 2, 0)), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
+  }
+  // wires: three conductors per span, parabolic sag, merged into line segments per tile
+  const tiles = new Map();
+  for (const [a, b] of M.wires) {
+    const A = M.poles[a], B = M.poles[b], k = Math.floor(((A.x + B.x) / 2 + M.HALF) / 500) + Math.floor(((A.z + B.z) / 2 + M.HALF) / 500) * 1000;
+    if (!tiles.has(k)) tiles.set(k, []); const arr = tiles.get(k);
+    const len = Math.hypot(B.x - A.x, B.z - A.z), sag = 0.35 + len * 0.018, ca = Math.cos(A.ang + Math.PI / 2), sa = Math.sin(A.ang + Math.PI / 2), cb = Math.cos(B.ang + Math.PI / 2), sb = Math.sin(B.ang + Math.PI / 2);
+    for (const o of [-0.7, 0, 0.7]) {
+      const ax = A.x + o * ca, az = A.z - o * sa, bx = B.x + o * cb, bz = B.z - o * sb, ay = A.y + 7.95, by = B.y + 7.95;
+      let px = ax, py = ay, pz = az;
+      for (let i = 1; i <= 8; i++) { const t = i / 8, x = lerp(ax, bx, t), z = lerp(az, bz, t), y = lerp(ay, by, t) - sag * 4 * t * (1 - t) * (1 + 0.15 * o); arr.push(px, py, pz, x, y, z); px = x; py = y; pz = z; }
+    }
+  }
+  const wmat = new THREE.LineBasicMaterial({ color: 0x161616 });
+  for (const [k, arr] of tiles) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+    const L = new THREE.LineSegments(g, wmat); scene.add(L);
+    regLod(L, (k % 1000) * 500 - M.HALF + 250, Math.floor(k / 1000) * 500 - M.HALF + 250, far * 0.8);
+  }
+}
+
 // ---------------- buildings ----------------
 function buildBuildings(scene, q) {
   const B = M.buildings, n = B.length;
@@ -1241,6 +1275,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
   buildEstates(scene, q, mats, TX, regLod, addCol);
+  buildPoles(scene, q);
   world.labels.push({ name: 'Jampore Villa Colony', x: M.L.villas.x, z: M.L.villas.z });
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);

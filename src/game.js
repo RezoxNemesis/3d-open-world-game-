@@ -415,6 +415,26 @@ export class Game {
       case 'buy': if (this.money >= 500) { this.money -= 500; for (const h of this.heroes) h.armor = 100; for (const h of this.heroes) { h.ammo.pistol += 60; h.ammo.rifle += 120; } sfx('coin'); this.hud.toast('Armour + ammo', 2, '#4fc3f7'); } break;
     }
   }
+  // ---------------- photo mode: frozen world, free-flying camera, HUD hidden ----------------
+  startPhoto() {
+    this.hud.closeMenu(); this.paused = false;
+    this.photo = { yaw: this.rig.yaw, pitch: this.rig.pitch, pos: this.cam.position.clone() };
+    document.body.classList.add('photo'); this.hud.photoUI(true);
+  }
+  stopPhoto() { this.photo = null; document.body.classList.remove('photo'); this.hud.photoUI(false); }
+  updatePhoto(dt) {
+    const I = input, ph = this.photo, held = (a) => I.held.has(a);
+    if (I.pressed.has('pause') || I.pressed.has('interact')) { this.stopPhoto(); return; }
+    ph.yaw -= I.lookX; ph.pitch = clamp(ph.pitch + I.lookY, -1.45, 1.45);
+    const cp = Math.cos(ph.pitch), f = new V3(-Math.sin(ph.yaw) * cp, -Math.sin(ph.pitch), -Math.cos(ph.yaw) * cp), r = new V3(Math.cos(ph.yaw), 0, -Math.sin(ph.yaw));
+    const sp = held('sprint') ? 32 : 8;
+    ph.pos.addScaledVector(f, (I.my || 0) * sp * dt).addScaledVector(r, (I.mx || 0) * sp * dt);
+    ph.pos.y += ((held('jump') ? 1 : 0) - (held('down') ? 1 : 0)) * sp * 0.6 * dt + (I.wheel || 0) * -0.8;
+    const P = this.playerPos(); if (ph.pos.distanceTo(P) > 250) ph.pos.sub(P).setLength(250).add(P);        // stay near the scene you are framing
+    ph.pos.y = Math.max(ph.pos.y, M.groundAt(ph.pos.x, ph.pos.z) + 0.3);
+    this.cam.position.copy(ph.pos); this.cam.lookAt(ph.pos.clone().add(f));
+    this.uw.update(0);
+  }
   // ---------------- companion AI ----------------
   companionCtl(dt, c = this.companion, slot = 0) {
     const L = this.player, ctl = { move: new V3() };
@@ -440,6 +460,7 @@ export class Game {
   update(dt) {
     pollInput();
     const I = input, held = (a) => I.held.has(a), pr = (a) => I.pressed.has(a);
+    if (this.photo) { this.updatePhoto(dt); endFrame(); return; }
     if (pr('pause')) { this.paused ? this.hud.closeMenu() : this.hud.openMenu(); }
     if (pr('map')) { this.hud.mapEl.style.display === 'flex' ? this.hud.closeMap() : this.hud.openMap(); }
     if (this.paused) { endFrame(); return; }
