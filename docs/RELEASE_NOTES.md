@@ -1,3 +1,15 @@
+## Daman Duo — v1.8 "Golden Daman" update
+
+**What's new in 1.8**
+- **Real photo skies:** ten CC0 photographed skies (Poly Haven) crossfade through the day: dawn, sunrise, a cumulus noon, a hazy afternoon, golden hour, a dramatic sunset, pink dusk, blue hour and a starry night. Rain blends in an overcast sky. The sea, wet sand and every shiny surface reflect the real sky, and the lighting is baked from it.
+- **Realistic sun path:** the sun now follows Daman's November arc (about 52 degrees at noon), so shadows are long and soft all day. A big cinematic moon with a halo hangs low over the sea at night.
+- **Devka Sea Face promenade:** a new seafront drive with a wide paver walkway, black-and-white curbs, bougainvillea beds, Victorian triple-lantern lamp posts, benches facing the sea, palms in stone planters, yellow gate pillars and a welcome arch. A stone sea wall with iron bollards and chains runs along it, with steps down to the beach.
+- **Photo-scanned shore:** CC0 scanned boulders, rock clusters and rocky shelves (processed in Blender) line the sea wall and the surf.
+- **Night lights:** soft glows around every lamp, light pools on the roads and walkway, and long lamp reflections on wet roads after rain.
+- **Sea and beach:** turquoise shallows, rolling surf lines that break into whitewash, sun glitter, and glossy wet sand at the waterline.
+- **Fishing fleet:** painted wooden Daman fishing boats hauled up on Devka and Jampore beaches (flags, nets, cabins), plus more riding at anchor.
+- **Fixes:** the old "dotted road" artefact is gone (a precision bug in the road shader), and mission markers and boss beacons are now soft columns of light.
+
 ## Daman Duo — v1.7 "Real People" update
 
 **What's new in 1.7**
