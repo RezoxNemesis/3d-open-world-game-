@@ -447,6 +447,8 @@ export class Game {
     const P = this.playerPos(); if (ph.pos.distanceTo(P) > 250) ph.pos.sub(P).setLength(250).add(P);        // stay near the scene you are framing
     ph.pos.y = Math.max(ph.pos.y, M.groundAt(ph.pos.x, ph.pos.z) + 0.3);
     this.cam.position.copy(ph.pos); this.cam.lookAt(ph.pos.clone().add(f));
+    // keep the camera-centred world (terrain LOD, near trees, tiles, grass, crowd, rain) following the photo camera
+    const cpos = this.cam.position; updateTerrain(cpos, this.q); updateTrees(cpos, this.q); updateWorldLOD(cpos); updateGrass(cpos); updateCrowd(cpos, this.q, this.inside); updateRain(cpos);
     this.uw.update(0);
   }
   // ---------------- companion AI ----------------

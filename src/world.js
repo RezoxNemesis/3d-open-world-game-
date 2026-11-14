@@ -256,14 +256,14 @@ function buildPoles(scene, q) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   const far = q.desktop ? 900 : 420;
   for (const [g, list] of [[geo, M.poles.filter((p) => !p.tr)], [tgeo, M.poles.filter((p) => p.tr)]]) {
-    instTiles(scene, g, mat, list, 500, far, (m, p, i) => { _m.compose(_p.set(p.x, p.y, p.z), _q.setFromEuler(_e.set(0, p.ang + Math.PI / 2, 0)), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
+    instTiles(scene, g, mat, list, 500, far, (m, p, i) => { _m.compose(_p.set(p.x, p.y, p.z), _q.setFromEuler(_e.set(0, p.ang, 0)), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
   }
   // wires: three conductors per span, parabolic sag, merged into line segments per tile
   const tiles = new Map();
   for (const [a, b] of M.wires) {
     const A = M.poles[a], B = M.poles[b], k = Math.floor(((A.x + B.x) / 2 + M.HALF) / 500) + Math.floor(((A.z + B.z) / 2 + M.HALF) / 500) * 1000;
     if (!tiles.has(k)) tiles.set(k, []); const arr = tiles.get(k);
-    const len = Math.hypot(B.x - A.x, B.z - A.z), sag = 0.35 + len * 0.018, ca = Math.cos(A.ang + Math.PI / 2), sa = Math.sin(A.ang + Math.PI / 2), cb = Math.cos(B.ang + Math.PI / 2), sb = Math.sin(B.ang + Math.PI / 2);
+    const len = Math.hypot(B.x - A.x, B.z - A.z), sag = 0.35 + len * 0.018, ca = Math.cos(A.ang), sa = Math.sin(A.ang), cb = Math.cos(B.ang), sb = Math.sin(B.ang);   // crossarm axis = across the road
     for (const o of [-0.7, 0, 0.7]) {
       const ax = A.x + o * ca, az = A.z - o * sa, bx = B.x + o * cb, bz = B.z - o * sb, ay = A.y + 7.95, by = B.y + 7.95;
       let px = ax, py = ay, pz = az;
