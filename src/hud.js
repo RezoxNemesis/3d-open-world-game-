@@ -198,7 +198,9 @@ export class HUD {
     const b = this.menuBody; b.innerHTML = '';
     const sec = (t) => $('div', { class: 'lbl', text: t, style: 'margin:14px 0 4px;opacity:.7;letter-spacing:.2em;font-size:12px' }, b);
     sec('MISSIONS');
-    for (const ms of g.missions.list) { const r = $('div', { class: 'setrow' }, b); $('span', { text: (ms.done ? '✔ ' : '') + ms.name + ' — ' + ms.desc }, r); const go = $('button', { class: 'btn alt', text: ms.done ? 'REPLAY' : 'START' }, r); go.onclick = () => { this.closeMenu(); g.missions.start(ms.id); }; }
+    for (const ms of g.missions.list) { const r = $('div', { class: 'setrow' }, b), dn = g.missions.done.has(ms.id);
+      if (g.missions.locked(ms)) { $('span', { text: `🔒 ${ms.name} — complete ${ms.needs} missions to unlock`, style: 'opacity:.55' }, r); continue; }
+      $('span', { text: (dn ? '✔ ' : '') + ms.name + ' — ' + ms.desc }, r); const go = $('button', { class: 'btn alt', text: dn ? 'REPLAY' : 'START' }, r); go.onclick = () => { this.closeMenu(); g.missions.start(ms.id); }; }
     { const r = $('div', { class: 'setrow' }, b); const ph = $('button', { class: 'btn', text: '📷 PHOTO MODE' }, r); ph.onclick = () => g.startPhoto(); }
     sec('BOSSES');
     for (const bs of g.bosses || []) {

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
 import { U, NOISE, patch } from './shaders.js';
+import { ATMO_GLSL, atmoUniforms } from './atmo.js';
 import { TEX_GLSL } from './textures.js';
 import { fbm, smooth, clamp, lerp, mulberry32 } from './util.js';
 
@@ -148,6 +149,29 @@ export function terrainMaterial(TX, splat, q) {
       float wF = sp.b, wFo = sp.g;
       float kR = rk, kS = wS*(1.-rk), kU = wU*(1.-wS)*(1.-rk), kF = wF*(1.-wU)*(1.-wS)*(1.-rk);
       float kFo = wFo*(1.-wF)*(1.-wU)*(1.-wS)*(1.-rk), kG = max(0., 1. - kR - kS - kU - kF - kFo);
+      // town ground: not one sheet of bare earth but an irregular patchwork of yards (concrete, paving, garden, packed earth)
+      float kUe = kU, kUp = 0.; vec3 plotC = vec3(0.6);
+      float plotK = smoothstep(0.765, 0.795, sp.a);        // towns and industry only (river mud and villages keep their earth)
+      if (kU*plotK > 0.004) {
+        const vec2 PS = vec2(19.0, 14.0);
+        vec2 q = p/PS; q.x += h21(vec2(floor(q.y), 3.7))*0.7;
+        vec2 ci = floor(q), cf = fract(q), ed = min(cf, 1. - cf)*PS;
+        float hT = fract(h21(ci) + (nm - 0.5)*0.6), hV = h21(ci + 17.3);
+        float lw = max(0.16, camD*0.002);
+        float edge = 1. - smoothstep(lw, lw*1.8, min(ed.x, ed.y));             // kerb round each plot
+        float garden = step(0.52, hT)*step(hT, 0.80)*(1. - edge), paved = max(step(hT, 0.52), edge);
+        float kUg = kU*plotK*garden; kUp = kU*plotK*paved*(1. - garden); kUe = max(0., kU - kUg - kUp); kG += kUg;
+        vec3 conc = vec3(0.60, 0.59, 0.56)*(0.82 + 0.3*hV);
+        vec3 tile = mix(vec3(0.60, 0.40, 0.31), vec3(0.50, 0.47, 0.44), step(0.5, hV))*(0.85 + 0.3*fract(hV*7.));
+        float slab = step(hT, 0.34);
+        plotC = mix(mix(tile, conc, slab), vec3(0.70, 0.69, 0.66), edge);
+        if (gNear > 0.0) {
+          // slab joints / paving courses, close up only (they fade before they can shimmer)
+          float sc = mix(0.55, 3.0, slab), jw = (0.02 + camD*0.0015)/sc; vec2 sj = abs(fract(p/sc) - 0.5);
+          float joint = smoothstep(0.5 - jw, 0.5 - jw*0.4, max(sj.x, sj.y));
+          plotC *= 1. - joint*0.28*gNear*(1. - edge)*(1. - smoothstep(sc*8., sc*28., camD));
+        }
+      }
       vec3 col = vec3(0.), nrm = vec3(0.);
       vec3 gc = vec3(0.), dummy = vec3(0.);
       layer(uGrassD, uGrassN, p, 0.42, kG, gc, nrm);
@@ -166,7 +190,9 @@ export function terrainMaterial(TX, splat, q) {
         vec3 fieldC = mix(soilC, crop*(0.75 + 0.5*dot(soilC, vec3(0.5))), cover*rows*(1.-bund));
         col += fieldC*kF;
       }
-      layer(uGroundD, uGroundN, p, 0.33, kU, col, nrm);
+      { vec3 uc = vec3(0.); float kk = kUe + kUp; layer(uGroundD, uGroundN, p, 0.33, kk, uc, nrm);
+        vec3 base = uc/max(kk, 0.001);                                           // the earth texture; paved yards borrow its grain
+        col += base*kUe + plotC*(0.55 + 0.9*dot(base, vec3(0.333)))*kUp; }
       layer(uSandD, uSandN, p, 0.24, kS, col, nrm);
       if (kR > 0.004) {
         #if HIGHQ == 1
@@ -277,11 +303,12 @@ export function updateTerrain(cam, q, force = false) {
 // ---------- water ----------
 export function waterMaterial(level, hTex) {
   return new THREE.ShaderMaterial({
-    transparent: true, side: THREE.DoubleSide, uniforms: { ...U, uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level },
+    transparent: true, side: THREE.DoubleSide, uniforms: { ...U, ...atmoUniforms(), uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level },
       // photo-sky reflection (the sky system swaps in its own uniform objects once the photos are loaded)
       uPA: { value: null }, uPB: { value: null }, uPO: { value: null }, uRot: { value: new THREE.Vector3() }, uSc: { value: new THREE.Vector3(1, 1, 1) }, uMix: { value: 0 }, uOver: { value: 0 }, uPhoto: { value: 0 }, uElMin: { value: -6 } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
-    fragmentShader: `uniform float uTime,uNight,uFogDensity,uLevel,uRain; uniform vec3 uSunDir,uSunColor,uZenith,uHorizon,uFogColor,uAmbient; varying vec3 vW;
+    fragmentShader: `uniform float uTime,uNight,uFogDensity,uLevel,uRain; uniform vec3 uSunDir,uSunColor,uZenith,uHorizon,uFogColor,uFogSun,uAmbient; varying vec3 vW;
+    ${ATMO_GLSL}
     uniform sampler2D uPA, uPB, uPO; uniform vec3 uRot, uSc; uniform float uMix, uOver, uPhoto, uElMin;
     vec3 photo(sampler2D t, float rot, vec3 d){
       float az = atan(d.x, d.z) - rot, el = degrees(asin(clamp(d.y, -1., 1.)));
@@ -343,8 +370,9 @@ export function waterMaterial(level, hTex) {
       col = mix(col, vec3(0.95)*(light*1.05 + uSunColor*0.25*max(uSunDir.y, 0.)), foam);
       float alpha = mix(0.4, 1., smoothstep(0., murky > 0.5 ? 2.5 : 8., depth)) * mix(1., 0.85, (1. - fres)*(1. - murky)*(1. - smoothstep(4., 16., depth)));
       alpha = mix(alpha, 1.0, smoothstep(0.12, 0.6, fres));   // grazing views see the reflection, not the sand below
-      float f = 1. - exp(-uFogDensity*uFogDensity*dist*dist);
-      col = mix(col, uFogColor, f);
+      vec3 ray = vW - cameraPosition;
+      float f = ddFogAmt(ray, uFogDensity);
+      col = mix(col, mix(uFogColor, uFogSun, ddSunK(ray)), f);     // same haze as the land (atmo.js)
       gl_FragColor = vec4(col, max(alpha, f));
       #include <tonemapping_fragment>
       #include <colorspace_fragment>

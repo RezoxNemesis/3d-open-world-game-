@@ -3,12 +3,14 @@ import * as THREE from 'three';
 import * as M from './mapdata.js';
 import { say, sfx, setMood } from './audio.js';
 import { U } from './shaders.js';
+import { showChoice } from './choice.js';
 
 export class Missions {
   constructor(game) {
     this.game = game; this.cur = null; this.step = 0; this.done = new Set(); this.objs = []; this.timer = 0;
     const L = M.L, ap = L.airport;
     const fort = L.motiFort;
+    this.riftSite = { x: fort.x1 + 85, z: (fort.z0 + fort.z1) / 2 };   // open ground east of the fort gate
     this.list = [
       { id: 'fort', name: 'Fort Run', desc: 'Parkour race over Moti Daman Fort to the lighthouse', reward: 5000, steps: [
         { goto: { x: fort.x1 + 22, z: (fort.z0 + fort.z1) / 2 }, r: 12, text: 'Go to the east gate of Moti Daman Fort' },
@@ -17,7 +19,10 @@ export class Missions {
       { id: 'gang', name: 'Kaala Naag Gang', desc: 'Clear the gang from Kachigam Docks', reward: 10000, steps: [
         { goto: { x: L.hideout.x - 120, z: L.hideout.z - 100 }, r: 20, text: 'Drive to Kachigam Docks' },
         { say: [['Vikas', 'There they are. Ten of them... and their boss.'], ['Mira', 'Stay close. I will cover you.']] },
-        { kill: { n: 10, boss: true }, text: 'Defeat the Kaala Naag gang' }, { say: [['Mira', 'Docks are clear. But that boss kept talking about a serpent...']] }] },
+        { kill: { n: 10, boss: true }, text: 'Defeat the Kaala Naag gang' }, { say: [['Mira', 'Docks are clear. But that boss kept talking about a serpent...']] },
+        { choice: { id: 'gang', title: 'The gang boss is at your feet', text: 'He is beaten and the docks are quiet. Mira looks at you. What happens to him is your call.', options: [
+          { key: 'police', label: 'Hand him to the Daman Police', sub: 'A ₹5,000 reward, and the police go easier on you from now on: wanted stars fade twice as fast.', money: 5000, say: [['Mira', 'Clean. Inspector Desai owes us one now.']] },
+          { key: 'cash', label: 'Take his cash and let him run', sub: '₹20,000 now. But the Kaala Naag gang will come looking for you in town.', money: 20000, say: [['Vikas', 'Run. And tell your friends who sent you.'], ['Mira', 'They will come back for that money, you know.']] }] } }] },
       { id: 'dash', name: 'Devka Dash', desc: 'Supercar race up the coast to Devka', reward: 8000, steps: [
         { spawnCar: 'rakshas', text: 'Get in the Vayu Rakshas' }, { inCar: true, text: 'Get in the Vayu Rakshas' },
         { cps: [{ x: M.coastRoadX(-900), z: -900 }, { x: M.coastRoadX(-1800), z: -1800 }, { x: M.coastRoadX(-2700), z: -2700 }, { x: M.coastRoadX(-3600), z: -3600 }, { x: M.coastRoadX(-4300), z: -4300 }], time: 95, r: 16, text: 'Race to Devka!' }] },
@@ -72,6 +77,15 @@ export class Missions {
         { say: [['Arjun', 'Herders in the Ghats saw a giant with horns and a golden mace.'], ['Vikas', 'Then we climb. The gem on his chest — that is his heart.']] },
         { bossFight: 'rakshasa', text: 'Defeat the Maha Rakshasa — strike the gem on his chest!' },
         { say: [['Mira', 'Vikas... you are flying.'], ['Vikas', 'Daman has a new guardian now.']] }] },
+      { id: 'rift', name: 'The Sky Tears Open', desc: 'A rift has opened over Moti Daman. Break its three anchors', reward: 75000, needs: 3, rift: true, steps: [
+        { say: [['Mira', 'Vikas... the sky over the fort. It is tearing.'], ['Arjun', 'Things are walking out of it. Shades. They are not from here.'], ['Vikas', 'Three anchors hold it open. We break them, it closes.']] },
+        { rift: 'open' },
+        { seal: true, text: 'Stand inside an anchor ring until it breaks' },
+        { say: [['Arjun', 'It is shut. All that is left is this shard. It is still warm.'], ['Mira', 'It hums. Like it wants to open again.']] },
+        { choice: { id: 'rift', title: 'The rift shard', text: 'The tear is closed. One shard of it fell at your feet, still alive with whatever is on the other side. Daman will live with what you do next.', options: [
+          { key: 'shatter', label: 'Shatter it', sub: 'The rifts end here. Daman is safe, and the town rewards its guardians: + ₹50,000.', money: 50000, say: [['Vikas', 'Whatever is on the other side stays there.'], ['Mira', 'Good. I did not like how it looked at us.']] },
+          { key: 'keep', label: 'Keep it', sub: 'New power: Rift Step, a short jump through the tear. But the shard pulls small rifts open around you from time to time.', power: 'blink', say: [['Vikas', 'If it can open doors, I want the key.'], ['Arjun', 'Then be ready. Doors open both ways.']] },
+          { key: 'lab', label: 'Give it to Arjun for the Navy lab', sub: '₹20,000 now and rift-forged rounds: your rifle and pistol hit 60% harder.', money: 20000, say: [['Arjun', 'The lab will learn more from this in a week than in ten years.'], ['Vikas', 'Just make sure they keep the lid on it.']] }] } }] },
     ];
   }
   // where each mission is picked up in the world
@@ -80,10 +94,12 @@ export class Missions {
     const at = { chai: L.jetty, fort: { x: fort.x1 + 22, z: (fort.z0 + fort.z1) / 2 }, gang: { x: L.hideout.x - 140, z: L.hideout.z - 110 }, dash: { x: -2236, z: -800 }, sky: g.world.skyBase,
       wings: { x: L.airport.runX0 + 120, z: L.airport.runZ + 90 }, jungle: { x: L.jungleCamp.x, z: L.jungleCamp.z }, naag: this.resolve('naagcave'), sunken: { x: M.coastX(3320) + 45, z: 3320 },
       bulletrun: { x: M.ZONES.villa.x0 - 16, z: 3410 }, pursuit: { x: -2120, z: -1480 }, streetkings: { x: M.L.devkaBeach.x + 30, z: M.L.devkaBeach.z }, mahal: this.resolve('palace'),
-      makara: { x: M.coastX(-3450) + 40, z: -3450 }, rakshasa: g.rakshasa ? g.rakshasa.home() : null }[m.id];
+      makara: { x: M.coastX(-3450) + 40, z: -3450 }, rakshasa: g.rakshasa ? g.rakshasa.home() : null, rift: { x: this.riftSite.x + 34, z: this.riftSite.z } }[m.id];
     return at ? { x: at.x, z: at.z } : null;
   }
-  starts() { if (this.cur) return []; const out = []; for (const m of this.list) { if (this.done.has(m.id)) continue; const p = this.startAt(m); if (p) out.push({ m, x: p.x, z: p.z }); } return out; }
+  // a mission with `needs` only appears once that many others are done
+  locked(m) { return !!m.needs && !this.done.has(m.id) && [...this.done].filter((id) => id !== m.id).length < m.needs; }
+  starts() { if (this.cur) return []; const out = []; for (const m of this.list) { if (this.done.has(m.id) || this.locked(m)) continue; const p = this.startAt(m); if (p) out.push({ m, x: p.x, z: p.z }); } return out; }
   updateStarts(dt) {
     const g = this.game, P = g.playerPos(), list = this.starts();
     if (!this.startMeshes) { this.startMeshes = new Map(); this.startMat = markerMat(0xffd54f, 0.42); this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }); }
@@ -121,6 +137,7 @@ export class Missions {
     if (s.fight && s.fight.combo) t += `  · best combo ${this.bestCombo || 0}/${s.fight.combo}`;
     if (s.chests) t += `  (${Math.max(0, this.game.uw.found.size - this.chest0)}/${s.chests})`;
     if (s.lose) t += `  ★${this.game.npcs.wanted}`;
+    if (s.seal) { const r = this.game.rift; t += `  (${r.sealed}/${r.site ? r.site.n : 3})`; if (r.holding > 0.02) t += `  · breaking ${Math.round(r.holding * 100)}%`; }
     return t;
   }
   markers() {
@@ -130,6 +147,7 @@ export class Missions {
     if (s.rings && this.rings) { const r = s.rings[this.ringIdx]; if (r) out.push({ x: r[0], z: r[2] }); }
     if (s.chests) for (const c of this.game.uw.chests) if (!c.done) out.push({ x: c.x, z: c.z, color: '#ffd54f' });
     if (s.land) out.push({ x: s.land.x, z: s.land.z }); if ((s.kill || s.fight) && this.killGroup) for (const e of this.killGroup) if (e.alive) out.push({ x: e.pos.x, z: e.pos.z, color: '#ff5252' });
+    if (s.seal) for (const a of this.game.rift.anchors) if (a.on && !a.done) out.push({ x: a.x, z: a.z, color: '#e040fb' });
     if (s.boss && this.game.serpent.active) out.push({ x: this.game.serpent.head.x, z: this.game.serpent.head.z, color: '#d500f9' });
     return out;
   }
@@ -139,11 +157,12 @@ export class Missions {
     const m = this.cur; this.done.add(m.id); this.game.money += m.reward; this.cur = null; sfx('mission');
     this.game.hud.toast(`MISSION PASSED<br><span style="font-size:20px;color:#9dff8a">+ ₹${m.reward.toLocaleString('en-IN')}</span>`, 4);
     this.game.save();
-    const nxt = this.list.find((x) => !this.done.has(x.id));
+    const rm = this.list.find((x) => x.rift); if (rm && !this.done.has('rift') && !this.locked(rm) && this.game.rift.state === 'idle') setTimeout(() => { this.game.rift.omen(this.riftSite); say('Mira', 'Vikas! Look at the sky over Moti Daman!'); }, 9000);
+    const nxt = this.list.find((x) => !this.done.has(x.id) && !this.locked(x));
     if (nxt) setTimeout(() => this.game.hud.toast(`Next: ${nxt.name}<br><span style="font-size:15px">Open the menu ❚❚ → Missions</span>`, 4, '#fff'), 4500);
     else setTimeout(() => this.game.hud.toast('ALL MISSIONS COMPLETE!<br><span style="font-size:16px">Daman is yours to explore.</span>', 6), 4500);
   }
-  fail(why) { this.game.hud.toast('MISSION FAILED<br><span style="font-size:16px">' + why + '</span>', 3.5, '#ff5252'); const id = this.cur.id; this.cleanup(); this.cur = null; setTimeout(() => this.game.hud.toast('Retry from the menu ❚❚', 2.5, '#fff'), 3600); }
+  fail(why) { this.game.hud.toast('MISSION FAILED<br><span style="font-size:16px">' + why + '</span>', 3.5, '#ff5252'); const id = this.cur.id; if (this.cur.rift) this.game.rift.reset(true); this.cleanup(); this.cur = null; setTimeout(() => this.game.hud.toast('Retry from the menu ❚❚', 2.5, '#fff'), 3600); }
   update(dt) {
     const g = this.game; this.updateStarts(dt); if (!this.cur) return; const s = this.cur.steps[this.step]; if (!s) return;
     const P = g.playerPos(); this.timer += dt;
@@ -157,6 +176,15 @@ export class Missions {
       if (s.spawnCar) { g.spawnMissionCar(s.spawnCar); this.next(); return; }
       if (s.land) this.beam(s.land.x, s.land.z, undefined, 0xff4081, 200, 12);
       if (s.boss) g.serpent.awaken();
+      if (s.rift) { g.rift.begin(this.riftSite); this.next(); return; }
+      if (s.choice) {
+        const c = s.choice;
+        showChoice(g, c, (o) => {
+          g.choices[c.id] = o.key; if (o.money) { g.money += o.money; g.hud.toast(`+ ₹${o.money.toLocaleString('en-IN')}`, 2.5, '#9dff8a'); } if (o.power) g.unlockPower(o.power);
+          g.save(); if (o.say) for (const [w, t] of o.say) say(w, t);
+          if (this.cur && this.cur.steps[this.step] === s) this.next();
+        });
+      }
       if (s.chests) this.chest0 = g.uw.found.size;
       if (s.wanted) g.npcs.crime(s.wanted);
       if (s.bossFight) { const b = g[s.bossFight]; if (b) { b.defeated = false; g.fightBoss(b); } }
@@ -195,7 +223,8 @@ export class Missions {
     } else if (s.land) { const p = g.player; if ((p.state === 'ground' || p.state === 'roll') && this.timer > 3) { if (near(s.land, s.r)) this.next(); else if (p.pos.y < 60 && this.timer > 5 && !this.warned) { this.warned = true; this.fail('Missed the landing zone'); } } }
     else if (s.kill) { if (this.killGroup.every((e) => !e.alive)) this.next(); }
     else if (s.boss) { if (g.serpent.defeated) this.next(); }
-    if (!g.player.alive && this.cur && (s.cps || s.kill || s.boss || s.fight || s.bossFight)) this.fail('You were knocked out');
+    else if (s.seal) { if (g.rift.state !== 'open') this.next(); }
+    if (!g.player.alive && this.cur && (s.cps || s.kill || s.boss || s.fight || s.bossFight || s.seal)) this.fail('You were knocked out');
   }
 }
 // GTA-style marker column: bright at the ground, fading out upward, gently pulsing

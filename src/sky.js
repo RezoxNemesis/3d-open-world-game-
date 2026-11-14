@@ -189,6 +189,8 @@ export class SkySystem {
     // clearer, bluer air than before: aerial perspective tinted by the sky instead of grey
     const fogc = hor.clone().lerp(zen, 0.18 * dayK).lerp(C(0.78, 0.86, 0.95), 0.12 * dayK);
     this.scene.fog.color.copy(fogc); U.uFogColor.value.copy(fogc);
+    // the haze towards the sun takes the colour of the sky around it (warm at golden hour); weather.js hands this to the fog model
+    this.atmo = { sunFog: horS.clone().lerp(C(1.0, 0.7, 0.42), golden * 0.5), strength: (0.45 + 0.55 * golden) * smooth(-0.06, 0.1, sy), haze: 1 + 0.9 * golden + 0.4 * twi };
     const amb = new THREE.Color(0.35, 0.42, 0.55).multiplyScalar(lerp(0.12, 1, day)).lerp(new THREE.Color(0.6, 0.4, 0.35), golden * 0.3);
     U.uAmbient.value.copy(amb);
     this.hemi.color.setRGB(0.55, 0.68, 0.9).lerp(new THREE.Color(0.2, 0.25, 0.42), night); this.hemi.groundColor.setRGB(0.42, 0.36, 0.28).lerp(new THREE.Color(0.08, 0.08, 0.1), night);

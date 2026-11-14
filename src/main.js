@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { PRESETS, detectPlatform, defaultPreset, FPS_CAPS } from './quality.js';
 import { Governor, gpuInfo, autoPreset, requestRefresh } from './perf.js';
 import { UPSCALE_MODES } from './upscale.js';
+import { installAtmosphere } from './atmo.js';
+import { showChoice } from './choice.js';
 import { Benchmark } from './bench.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
@@ -10,6 +12,7 @@ import { initInput, input } from './input.js';
 import { initAudio, audio, say } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
+installAtmosphere();   // before any shader is built
 import { loadAvatar, describe as describeAvatar } from './avatars.js';
 import { world, updateWorldLOD } from './world.js';
 import { crowd } from './crowd.js';
@@ -288,6 +291,12 @@ function setupTests(game) {
     look_golden: () => { const z = -3900; at(M.coastX(z) + 150, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 17.9; game.rig.zoom = 1.7; game.rig.pitch = 0.0; step(6); game.rig.zoom = 1; },
     look_twilight: () => { const z = -3600; at(M.coastRoadX(z) - 6, z, -Math.PI / 2 - 0.5); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 18.75; game.rig.zoom = 1.8; game.rig.pitch = -0.05; step(6); game.rig.zoom = 1; },
     look_night: () => { at(-2238, -1170, Math.PI * 0.85); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 22; game.rig.zoom = 1.6; game.rig.pitch = -0.08; step(6); game.rig.zoom = 1; },
+    // the portal outbreak: the tear seen from town, a fight at an anchor, and the choice card
+    rift_omen: () => { const s = game.missions.riftSite; game.rift.reset(false); at(s.x + 620, s.z - 260, Math.atan2(-620, 260)); game.sky.hour = 18.1; game.rift.omen(s, true); undo.push(() => game.rift.reset(false)); game.rig.pitch = -0.05; step(90); },
+    rift_open: () => { const s = game.missions.riftSite; game.rift.reset(false); at(s.x + 150, s.z + 40, Math.atan2(-150, -40)); game.sky.hour = 17.2; game.rift.begin(s); undo.push(() => game.rift.reset(false)); game.rig.pitch = -0.12; step(70); },
+    rift_fight: () => { const s = game.missions.riftSite; game.rift.reset(false); game.rift.begin(s); undo.push(() => game.rift.reset(false)); const a = game.rift.anchors[0]; at(a.x + 3, a.z + 9, Math.atan2(-3, -9)); game.sky.hour = 17.2; game.rift.spawnT = 0; step(100); },
+    rift_shades: () => { at(-2238, -770, 0); game.sky.hour = 17.2; const p = game.player; for (let k = 0; k < 3; k++) { const e = game.npcs.spawnEnemy('rift', p.pos.x - 1.6 + k * 1.6, p.pos.z + 3.2 + (k % 2) * 0.8, { alert: false, boss: k === 1 }); e.yaw = Math.PI; undo.push(() => { e.remove(); game.npcs.enemies.splice(game.npcs.enemies.indexOf(e), 1); }); } game.rig.dist = 3.4; step(3); },
+    rift_choice: () => { at(-2238, -770, 0); showChoice(game, game.missions.list.find((m) => m.rift).steps[4].choice, () => {}); undo.push(() => { const el = document.querySelector('[data-choice]'); if (el) el.remove(); game.paused = false; }); game.render(); },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

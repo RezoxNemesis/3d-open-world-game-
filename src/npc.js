@@ -6,6 +6,7 @@ import { randomLook } from './human.js';
 import { setAlive, lookOf } from './crowd.js';
 import { clamp, angDiff, mulberry32 } from './util.js';
 import { sfx, say } from './audio.js';
+import { SHADE_LOOK, dressShade } from './rift.js';
 
 const GANG_LINES = ['Arre! Who are these two?', 'Get them!', 'This is Kaala Naag territory!', 'You picked the wrong dock, hero!', 'Boss said no visitors!'];
 const POLICE_LINES = ['Daman Police! Stop right there!', 'Hands up!', 'Rukk jao! Stop!', 'Backup requested near your location!'];
@@ -14,12 +15,16 @@ export class NPCs {
   spawnEnemy(team, x, z, opts = {}) {
     const r = this.rng;
     const look = team === 'police' ? { skin: [0xc68642, 0x8d5524, 0xa86b3c, 0xe0ac69][Math.floor(r() * 4)], top: 0xb39a6b, bottom: 0xa88f60, denim: false, shoes: 0x120d0a, sole: 0x0a0a0a, hair: 0x120c08, hairStyle: 'short', sleeves: 'short', cap: 0x1f2a44, beard: r() < 0.4, police: true }
+      : team === 'rift' ? { ...randomLook(r, false), ...SHADE_LOOK, cap: null, jacket: null }
       : { ...randomLook(r, false), top: r() < 0.6 ? 0x111111 : 0x3e2723, bottom: 0x1a1a2e, cap: 0xb71c1c, beard: r() < 0.6, jacket: r() < 0.3 ? 0x212121 : null };
-    const c = new Character(this.game, look, { team, x, z, hp: team === 'police' ? 110 : opts.boss ? 400 : 90, runSpeed: 5, sprintSpeed: 7.4, detail: 1, name: team === 'police' ? 'Constable' : opts.boss ? 'Gang Boss' : 'Gangster' });
-    c.weapon = opts.weapon ?? (r() < (team === 'police' ? 0.75 : 0.45) ? 1 : 0); if (opts.rifle) c.weapon = 2;
+    const rift = team === 'rift';
+    const c = new Character(this.game, look, { team, x, z, hp: team === 'police' ? 110 : rift ? (opts.boss ? 520 : 80) : opts.boss ? 400 : 90, runSpeed: rift ? 5.8 : 5, sprintSpeed: rift ? 8.4 : 7.4, detail: 1,
+      name: team === 'police' ? 'Constable' : rift ? (opts.boss ? 'Shade Lord' : 'Shade') : opts.boss ? 'Gang Boss' : 'Gangster' });
+    c.weapon = rift ? 0 : opts.weapon ?? (r() < (team === 'police' ? 0.75 : 0.45) ? 1 : 0); if (opts.rifle) c.weapon = 2;
     c.ai = { home: new THREE.Vector3(x, 0, z), cd: r() * 2, strafe: r() < 0.5 ? 1 : -1, alert: !!opts.alert, boss: !!opts.boss, talked: false };
     c.ammo = { pistol: 999, rifle: 999 };
-    if (opts.boss) { c.h.mesh.scale.setScalar(1.12); c.dmgMul = 1.5; }
+    if (rift) { dressShade(c, opts.boss); if (opts.boss) c.dmgMul = 1.6; }
+    else if (opts.boss) { c.h.mesh.scale.setScalar(1.12); c.dmgMul = 1.5; }
     this.enemies.push(c); return c;
   }
   spawnGang(n, cx, cz, alert = false) {
@@ -46,7 +51,7 @@ export class NPCs {
     const g = this.game, P = g.player;
     // wanted decay + police spawns
     if (this.wanted > 0) {
-      this.calm += dt;
+      this.calm += dt * (g.choices.gang === 'police' ? 2 : 1);      // handing the gang boss in bought some goodwill
       const nearCops = this.enemies.filter((e) => e.team === 'police' && e.alive && e.pos.distanceTo(g.playerPos()) < 90).length;
       if (this.calm > 18 + this.wanted * 6 && nearCops === 0) { this.wanted--; this.calm = 0; g.hud.stars(this.wanted); }
       const cops = this.enemies.filter((e) => e.team === 'police' && e.alive).length;
@@ -57,6 +62,12 @@ export class NPCs {
     }
     // gang presence at the docks (respawns when cleared)
     const H = M.L.hideout;
+    if (g.choices.gang === 'cash' && !g.missions.cur && !g.inside && !g.benchmark && g.player.state === 'ground' && !g.player.vehicle) {
+      this.ambushT = (this.ambushT ?? 240) - dt;
+      if (this.ambushT < 0) { this.ambushT = 300 + Math.random() * 240; const P = g.playerPos(), a = Math.random() * 6.28;
+        for (let k = 0; k < 3; k++) this.spawnEnemy('gang', P.x + Math.cos(a + k * 0.3) * 32, P.z + Math.sin(a + k * 0.3) * 32, { alert: true });
+        say('Gang', 'There he is! Boss wants his money back!'); }
+    }
     const gangAlive = this.enemies.filter((e) => e.team === 'gang' && e.alive).length;
     if (gangAlive === 0) { this.gangRespawn -= dt; if (this.gangRespawn < 0 && g.playerPos().distanceTo(new THREE.Vector3(H.x, 0, H.z)) > 300) { this.spawnGang(8, H.x, H.z); this.gangRespawn = 120; } }
     // enemies

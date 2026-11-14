@@ -1,6 +1,7 @@
 // Seasons + weather: summer haze, monsoon storms (rain, lightning, wet surfaces), winter fog, post-monsoon green.
 import * as THREE from 'three';
 import { U } from './shaders.js';
+import { setAtmosphere } from './atmo.js';
 import { clamp, lerp, damp } from './util.js';
 import { sfx } from './audio.js';
 
@@ -30,6 +31,10 @@ export class Weather {
     sky.hemi.intensity *= 1 - this.rain * 0.3;
     if (this.season === 'winter' && morning > 0) { const mist = new THREE.Color(0.72, 0.76, 0.82); this.game.scene.fog.color.lerp(mist, morning * 0.6); U.uFogColor.value.copy(this.game.scene.fog.color); }
     if (this.rain > 0.1) { const grey = new THREE.Color(0.32, 0.35, 0.4); this.game.scene.fog.color.lerp(grey, this.rain * 0.7); U.uFogColor.value.copy(this.game.scene.fog.color); U.uHorizon.value.lerp(grey, this.rain * 0.6); U.uZenith.value.lerp(new THREE.Color(0.2, 0.22, 0.26), this.rain * 0.7); }
+    // aerial perspective + sun in-scattering (atmo.js)
+    { const A = sky.atmo, sf = A.sunFog.clone().lerp(new THREE.Color(0.32, 0.35, 0.4), this.rain * 0.8);
+      U.uFogSun.value.copy(sf);
+      setAtmosphere(1.0e-4 * this.game.q.fog * A.haze * (1 + morning * 0.6 + this.rain * 0.8), sky.sunDir, sf, A.strength * (1 - this.rain * 0.85) * (1 - (this.game.uw ? this.game.uw.k : 0))); }
     // lightning
     if (this.rain > 0.6 && Math.random() < dt * 0.06) { this.flash = 1; setTimeout(() => sfx('thunder', 0.9), 400 + Math.random() * 2500); }
     if (this.flash > 0) { this.flash = Math.max(0, this.flash - dt * 4); sky.hemi.intensity += this.flash * 3; }
