@@ -10,7 +10,7 @@ import { buildWorld, world, updateWorld, updateTrees, updateWorldLOD } from './w
 import { updateTerrain, updateGrass, T as TR } from './terrain.js';
 import { SkySystem } from './sky.js';
 import { U } from './shaders.js';
-import { Character, CameraRig, WEAPONS } from './player.js';
+import { Character, CameraRig, WEAPONS, ATK } from './player.js';
 import { Pose } from './human.js';
 import { Vehicle } from './vehicles.js';
 import { CARS } from './vehicle_models.js';
@@ -74,7 +74,8 @@ export class Game {
     const sp = M.spawns.start;
     this.vikas = new Character(this, { skin: 0xc68642, top: 0x5f6a70, bottom: 0x1f3550, shoes: 0x3a2a20, sole: 0x2a221c, hair: 0x0e0a08, hairStyle: 'spiky', beard: true, jacket: 0x151515, sleeves: 'long', eyes: 0x2a1a0e }, { name: 'Vikas', detail: 2, team: 'hero', x: sp.x, z: sp.z, yaw: sp.ang, hp: 230, runSpeed: 5.7, sprintSpeed: 9.4, jumpV: 7.2, climbSpeed: 3.8, powers: true, dmgMul: 1.35 });
     this.mira = new Character(this, { female: true, skin: 0xd29b67, top: 0xb71c1c, bottom: 0x1c2733, shoes: 0xf0f0f0, sole: 0xffffff, hair: 0x120c08, hairStyle: 'pony', midriff: false, sleeves: 'short', jacket: null, eyes: 0x3b2314 }, { name: 'Mira', detail: 2, team: 'hero', x: sp.x + 1.5, z: sp.z - 1.5, yaw: sp.ang, hp: 190, runSpeed: 6.0, sprintSpeed: 10.2, jumpV: 7.8, climbSpeed: 4.6, powers: true, dmgMul: 1.0 });
-    this.heroes = [this.vikas, this.mira]; this.player = this.vikas; this.companion = this.mira;
+    this.arjun = new Character(this, { skin: 0xa86b3c, top: 0x1f3a5f, bottom: 0x2b2b2b, shoes: 0x5d4037, sole: 0x2a221c, hair: 0x0a0806, hairStyle: 'short', beard: true, jacket: null, sleeves: 'short', eyes: 0x24160c, build: 1.08 }, { name: 'Arjun', detail: 2, team: 'hero', x: sp.x - 1.5, z: sp.z + 1.5, yaw: sp.ang, hp: 210, runSpeed: 5.8, sprintSpeed: 9.6, jumpV: 7.0, climbSpeed: 3.6, powers: false, dmgMul: 1.15 });
+    this.heroes = [this.vikas, this.mira, this.arjun]; this.player = this.vikas; this.companion = this.mira; this.friends = [this.mira, this.arjun];
     for (const h of this.heroes) h.weapon = 0;
     // parked vehicles
     for (const c of M.spawns.cars) this.addVehicle('car', c.key || (c.kind === 'super' ? 'rakshas' : c.kind === 'gt' ? 'agni' : 'bison'), c.color, c.x, c.z, c.ang);
@@ -127,6 +128,23 @@ export class Game {
     return null;
   }
   addThreat(p, r) { this.threats.push({ p: p.clone(), r, t: this.time }); if (this.threats.length > 20) this.threats.shift(); }
+  // ---- freeflow combat helpers ----
+  freeflowTarget(c, inDir) {
+    let best = null, bs = -1e9;
+    const list = [...this.npcs.enemies, ...this.animals.filter((a) => (a.type === 'tiger' || a.angry > 0) && !a.dead)];
+    for (const e of list) {
+      if (e.alive === false || e.dead || e.state === 'down') continue;
+      const dx = e.pos.x - c.pos.x, dz = e.pos.z - c.pos.z, d = Math.hypot(dx, dz); if (d > 7.5 || Math.abs(e.pos.y - c.pos.y) > 2.5) continue;
+      const fx = inDir ? inDir.x : Math.sin(c.yaw), fz = inDir ? inDir.z : Math.cos(c.yaw), al = (dx * fx + dz * fz) / Math.max(d, 0.01);
+      if (al < 0.25 && d > 2.2) continue;
+      const sc = al * 3 - d * 0.55 + (e.telegraph > 0 ? 1 : 0); if (sc > bs) { bs = sc; best = e; }
+    }
+    return best || this.nearestFoe(c, 3);
+  }
+  downedFoe(c, r) { for (const e of this.npcs.enemies) if (e.alive && e.state === 'down' && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) return e; return null; }
+  counterTarget(c) { let best = null, bd = 3.4; for (const e of this.npcs.enemies) { if (!e.alive || !(e.telegraph > 0) || e.state === 'down') continue; const d = Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z); if (d < bd) { bd = d; best = e; } } return best; }
+  onCounter(c, e) { e.telegraph = 0; if (e.ai) { e.ai.wind = 0; e.ai.cd = 1.4; } e.atk = null; e.stun = 0.7; this.slowmo(0.45, 0.28); this.hud.pop && this.hud.pop('COUNTER!', '#4fc3f7'); sfx('punch', 1); }
+  slowmo(t, k) { if (!this.slow || this.slow.t <= 0 || k < this.slow.k) this.slow = { t, k }; }
   nearestFoe(c, r) {
     let best = null, bd = r;
     const list = c.team === 'hero' ? [...this.npcs.enemies, ...this.animals.filter((a) => (a.type === 'tiger' || a.angry > 0) && !a.dead)] : this.heroes;
@@ -135,10 +153,15 @@ export class Game {
   }
   // ---------------- combat ----------------
   meleeHit(att, A) {
-    const f = att.forward(), dmg = A.dmg * (att.dmgMul || 1); let hit = false;
-    const inFront = (p) => { const dx = p.x - att.pos.x, dz = p.z - att.pos.z, d = Math.hypot(dx, dz); return d < A.range && Math.abs(p.y - att.pos.y) < 2 && (dx * f.x + dz * f.z) / Math.max(d, 0.01) > 0.35; };
+    const f = att.forward(), dmg = A.dmg * (att.dmgMul || 1); let hit = false, foes = 0;
+    const inFront = (p) => { const dx = p.x - att.pos.x, dz = p.z - att.pos.z, d = Math.hypot(dx, dz); return d < A.range && Math.abs(p.y - att.pos.y) < 2 && (A.aoe || (dx * f.x + dz * f.z) / Math.max(d, 0.01) > 0.35); };
     if (att.team === 'hero') {
-      for (const e of this.npcs.enemies) if (e.alive && inFront(e.pos)) { e.damage(dmg, att, A.kb, A.down); hit = true; e.ai && (e.ai.alert = true); }
+      for (const e of this.npcs.enemies) {
+        if (!e.alive || !inFront(e.pos)) continue;
+        if (A.ground ? e.state !== 'down' : e.state === 'down' && !A.aoe) continue;      // stomps hit downed foes, strikes hit standing ones
+        e.damage(dmg, att, A.kb, A.down); hit = true; foes++; e.ai && (e.ai.alert = true); e.telegraph = 0; if (e.ai) e.ai.wind = 0;
+        if (A.launch && e.alive) e.vel.y = Math.max(e.vel.y, A.launch);
+      }
       for (const a of this.animals) if (!a.dead && !a.rider && inFront(a.pos)) { a.hurt(dmg, att); hit = true; }
       for (const c of this.npcs.civs) if (c.alive && c.state !== 'down' && inFront(c.pos)) { c.damage(dmg * 0.5, att, A.kb, true); hit = true; }
       if (att === this.player && !this.interior.active) for (const p of crowdNear(att.pos.x + f.x, att.pos.z + f.z, A.range)) { if (inFront(p)) { const vel = new V3(f.x * A.kb, 2, f.z * A.kb); this.npcs.knockCivilian(p, att.pos, vel); this.npcs.crime(1); hit = true; break; } }
@@ -147,7 +170,15 @@ export class Game {
     } else {
       for (const h of this.heroes) if (h.alive && !h.vehicle && inFront(h.pos)) { h.damage(dmg, att, A.kb, A.down); hit = true; }
     }
-    if (hit) { sfx('punch', 1, this.camDist(att.pos)); burst('spark', att.pos.x + f.x * 1.2, att.pos.y + 1.3, att.pos.z + f.z * 1.2, 5, 0.4); if (att === this.player) this.shake(A.down ? 0.25 : 0.1); }
+    if (hit) {
+      sfx('punch', 1, this.camDist(att.pos)); burst('spark', att.pos.x + f.x * 1.2, att.pos.y + (A.ground ? 0.3 : 1.3), att.pos.z + f.z * 1.2, A.fin ? 16 : 5, A.fin ? 0.9 : 0.4);
+      if (att === this.player) {
+        this.shake(A.fin ? 0.5 : A.down ? 0.25 : 0.1); this.slowmo(A.fin ? 0.5 : 0.06, A.fin ? 0.25 : 0.12);     // hit-stop on every connected blow
+        if (foes) { this.combo = this.combo || { n: 0, t: 0 }; this.combo.n += foes; this.combo.t = 2.4; this.hud.combo && this.hud.combo(this.combo.n); }
+        if ((A.fin || A === ATK.counter) && foes) this.finCam = 0.7;
+        if (A.fin && foes) this.hud.pop && this.hud.pop('FINISHER!', '#ffca28'); else if (A.ground && foes) this.hud.pop && this.hud.pop('TAKEDOWN', '#ff7043');
+      }
+    }
   }
   // world ray: buildings + terrain; returns distance
   rayWorld(o, d, maxT) {
@@ -238,7 +269,8 @@ export class Game {
     if (c === this.player) {
       this.hud.toast('KNOCKED OUT', 3, '#ff5252'); sfx('boom', 0.4);
       setTimeout(() => { this.money = Math.max(0, this.money - 500); for (const h of this.heroes) { const s = M.spawns.hospital; h.revive(s.x + (h === this.mira ? 1.5 : 0), s.z); } this.npcs.wanted = 0; this.hud.stars(0); this.hud.toast('Govt. Hospital Marwad · −₹500', 2.5, '#fff'); if (!this.missions.cur) for (const b of this.bosses) if (b.active) { if (b === this.serpent) { b.active = false; b.setVisible(false); this.hud.boss(null, 0); } else b.sleep(); } }, 3500);
-    } else if (c === this.companion) setTimeout(() => { if (!c.alive) { const p = this.player.pos; c.revive(p.x - 2, p.z - 2); say(c.name, 'I am back! That one hurt.'); } }, 20000);
+    } else if (c === this.arjun) setTimeout(() => { if (!c.alive) { const p = this.player.pos; c.revive(p.x + 2, p.z - 2); say('Arjun', 'Back on my feet. Let us finish this!'); } }, 20000);
+    else if (c === this.companion) setTimeout(() => { if (!c.alive) { const p = this.player.pos; c.revive(p.x - 2, p.z - 2); say(c.name, 'I am back! That one hurt.'); } }, 20000);
   }
   onSerpentDefeated() { this.money += 25000; this.hud.toast('KAALA NAAG DEFEATED!  + ₹25,000', 5, '#e040fb'); setMood('day'); setTimeout(() => this.unlockPower('flash'), 2500); }
   onBossDefeated(b) {
@@ -334,10 +366,11 @@ export class Game {
     for (let k = 0; k < 30 && (M.terrainH(x, z) < 0.5 || M.waterLevelAt(x, z) > M.terrainH(x, z)); k++) { x += 15; }
     p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0);
     const c = this.companion; if (c.alive) { c.pos.set(x + 2, M.groundAt(x + 2, z + 2), z + 2); c.state = 'ground'; }
+    const a = this.arjun; if (a.alive && !a.vehicle) { a.pos.set(x - 2, M.groundAt(x - 2, z + 2), z + 2); a.state = 'ground'; }
     this.hud.toast(L.name, 2, '#fff'); this.rig.target.copy(p.pos);
   }
-  enterInterior(pos) { this.inside = true; this.player.pos.copy(pos); this.player.state = 'ground'; this.player.vel.set(0, 0, 0); const c = this.companion; if (c.alive) { c.pos.copy(pos).add(new V3(0.8, 0, 0.4)); c.state = 'ground'; } for (const o of this.worldObjs) o.visible = false; this.rig.target.copy(pos); sfx('door'); }
-  leaveInterior() { const out = this.interior.exit(); this.inside = false; for (const o of this.worldObjs) o.visible = true; if (out) { this.player.pos.copy(out); this.player.state = 'ground'; const c = this.companion; if (c.alive) { c.pos.copy(out).add(new V3(1, 0, 0)); c.state = 'ground'; } this.rig.target.copy(out); } sfx('door'); }
+  enterInterior(pos) { this.inside = true; this.player.pos.copy(pos); this.player.state = 'ground'; this.player.vel.set(0, 0, 0); const c = this.companion; if (c.alive) { c.pos.copy(pos).add(new V3(0.8, 0, 0.4)); c.state = 'ground'; } if (this.arjun.alive) { this.arjun.pos.copy(pos).add(new V3(-0.8, 0, 0.5)); this.arjun.state = 'ground'; } for (const o of this.worldObjs) o.visible = false; this.rig.target.copy(pos); sfx('door'); }
+  leaveInterior() { const out = this.interior.exit(); this.inside = false; for (const o of this.worldObjs) o.visible = true; if (out) { this.player.pos.copy(out); this.player.state = 'ground'; const c = this.companion; if (c.alive) { c.pos.copy(out).add(new V3(1, 0, 0)); c.state = 'ground'; } if (this.arjun.alive) { this.arjun.pos.copy(out).add(new V3(-1, 0, 0.5)); this.arjun.state = 'ground'; } this.rig.target.copy(out); } sfx('door'); }
   makeChai(at) {
     const p = this.player; p.weapon = 0; p.busy = { t: 0, dur: 7, pose: (t) => (t < 4.5 ? Pose.chai(t) : Pose.sip(t)), done: () => { for (const h of this.heroes) { if (h.alive) { h.hp = h.maxHp; } } this.hud.toast('☕ Masala chai · Health restored', 2.5, '#ffcc80'); this.missions.event('chai'); } };
     sfx('pour', 0.8); const t0 = this.time; this.chaiSteam = { at: at.clone(), until: this.time + 7 };
@@ -381,22 +414,22 @@ export class Game {
     }
   }
   // ---------------- companion AI ----------------
-  companionCtl(dt) {
-    const c = this.companion, L = this.player, ctl = { move: new V3() };
+  companionCtl(dt, c = this.companion, slot = 0) {
+    const L = this.player, ctl = { move: new V3() };
     if (!c.alive || c.state === 'seated') return ctl;
     c.setVisible(true);
     if (L.vehicle) { const vp = L.vehicle.pos; if (c.pos.distanceTo(vp) > 60) { c.pos.set(vp.x - 4, M.groundAt(vp.x - 4, vp.z - 4), vp.z - 4); c.state = 'ground'; c.vel.set(0, 0, 0); } return ctl; }
     const foe = this.nearestFoe(c, 22);
     if (foe && foe.ai && foe.ai.alert) {
       const to = new V3().subVectors(foe.pos, c.pos); to.y = 0; const d = to.length(); to.normalize();
-      if (d > 1.5) { ctl.move.copy(to); ctl.sprint = d > 6; } else if ((this.cmpCd = (this.cmpCd || 0) - dt) < 0) { if (Math.random() < 0.6) ctl.attack = true; else ctl.kick = true; this.cmpCd = 0.5 + Math.random() * 0.5; }
+      if (d > 1.5) { ctl.move.copy(to); ctl.sprint = d > 6; } else if ((c.cmpCd = (c.cmpCd || 0) - dt) < 0) { if (Math.random() < 0.6) ctl.attack = true; else ctl.kick = true; c.cmpCd = 0.5 + Math.random() * 0.5; }
       ctl.face = d < 3; ctl.faceYaw = Math.atan2(to.x, to.z);
       return ctl;
     }
-    const lp = L.pos, side = new V3(Math.cos(L.yaw), 0, -Math.sin(L.yaw)), back = L.forward().multiplyScalar(-1.8);
-    const tgt = lp.clone().add(back).addScaledVector(side, 1.6);
+    const lp = L.pos, side = new V3(Math.cos(L.yaw), 0, -Math.sin(L.yaw)), back = L.forward().multiplyScalar(slot ? -2.8 : -1.8);
+    const tgt = lp.clone().add(back).addScaledVector(side, slot ? -1.9 : 1.6);
     const to = new V3().subVectors(tgt, c.pos); to.y = 0; const d = to.length();
-    if (d > 70 || (Math.abs(lp.y - c.pos.y) > 6 && L.state === 'ground' && (this.cmpStuck = (this.cmpStuck || 0) + dt) > 3)) { this.cmpStuck = 0; c.pos.copy(tgt); c.pos.y = L.state === 'ground' ? lp.y : M.groundAt(tgt.x, tgt.z); c.state = 'ground'; c.vel.set(0, 0, 0); return ctl; }
+    if (d > 70 || (Math.abs(lp.y - c.pos.y) > 6 && L.state === 'ground' && (c.cmpStuck = (c.cmpStuck || 0) + dt) > 3)) { c.cmpStuck = 0; c.pos.copy(tgt); c.pos.y = L.state === 'ground' ? lp.y : M.groundAt(tgt.x, tgt.z); c.state = 'ground'; c.vel.set(0, 0, 0); return ctl; }
     if (d > 1.2) { ctl.move.copy(to.normalize()).multiplyScalar(Math.min(1, d / 3)); ctl.sprint = d > 8; }
     if (L.state === 'air' && d < 4 && Math.random() < 0.02) ctl.jump = true;
     return ctl;
@@ -408,6 +441,8 @@ export class Game {
     if (pr('pause')) { this.paused ? this.hud.closeMenu() : this.hud.openMenu(); }
     if (pr('map')) { this.hud.mapEl.style.display === 'flex' ? this.hud.closeMap() : this.hud.openMap(); }
     if (this.paused) { endFrame(); return; }
+    if (this.slow && this.slow.t > 0) { this.slow.t -= dt; dt *= this.slow.k; }
+    if (this.combo && this.combo.n > 0 && (this.combo.t -= dt) < 0) { this.combo.n = 0; this.hud.combo && this.hud.combo(0); }
     this.time += dt; U.uTime.value = this.time;
     const p = this.player;
     const desk = !I.touch && !I.usingPad;
@@ -436,7 +471,7 @@ export class Game {
     // player control
     const ctl = { move, sprint: held('sprint'), jump: pr('jump'), up: held('jump'), aim: aiming, down: held('down'), camYaw, aimDir: cf, pitch: this.rig.pitch * 0.6, turn: I.mx,
       attack: (tool.id === 'fists' && use && !shiftKick) || (gun && use), fire: gun && (useHeld || use),
-      kick: pr('kick') || shiftKick, roll: pr('roll'),
+      kick: pr('kick') || shiftKick, roll: pr('roll'), counter: tool.id === 'fists' && (pr('counter') || pr('aim')),
       web: held('web') || (tool.id === 'web' && useHeld) || (tool.id === 'web' && desk && held('lmb')), webPress: pr('web') || (tool.id === 'web' && use),
       chute: pr('chute') || (pr('jump') && (p.state === 'glide' || (p.state === 'air' && (p.usedFlip || p.pos.y - M.groundAt(p.pos.x, p.pos.z) > 25) && p.vel.y < -6))) };
     if (tool.power && use) this.usePower(p, tool.power);
@@ -463,6 +498,7 @@ export class Game {
     if (this.chaiSteam && this.time < this.chaiSteam.until && Math.random() < 0.5) burst('steam', this.chaiSteam.at.x, this.chaiSteam.at.y, this.chaiSteam.at.z, 1);
     // companion
     const c = this.companion; if (c.state !== 'seated') c.update(dt, this.companionCtl(dt)); else c.update(dt, {});
+    { const a = this.arjun; if (a.state !== 'seated') a.update(dt, this.companionCtl(dt, a, 1)); else a.update(dt, {}); }
     // other vehicles (parked / unmanned) still need physics when moving
     this.police.update(dt);
     for (const v of this.vehicles) if (v !== p.vehicle && !v.ai && (v.speed !== 0 || v.burn > 0 || v.kind === 'heli' && v.rotor > 0.01 || v.airborne)) v.update(dt, null);
@@ -503,7 +539,7 @@ export class Game {
     else if (p.mount) { speed = p.mount.speed * 3.6; unit = 'KM/H'; }
     else if (p.state === 'glide' || p.state === 'chute' || (p.state === 'air' && p.pos.y - M.groundAt(p.pos.x, p.pos.z) > 15)) { speed = p.pos.y - M.groundAt(p.pos.x, p.pos.z); unit = 'M ALTITUDE'; }
     const mode = v ? (v.kind === 'car' ? 'car' : v.kind === 'boat' ? 'boat' : v.kind === 'heli' ? 'heli' : v.kind === 'jet' ? 'jet' : 'plane') : p.mount ? 'horse' : p.busy ? 'busy' : p.state === 'swim' ? 'swim' : p.state === 'dive' ? 'dive' : p.state === 'glide' ? 'glide' : p.state === 'chute' ? 'chute' : p.state === 'climb' ? 'climb' : p.state === 'fly' ? 'fly' : p.state === 'air' || p.state === 'web' || p.state === 'slam' ? 'air' : 'foot';
-    this.hud.setMode(mode, !!act);
+    this.hud.setMode(mode, !!act, !!(mode === 'foot' && this.counterTarget(p)));
     this.hud.update(dt, {
       hour: this.sky.hour, season: SEASONS[this.weather.season].name, rain: this.weather.rain, money: this.money, weaponName: v || p.mount ? '' : (() => { const t = this.toolOf(p); return t.id === 'pistol' || t.id === 'rifle' ? `${W.name}  ${p.clip[W.id]}/${p.ammo[W.id]}` : t.name + (t.power === 'flash' && p.flash > 0 ? ` ${Math.ceil(p.flash)}s` : ''); })(),
       speed, speedUnit: unit, aim: ctl.aim && !v && p.weapon > 0, prompt: act ? act.label : null, objective: this.missions.objective, fps: this.fps, fpsOn: this.fpsOn, res: this.gov && this.gov.enabled ? Math.round(this.gov.scale * 100) : 0,
@@ -530,6 +566,7 @@ export class Game {
     else if (p.state === 'glide' || p.state === 'chute' || p.state === 'web' || p.state === 'fly' || p.state === 'slam') { mode = 'air'; opts = { followYaw: Math.hypot(p.vel.x, p.vel.z) > 4 ? Math.atan2(p.vel.x, p.vel.z) : undefined, followK: 1.2, speedFov: clamp(p.vel.length() / 3, 0, 14) }; }
     if (this.inside) { opts.noCollide = true; opts.followPitch = 0.45; }
     this.camMode = mode;
+    if (this.finCam > 0 && mode === 'foot') { this.finCam -= dt; opts.zoomK = 0.62; }
     this.rig.update(dt, look, focus, mode, opts);
     if (!p.vehicle && (p.state === 'swim' || p.state === 'dive')) { const cp = this.cam.position, wl = M.waterLevelAt(cp.x, cp.z); if (p.state === 'swim' && cp.y < wl + 0.35) cp.y = wl + 0.35; if (p.state === 'dive' && cp.y > wl - 0.35) cp.y = wl - 0.35; }
     if (this.camOverride) { const o = this.camOverride(); this.cam.position.copy(o.pos); this.cam.lookAt(o.look); }

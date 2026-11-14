@@ -1,3 +1,17 @@
+## Daman Duo — v1.4 "Freeflow" update
+
+**What's new in 1.4**
+- **Freeflow combat** (in the style of Arkham and Spider-Man):
+  - Vikas locks onto the enemy you push toward, up to 7.5 m away, and lunges in to strike.
+  - A five-hit punch chain: jab, cross, hook, elbow, uppercut (the uppercut launches). Kicks: front kick, roundhouse, leg sweep.
+  - **Finishers:** every sixth hit of a combo becomes a spinning back kick or a two-handed ground slam that hits everyone around you. They play in slow motion with a close-up camera.
+  - **Counters:** enemies telegraph their strikes with a pulsing red **!** ring. Right-click on PC, or tap the **COUNTER** button on the phone, to counter in slow motion.
+  - **Perfect dodge:** tap Shift into an incoming attack for slow motion and extra invulnerability.
+  - **Takedowns:** strike an enemy on the ground for a stomp finisher.
+  - Every connected blow has hit-stop, with launches and knockdowns, and a **combo counter** keeps score. Getting hit resets it.
+- **Smarter street fights:** only two thugs wind up at once while the rest circle you, so fights are readable and fair.
+- **Friends:** **Arjun** joins Mira as a second friend. He follows you, fights beside you, comes into buildings and fast-travels with you, and gets back up if he's knocked out.
+
 ## Daman Duo — v1.3 "Deep Blue & Sirens" update
 
 **What's new in 1.3**

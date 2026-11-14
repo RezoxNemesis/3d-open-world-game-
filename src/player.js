@@ -8,9 +8,16 @@ import { sfx } from './audio.js';
 
 export const ATK = {
   jab: { dur: 0.3, hit: 0.45, dmg: 9, range: 1.75, kb: 2, next: 'cross' }, cross: { dur: 0.34, hit: 0.45, dmg: 13, range: 1.85, kb: 3, next: 'hook' },
-  hook: { dur: 0.4, hit: 0.5, dmg: 16, range: 1.75, kb: 4, next: 'upper' }, upper: { dur: 0.5, hit: 0.5, dmg: 24, range: 1.7, kb: 6, down: true, next: 'jab' },
-  kick: { dur: 0.48, hit: 0.5, dmg: 19, range: 2.15, kb: 6, next: 'round' }, round: { dur: 0.6, hit: 0.55, dmg: 28, range: 2.4, kb: 9, down: true, next: 'kick' },
+  hook: { dur: 0.4, hit: 0.5, dmg: 16, range: 1.75, kb: 4, next: 'elbow' }, elbow: { dur: 0.36, hit: 0.5, dmg: 18, range: 1.6, kb: 4, next: 'upper' },
+  upper: { dur: 0.5, hit: 0.5, dmg: 24, range: 1.7, kb: 6, down: true, launch: 4, next: 'jab' },
+  kick: { dur: 0.48, hit: 0.5, dmg: 19, range: 2.15, kb: 6, next: 'round' }, round: { dur: 0.6, hit: 0.55, dmg: 28, range: 2.4, kb: 9, down: true, next: 'sweep' },
+  sweep: { dur: 0.5, hit: 0.5, dmg: 16, range: 2.4, kb: 3, down: true, aoe: true, next: 'kick' },
   flykick: { dur: 0.55, hit: 0.4, dmg: 32, range: 2.5, kb: 11, down: true },
+  // freeflow specials: finishers (every 6th hit of a combo), counters, ground takedowns
+  spinkick: { dur: 0.62, hit: 0.55, dmg: 42, range: 2.6, kb: 14, down: true, launch: 5, fin: true },
+  slam: { dur: 0.72, hit: 0.62, dmg: 46, range: 2.6, kb: 7, down: true, aoe: true, launch: 3, fin: true },
+  counter: { dur: 0.5, hit: 0.42, dmg: 34, range: 2.4, kb: 10, down: true, launch: 3 },
+  stomp: { dur: 0.46, hit: 0.56, dmg: 40, range: 1.9, kb: 0, ground: true },
 };
 export const WEAPONS = [
   { id: 'fists', name: 'Fists' },
@@ -84,7 +91,8 @@ export class Character {
     if (!this.alive || this.inv > 0 || this.state === 'seated') return;
     if (this.blocking && from && this.forward().dot(new THREE.Vector3().subVectors(from.pos, this.pos).normalize()) > 0.2) { n *= 0.2; kb *= 0.3; down = false; sfx('hit', 0.5); }
     if (this.armor > 0) { const a = Math.min(this.armor, n * 0.7); this.armor -= a; n -= a; }
-    this.hp -= n; this.lastHit = this.game.time; this.atk = null;
+    this.hp -= n; this.lastHit = this.game.time; this.atk = null; this.lunge = 0;
+    if (this === this.game.player && this.game.combo && this.game.combo.n > 0) { this.game.combo.n = 0; this.game.hud.combo && this.game.hud.combo(0); }
     if (from) { const d = new THREE.Vector3().subVectors(this.pos, from.pos); d.y = 0; d.normalize(); this.vel.addScaledVector(d, kb); if (this.state === 'ground' && (down || kb > 5)) { this.vel.y = 2.5; } }
     burst('hit', this.pos.x, this.pos.y + 1.3, this.pos.z, 4);
     if (this.hp <= 0) { this.hp = 0; this.die(); return; }
@@ -117,7 +125,9 @@ export class Character {
     switch (this.state) {
       case 'ground': {
         const k = this.atk ? 3 : 12;
-        this.vel.x = damp(this.vel.x, dir.x * want, k, dt); this.vel.z = damp(this.vel.z, dir.z * want, k, dt);
+        this.inDir = mag > 0.05 ? dir.clone() : null;
+        if (this.lunge > 0) { this.lunge -= dt; const tg = this.atk && this.atk.tgt; if (tg && Math.hypot(tg.pos.x - this.pos.x, tg.pos.z - this.pos.z) < 1.25) { this.lunge = 0; this.vel.multiplyScalar(0.2); } }
+        else { this.vel.x = damp(this.vel.x, dir.x * want, k, dt); this.vel.z = damp(this.vel.z, dir.z * want, k, dt); }
         if (c.aim || c.face) this.yaw = dampAngle(this.yaw, c.faceYaw ?? c.camYaw, 16, dt);
         else if (mag > 0.05 && !this.atk) this.yaw = dampAngle(this.yaw, Math.atan2(dir.x, dir.z), 11, dt);
         this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
@@ -134,7 +144,7 @@ export class Character {
         }
         if (canAct && c.sprint && wall && mag > 0.5 && this.powers && this.wallTop(wall) - this.pos.y > 2.0 && dir.x * -wall.nx + dir.z * -wall.nz > 0.6) this.startClimb(wall);
         if (canAct && c.webPress && this.powers && this.webCd <= 0) { this.vel.y = this.jumpV * 1.35; this.state = 'air'; this.usedFlip = false; this.airT = 0; this.webAuto = 0.22; sfx('whoosh', 0.5); break; }
-        if (canAct && c.roll && this.landT <= 0) { this.state = 'roll'; this.t = 0; this.inv = 0.5; this.vel.x = dir.x * 9; this.vel.z = dir.z * 9; this.yaw = Math.atan2(dir.x, dir.z); }
+        if (canAct && c.roll && this.landT <= 0) { this.state = 'roll'; this.t = 0; this.inv = 0.5; this.vel.x = dir.x * 9; this.vel.z = dir.z * 9; this.yaw = Math.atan2(dir.x, dir.z); if (this === this.game.player && this.game.counterTarget && this.game.counterTarget(this)) { this.game.slowmo(0.6, 0.3); this.game.hud.pop && this.game.hud.pop('PERFECT DODGE', '#80deea'); this.inv = 0.9; } }
         this.landT = Math.max(0, this.landT - dt);
         const sp = Math.hypot(this.vel.x, this.vel.z);
         if (sp > 1 && this.t - this.lastStep > 2.2 / Math.max(sp, 1)) { this.lastStep = this.t; if (this === this.game.player) sfx('step', clamp(sp / 8, 0.3, 1)); if (sp > 7 && Math.random() < 0.3) burst('dust', this.pos.x, this.pos.y + 0.05, this.pos.z, 1, 0.5); }
@@ -265,16 +275,17 @@ export class Character {
     }
     // --- combat ---
     this.blocking = canAct && c.aim && this.weapon === 0 && this.state === 'ground';
+    if (canAct && c.counter && this.state === 'ground' && this.game.counterTarget) { const ct = this.game.counterTarget(this); if (ct) { this.atk = null; this.startAttack('counter', ct); this.game.onCounter(this, ct); } }
     if (canAct && (this.state === 'ground' || this.state === 'air')) {
       if (c.weaponNext) { this.weapon = (this.weapon + 1) % WEAPONS.length; sfx('ui'); }
       if (c.setWeapon !== undefined) this.weapon = c.setWeapon;
       if (this.weapon === 0 || this.state === 'air') {
-        if (c.attack && this.state === 'ground') this.queueAttack(this.combo && this.comboT > 0 ? ATK[this.combo].next : 'jab');
+        if (c.attack && this.state === 'ground') this.queueAttack(this.combo && this.comboT > 0 ? ATK[this.combo].next || 'jab' : 'jab');
         if (c.kick && this.state === 'ground') this.queueAttack(this.combo === 'kick' && this.comboT > 0 ? 'round' : 'kick');
       } else if (c.fire || c.attack) this.fireGun(c);
     }
     if (this.atk) {
-      this.atk.t += dt; const A = ATK[this.atk.id];
+      if (!(this.lunge > 0)) this.atk.t += dt; const A = ATK[this.atk.id];
       if (!this.atk.done && this.atk.t >= A.dur * A.hit) { this.atk.done = true; this.game.meleeHit(this, A); }
       if (this.atk.t >= A.dur) { const nx = this.atk.queued; this.combo = this.atk.id; this.comboT = 0.45; this.atk = null; if (nx) this.startAttack(nx); }
     }
@@ -283,12 +294,23 @@ export class Character {
     this.sync();
   }
   queueAttack(id) { if (!this.atk) this.startAttack(id); else if (this.atk.t > ATK[this.atk.id].dur * 0.45) this.atk.queued = id; }
-  startAttack(id) {
-    const tgt = this.game.nearestFoe(this, 4.5);
+  startAttack(id, forced) {
+    const g = this.game, isP = this === g.player;
+    // freeflow: the player locks onto the foe they push toward (up to 7.5 m) and lunges in to strike
+    let tgt = forced || (isP && g.freeflowTarget ? g.freeflowTarget(this, this.inDir) : g.nearestFoe(this, 4.5));
+    if (isP && !forced && id !== 'flykick') {
+      const downed = g.downedFoe && g.downedFoe(this, 2.4), standing = g.nearestFoe(this, 2.6);
+      if (downed && !standing) { id = 'stomp'; tgt = downed; }
+      else if (g.combo && g.combo.n >= 5 && g.combo.n % 6 === 5) id = Math.random() < 0.5 ? 'spinkick' : 'slam';
+    }
     if (tgt) this.yaw = Math.atan2(tgt.pos.x - this.pos.x, tgt.pos.z - this.pos.z);
-    this.atk = { id, t: 0, done: false }; sfx('whoosh', 0.5, this.game.camDist(this.pos));
+    this.atk = { id, t: 0, done: false, tgt }; sfx('whoosh', ATK[id].fin ? 0.9 : 0.5, g.camDist(this.pos));
     if (id === 'flykick') { const f = this.forward(); this.vel.x = f.x * 9; this.vel.z = f.z * 9; }
-    else if (tgt && tgt.pos.distanceTo(this.pos) > 1.4) { const f = this.forward(); this.vel.x += f.x * 4; this.vel.z += f.z * 4; }
+    else if (tgt) {
+      const d = Math.hypot(tgt.pos.x - this.pos.x, tgt.pos.z - this.pos.z), f = this.forward();
+      if (d > 1.5) { const sp = isP ? clamp((d - 1.15) / 0.2, 6, 24) : Math.min(6, (d - 1.15) / 0.17); this.vel.x = f.x * sp; this.vel.z = f.z * sp; this.lunge = Math.min(0.4, (d - 1.15) / sp); if (isP && d > 3) burst('dust', this.pos.x, this.pos.y + 0.1, this.pos.z, 4, 0.6); }
+    }
+    if (isP && ATK[id].fin) g.slowmo && g.slowmo(0.45, 0.35);
   }
   fireGun(c) {
     const W = WEAPONS[this.weapon]; if (this.t < (this.nextShot || 0)) return;
@@ -425,7 +447,7 @@ export class CameraRig {
     if (opts.followYaw !== undefined && this.idle > 1.0) this.yaw = dampAngle(this.yaw, opts.followYaw + Math.PI, opts.followK ?? 2.2, dt);
     if (opts.followPitch !== undefined && this.idle > 1.0) this.pitch = damp(this.pitch, opts.followPitch, 1.5, dt);
     const cfg = { foot: [4.2, 1.55, 0.42, 62], aim: [2.1, 1.6, 0.62, 48], car: [opts.len ? opts.len * 1.15 + 3 : 7.5, 1.9, 0, 64], heli: [17, 3, 0, 62], plane: [opts.len ? opts.len * 1.6 : 26, 3.5, 0, 65], horse: [5.8, 2.3, 0.3, 62], swim: [4.4, 0.6, 0.3, 62], air: [6, 1.4, 0, 70], interior: [4.2, 1.5, 0.3, 66], boat: [10, 2.6, 0, 62] }[mode] || [4.2, 1.5, 0.4, 62];
-    this.dist = damp(this.dist, cfg[0] * this.zoom, 5, dt);
+    this.dist = damp(this.dist, cfg[0] * this.zoom * (opts.zoomK || 1), opts.zoomK ? 9 : 5, dt);
     const fovT = cfg[3] + (opts.speedFov || 0); this.fov = damp(this.fov, fovT, 4, dt);
     if (Math.abs(this.cam.fov - this.fov) > 0.05) { this.cam.fov = this.fov; this.cam.updateProjectionMatrix(); }
     this.target.lerp(new THREE.Vector3(focus.x, focus.y + cfg[1], focus.z), 1 - Math.exp(-(mode === 'plane' || mode === 'car' ? 18 : 14) * dt));

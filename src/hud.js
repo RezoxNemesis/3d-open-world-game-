@@ -8,7 +8,7 @@ export class HUD {
   constructor(game) {
     this.game = game; this.root = $('div', { id: 'hud', class: 'ui' }, document.body); this.root.style.display = 'none';
     const tl = $('div', { id: 'topl' }, this.root);
-    this.ports = ['Vikas', 'Mira · friend'].map((n, i) => { const p = $('div', { class: 'port' + (i === 0 ? ' on' : ' friend') }, tl); $('b', { text: n.toUpperCase() }, p); const hp = $('div', { class: 'hp' }, p); const bar = $('div', {}, hp); const ar = $('div', { class: 'hp ar' }, p); const abar = $('div', { style: 'width:0%' }, ar); return { p, bar, abar }; });
+    this.ports = ['Vikas', 'Mira · friend', 'Arjun · friend'].map((n, i) => { const p = $('div', { class: 'port' + (i === 0 ? ' on' : ' friend') }, tl); $('b', { text: n.toUpperCase() }, p); const hp = $('div', { class: 'hp' }, p); const bar = $('div', {}, hp); const ar = $('div', { class: 'hp ar' }, p); const abar = $('div', { style: 'width:0%' }, ar); return { p, bar, abar }; });
     const tr = $('div', { id: 'topr' }, this.root);
     this.clock = $('div', { id: 'clock' }, tr); this.season = $('div', { id: 'season' }, tr); this.money = $('div', { id: 'money' }, tr); this.starsEl = $('div', { id: 'stars' }, tr); this.weapon = $('div', { id: 'weapon' }, tr);
     this.mm = $('div', { id: 'minimap' }, this.root); this.mmc = $('canvas', { width: 256, height: 256 }, this.mm); this.mmx = this.mmc.getContext('2d');
@@ -65,7 +65,7 @@ export class HUD {
     const B = [
       ['atk', 'PUNCH', 'attack', 30, 40, 1], ['jump', 'JUMP', 'jump', 30, 140], ['kick', 'KICK', 'kick', 130, 30], ['sprint', 'SPRINT', 'sprint', 112, 118, 0, 1], ['web', 'WEB', 'web', 200, 70],
       ['aim', 'AIM', 'aim', 210, 160, 0, 1], ['roll', 'ROLL', 'roll', 285, 30], ['act', 'F', 'interact', 30, 225], ['gun', 'GUN', 'weapon', 200, 245],
-      ['chute', 'CHUTE', 'chute', 290, 120], ['dive', 'DIVE ▼', 'down', 120, 40], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
+      ['ctr', 'COUNTER', 'counter', 120, 250, 1], ['chute', 'CHUTE', 'chute', 290, 120], ['dive', 'DIVE ▼', 'down', 120, 40], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
       ['hand', 'DRIFT', 'jump', 30, 140], ['nitro', 'NITRO', 'sprint', 112, 118], ['exit', 'EXIT', 'interact', 30, 225], ['horn', 'HORN', 'horn', 130, 30], ['gallop', 'GALLOP', 'sprint', 30, 40, 1], ['cam', 'CAM', 'camera', 200, 245],
     ];
     this.tb = {};
@@ -84,11 +84,11 @@ export class HUD {
     this.curMode = '';
   }
   showTouch(on) { this.touch.style.display = on ? 'block' : 'none'; this.touchOn = on; }
-  setMode(mode, canAct) {
+  setMode(mode, canAct, canCounter) {
     const pl = this.game.player, tool = pl && this.game.toolOf ? this.game.toolOf(pl) : null;
-    const key = mode + (canAct ? '+' : '') + (tool ? tool.id : '');
+    const key = mode + (canAct ? '+' : '') + (canCounter ? 'C' : '') + (tool ? tool.id : '');
     if (key === this.curMode) return; this.curMode = key;
-    const set = new Set(this.modeSets[mode] || []); if (canAct) set.add('act');
+    const set = new Set(this.modeSets[mode] || []); if (canAct) set.add('act'); if (canCounter) set.add('ctr');
     for (const id in this.tb) this.tb[id].classList.toggle('hide', !set.has(id));
     this.tb.atk.textContent = !tool ? 'PUNCH' : tool.id === 'pistol' || tool.id === 'rifle' ? 'FIRE' : tool.id === 'web' ? 'WEB' : tool.id === 'flash' ? 'FLASH' : tool.id === 'slam' ? 'SLAM' : tool.id === 'fly' ? (pl.state === 'fly' ? 'LAND' : 'FLY') : 'PUNCH';
   }
@@ -114,6 +114,16 @@ export class HUD {
   hurtFlash(a) { this.flash.style.opacity = a; setTimeout(() => (this.flash.style.opacity = 0), 120); }
   toast(text, t = 3, color = '#ffd54f') { this.toastEl.style.display = 'block'; this.toastEl.style.color = color; this.toastEl.innerHTML = text; this.toastT = t; }
   stars(n) { this.starsEl.textContent = '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n)); this.starsEl.style.display = n ? 'block' : 'none'; }
+  // freeflow combat feedback: running combo count + popups (COUNTER!, FINISHER!, TAKEDOWN)
+  combo(n) {
+    if (!this.comboEl) { this.comboEl = $('div', { id: 'combo' }, document.body); }
+    const el = this.comboEl; if (n < 2) { el.classList.remove('on'); return; }
+    el.innerHTML = `<b>${n}</b><span>HIT COMBO</span>`; el.classList.add('on'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  }
+  pop(text, color) {
+    const el = $('div', { class: 'fpop', text }, document.body); el.style.color = color || '#fff';
+    setTimeout(() => el.remove(), 1100);
+  }
   cinematic(title, sub, dur) {
     if (!this.cineEl) { this.cineEl = $('div', { id: 'cine' }, document.body); this.cineEl.innerHTML = '<div class="bar t"></div><div class="bar b"></div><div class="card"><h1></h1><p></p></div>'; }
     const el = this.cineEl; el.querySelector('h1').textContent = title; el.querySelector('p').textContent = sub || ''; el.classList.add('on'); document.body.classList.add('cine');
@@ -217,6 +227,7 @@ export class HUD {
     p.innerHTML = `<h3>CONTROLS</h3>
     <p><b>Phone:</b> left stick moves, drag the right side to look. Buttons change with what you're doing (on foot, driving, flying, riding, swimming). F appears when you can interact.</p>
     <p><b>Desktop — on foot:</b> <kbd>WASD</kbd>/<kbd>Arrows</kbd> move · <b>roll the mouse wheel forward</b> to walk · <b>move the mouse</b> to turn · <b>hold Left mouse + drag</b> to look around freely · <b>Left click</b> punch / shoot / use the selected power · <b>Right mouse</b> aim (then Left click fires; hold to keep firing) · <kbd>Tab</kbd> next weapon or power (Fists, Pistol, Rifle, Web Shooter + unlocked powers) · <kbd>Shift</kbd> sprint (tap = dodge roll, Shift + click = kick) · <kbd>Space</kbd> jump / double-jump flip / in the air: wingsuit, again: parachute · <kbd>Enter</kbd> enter vehicles and buildings, ride, make chai, talk · <kbd>Esc</kbd> menu · <kbd>M</kbd> map</p>
+    <p><b>Fighting (freeflow):</b> click to strike — Vikas locks onto the enemy you push toward and lunges in (jab → cross → hook → elbow → uppercut) · every 6th hit becomes a <b>finisher</b> (spinning kick or ground slam, slow motion) · when a red <b>!</b> ring flashes over an enemy, <b>right-click</b> (phone: <b>COUNTER</b>) to counter · tap <kbd>Shift</kbd> into an attack for a <b>perfect dodge</b> · hold right mouse to block · click a knocked-down enemy for a takedown.</p>
     <p><b>Web Shooter:</b> select it with <kbd>Tab</kbd>, then Left click to zip up and swing (hold to keep swinging). <b>Powers</b> (beat the bosses to unlock): <b>Flash Speed</b> (click to run like lightning), <b>Thunder Slam</b> (click: leap and smash), <b>Flight</b> (click to take off · <kbd>Space</kbd> climb · <kbd>Shift</kbd> boost · steer with the mouse · click again to drop).</p>
     <p><b>Cars:</b> <kbd>W</kbd>/<kbd>S</kbd> gas/brake · <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>Space</kbd> handbrake drift · <kbd>Shift</kbd> nitro · Left click horn · <kbd>Enter</kbd> exit.<br>
     <b>Helicopter:</b> <kbd>WASD</kbd> fly · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · Left mouse guns.<br>
