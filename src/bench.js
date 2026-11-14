@@ -32,6 +32,10 @@ export class Benchmark {
   constructor(game, opts = {}) {
     this.g = game; this.dur = opts.dur || 9; this.warm = opts.warm ?? 1.5; this.stages = stages(); this.i = -1; this.results = []; this.done = false; this.onDone = opts.onDone || (() => {});
     const g = game, p = g.player;
+    // step out of any vehicle, saddle or building first: the spot to come back to is then a real place on the ground
+    // (while driving p.pos is stale, and indoors it is a coordinate inside the interior set)
+    if (p.vehicle) g.exitVehicle(); if (p.mount) g.dismountHorse(); if (g.interior.active) g.leaveInterior();
+    g.transit = null; p.busy = null;
     this.saved = { x: p.pos.x, z: p.pos.z, hour: g.sky.hour, timeScale: g.timeScale, season: g.weather.season, rain: g.weather.targetRain, wt: g.weather.timer, cap: g.gov && g.gov.cap, drs: g.gov && g.gov.enabled, autoReset: g.renderer.info.autoReset };
     g.timeScale = 0; g.renderer.info.autoReset = false;
     if (g.gov) { requestRefresh(240); g.gov.cap = 240; g.gov.enabled = false; if (g.gov.scale !== 1) { g.gov.scale = 1; g.gov.onScale(1); } }
@@ -116,8 +120,9 @@ export function showBenchResults(b, g) {
     <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:right"><tr style="opacity:.55;font-size:11px"><td style="text-align:left">SCENE</td><td>FPS</td><td>1% LOW</td><td>WORST</td><td>DRAWS</td><td>TRIS</td></tr>${b.results.map(row).join('')}</table>
     <div style="margin:12px 0 4px;font-size:14px;color:#9dff8a">${S.note}</div>
     <div style="font-size:11px;opacity:.55">${g.gpu && g.gpu.renderer ? 'GPU: ' + g.gpu.renderer : ''}</div>
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"></div></div>`;
-  const bar = el.querySelector('div > div:last-child');
+    <div data-bar style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"></div></div>`;
+  el.dataset.bench = '1';
+  const bar = el.querySelector('[data-bar]');
   const btn = (t, fn, main) => { const e = document.createElement('button'); e.textContent = t; e.style.cssText = `padding:10px 16px;border-radius:9px;border:1px solid ${main ? '#ffd54f' : '#3a4a60'};background:${main ? '#ffd54f' : 'transparent'};color:${main ? '#111' : '#e9eef5'};font-weight:600;font-size:13px`; e.onclick = fn; bar.appendChild(e); };
   const close = () => { el.remove(); g.paused = false; };
   if (S.preset !== g.presetKey) btn(`USE ${PRESET_NAME[S.preset].toUpperCase()} GRAPHICS`, () => g.applyPreset(S.preset), true);

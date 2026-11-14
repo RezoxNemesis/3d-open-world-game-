@@ -387,13 +387,14 @@ export class Game {
     }
     p.busy.walkSpeed = 0;
     const k = Math.min(1, (t - o.walkT) / o.inT), e = k * k * (3 - 2 * k);
-    const a = o.type === 'in' ? o.doorW() : o.seatW(), b = o.type === 'in' ? o.seatW() : o.doorW();
     // path: sideways step + lift (bikes and horses go up and over)
     const lift = o.kind === 'horse' ? Math.sin(Math.min(1, k * 1.4) * Math.PI / 2) : o.kind === 'bike' ? Math.sin(k * Math.PI) * 0.15 : 0;
-    const hk = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.2) / 0.55)) : 1 - Math.min(1, Math.max(0, (k - 0.25) / 0.6))) : e;
-    const sideK = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.45) / 0.45)) : 1 - Math.min(1, Math.max(0, (k - 0.05) / 0.5))) : e;
-    const from = o.type === 'in' ? a : b, to = o.type === 'in' ? b : a;
-    p.pos.set(lerp(from.x, to.x, sideK), lerp(from.y, to.y, o.kind === 'horse' ? hk : e) + (o.kind === 'horse' ? 0 : lift), lerp(from.z, to.z, sideK));
+    // hk / sideK = how far towards the seat (0 at the door, 1 seated), in height and sideways; getting out runs them from 1 to 0
+    const ek = o.type === 'in' ? e : 1 - e;
+    const hk = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.2) / 0.55)) : 1 - Math.min(1, Math.max(0, (k - 0.25) / 0.6))) : ek;
+    const sideK = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.45) / 0.45)) : 1 - Math.min(1, Math.max(0, (k - 0.05) / 0.5))) : ek;
+    const door = o.doorW(), seat = o.seatW();
+    p.pos.set(lerp(door.x, seat.x, sideK), lerp(door.y, seat.y, hk) + (o.kind === 'horse' ? 0 : lift), lerp(door.z, seat.z, sideK));
     // face across the vehicle at the door, forward once seated
     // yaw: local +x of the vehicle is yaw + PI/2; a door on side s faces inwards at yaw - s * PI/2
     const vy = o.vyaw(), s = o.doorSign || -1, inward = vy - s * Math.PI / 2;
