@@ -271,13 +271,16 @@ export function waterMaterial(level, hTex) {
       vec3 V = normalize(cameraPosition - vW);
       float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
       vec3 Rf = reflect(-V, n);
-      vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.));
+      vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
+      vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y, 0.3));
       float murky = (uLevel > 1. || (p.x > -2900. && p.x < 6100.)) ? 1. : 0.;
       vec3 deep = mix(vec3(0.01,0.08,0.12), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.05,0.32,0.31), vec3(0.2,0.24,0.14), murky);
-      vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6;
+      vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6 + vec3(0.05,0.07,0.12)*uNight*max(moonD.y, 0.3);
       vec3 col = mix(mix(shal, deep, smoothstep(0., 9., depth))*light, sky, fres*0.85);
       float sd = max(dot(Rf, uSunDir), 0.);
       col += uSunColor*(pow(sd, 700.)*25. + pow(sd, 50.)*0.25)*step(0.,uSunDir.y)*(1.-uRain*0.8);
+      float md = max(dot(Rf, moonD), 0.);
+      col += vec3(0.55,0.65,0.9)*(pow(md, 400.)*6. + pow(md, 24.)*0.18)*uNight*step(0., moonD.y)*(1.-uRain*0.8);
       float band = sin(depth*6. - uTime*1.6 + vn(p*0.3)*6.)*0.5+0.5;
       float foam = (1. - smoothstep(0., 1.5, depth))*smoothstep(0.6, 0.95, band*0.75 + vn(p*0.35+uTime*0.2)*0.35)*0.7;
       foam = max(foam, smoothstep(0.35, 0.0, depth)*0.6);

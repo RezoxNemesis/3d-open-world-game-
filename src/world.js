@@ -481,64 +481,105 @@ function palmGeo(lod) {
   const m = mergeGeometries(parts.map((g) => { if (g.index) g = g.toNonIndexed(); return g; }));
   return m;
 }
+// ---- leaf-card trees: trunk + branches + alpha-tested leaf clusters with canopy-shaped normals ----
+function leafAtlas() {
+  return canvasTex(1024, 512, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    const rnd = mulberryLocal(91);
+    // left half: broadleaf cluster (neem / mango / teak style)
+    for (let k = 0; k < 260; k++) {
+      const x = 40 + rnd() * 432, y = 40 + rnd() * 432, ang = rnd() * Math.PI * 2, L = 26 + rnd() * 34, W = L * (0.36 + rnd() * 0.12);
+      const dx = x - 256, dy = y - 256; if (dx * dx + dy * dy > 215 * 215) continue;
+      const g = 70 + rnd() * 70, r = 25 + rnd() * 40, b = 15 + rnd() * 25, l = 0.75 + 0.25 * (1 - (y / 512));
+      c.save(); c.translate(x, y); c.rotate(ang);
+      c.fillStyle = `rgb(${r * l | 0},${g * l + 20 | 0},${b * l | 0})`;
+      c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(L * 0.5, -W, L, 0); c.quadraticCurveTo(L * 0.5, W, 0, 0); c.fill();
+      c.strokeStyle = 'rgba(30,45,15,0.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(0, 0); c.lineTo(L * 0.92, 0); c.stroke();
+      c.restore();
+    }
+    c.fillStyle = '#ffffff'; c.fillRect(w - 12, 0, 12, 12); // opaque corner (uv 0.999) used by trunks and branches
+    c.strokeStyle = 'rgba(60,42,25,0.9)'; c.lineWidth = 3; for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(256, 470); c.quadraticCurveTo(256 + (rnd() - 0.5) * 200, 330, 256 + (rnd() - 0.5) * 380, 120 + rnd() * 200); c.stroke(); }
+    // right half: casuarina / bamboo needles
+    for (let k = 0; k < 900; k++) {
+      const cx = 512 + 60 + rnd() * 392, cy = 40 + rnd() * 432, a = -Math.PI / 2 + (rnd() - 0.5) * 1.6, L = 30 + rnd() * 50;
+      if ((cx - 768) ** 2 + (cy - 256) ** 2 > 220 * 220) continue;
+      const g = 75 + rnd() * 50; c.strokeStyle = `rgba(${35 + rnd() * 25 | 0},${g | 0},${30 + rnd() * 20 | 0},0.95)`; c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * L * 0.3, cy + Math.sin(a) * L); c.stroke();
+    }
+  });
+}
+function mulberryLocal(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function vcolor(g, fn) { const p = g.attributes.position, a = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const c = fn(p.getX(i), p.getY(i), p.getZ(i)); a[i * 3] = c[0]; a[i * 3 + 1] = c[1]; a[i * 3 + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; }
-function roundTreeGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.25, 0.4, 3.2, lod ? 4 : 7); tr.translate(0, 1.6, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.3, 0.22, 0.15]));
-  const blobs = lod ? [[0, 5, 0, 3.4]] : [[0, 5, 0, 2.8], [1.6, 4.4, 0.6, 2.1], [-1.4, 4.6, -0.8, 2.2], [0.3, 6.3, -0.4, 2.0], [-0.5, 4.3, 1.5, 1.9]];
-  const base = [0.2 + R() * 0.06, 0.34 + R() * 0.08, 0.12];
-  for (const [x, y, z, r] of blobs) {
-    const s = new THREE.IcosahedronGeometry(r, lod ? 0 : 2).toNonIndexed();
-    const p = s.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = 1 + (Math.sin(p.getX(i) * 3.1 + p.getY(i) * 2.3) * 0.12); p.setXYZ(i, p.getX(i) * k + x, p.getY(i) * k * 0.85 + y, p.getZ(i) * k + z); }
-    s.computeVertexNormals();
-    parts.push(vcolor(s, (px, py) => { const l = 0.75 + 0.35 * ((py - y) / r + 1) / 2; return [base[0] * l, base[1] * l, base[2] * l]; }));
-  }
-  return mergeGeometries(parts);
+// a branch: tapered cylinder from a to b
+function limb(a, b, r0, r1, col, segs = 5) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), L = d.length();
+  const g = new THREE.CylinderGeometry(r1, r0, L, segs, 1, true); g.translate(0, L / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate(...a);
+  const ng = g.toNonIndexed(); ng.deleteAttribute('uv'); ng.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(ng.attributes.position.count * 2).fill(0.999), 2));
+  return vcolor(ng, () => col);
 }
-function casGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.12, 0.22, 11, 5); tr.translate(0, 5.5, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.32, 0.25, 0.2]));
-  const layers = lod ? 2 : 5;
-  for (let k = 0; k < layers; k++) {
-    const r = 2.2 - k * 0.35, c = new THREE.ConeGeometry(r, 3.4, lod ? 5 : 9, 1, true).toNonIndexed();
-    c.translate(0, 4.5 + k * 1.7, 0);
-    const p = c.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + Math.sin(i * 1.7) * 0.25);
-    c.computeVertexNormals(); parts.push(vcolor(c, () => [0.14, 0.26 + k * 0.02, 0.12]));
+// leaf cards scattered over canopy blobs; normals point away from the canopy centre (soft, volumetric lighting)
+function cards(blobs, tint, kind, rnd, size = 2.0, dens = 6) {
+  const P = [], N = [], UV = [], C = [], center = new THREE.Vector3();
+  for (const [bx, by, bz] of blobs) center.add(new THREE.Vector3(bx, by, bz)); center.divideScalar(blobs.length);
+  const u0 = kind === 'needle' ? 0.5 : 0;
+  for (const [bx, by, bz, r] of blobs) {
+    const n = Math.round(r * r * dens);
+    for (let k = 0; k < n; k++) {
+      const th = rnd() * Math.PI * 2, ph = Math.acos(rnd() * 1.6 - 0.6), rr = r * (0.55 + 0.45 * Math.cbrt(rnd()));
+      const px = bx + Math.sin(ph) * Math.cos(th) * rr, py = by + Math.cos(ph) * rr * 0.8, pz = bz + Math.sin(ph) * Math.sin(th) * rr;
+      const sz = size * (0.7 + rnd() * 0.6) * (kind === 'needle' ? 0.9 : 1);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * Math.PI, rnd() * Math.PI * 2, rnd() * Math.PI));
+      const corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => new THREE.Vector3(x * sz, y * sz, 0).applyQuaternion(q).add(new THREE.Vector3(px, py, pz)));
+      const nrm = new THREE.Vector3(px - center.x, (py - center.y) * 1.3 + 0.4 * r, pz - center.z).normalize();
+      const shade = 0.72 + 0.28 * Math.min(1, rr / r) + (rnd() - 0.5) * 0.15;
+      for (const id of [0, 1, 2, 0, 2, 3]) { const v = corners[id]; P.push(v.x, v.y, v.z); N.push(nrm.x, nrm.y, nrm.z); UV.push(u0 + (id === 1 || id === 2 ? 0.5 : 0), id >= 2 ? 1 : 0); C.push(tint[0] * shade, tint[1] * shade, tint[2] * shade); }
+    }
   }
-  return mergeGeometries(parts);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  return g;
 }
-function teakGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.22, 0.42, 9, lod ? 4 : 7); tr.translate(0, 4.5, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.36, 0.3, 0.24]));
-  const base = [0.17 + R() * 0.05, 0.3 + R() * 0.06, 0.1];
-  const blobs = lod ? [[0, 10.5, 0, 3.6]] : [[0, 10, 0, 3.0], [1.9, 9.2, 0.6, 2.3], [-1.7, 9.6, -0.9, 2.4], [0.4, 12, -0.3, 2.2], [-0.6, 8.8, 1.8, 2.1], [1.2, 11, 1.6, 1.8]];
-  for (const [x, y, z, r] of blobs) {
-    const sg = new THREE.IcosahedronGeometry(r, lod ? 0 : 1).toNonIndexed(), p = sg.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = 1 + Math.sin(p.getX(i) * 2.7 + p.getZ(i) * 3.3) * 0.18; p.setXYZ(i, p.getX(i) * k * 1.1 + x, p.getY(i) * k * 0.7 + y, p.getZ(i) * k * 1.1 + z); }
-    sg.computeVertexNormals();
-    parts.push(vcolor(sg, (px, py) => { const l = 0.7 + 0.4 * ((py - y) / r + 1) / 2; return [base[0] * l, base[1] * l, base[2] * l]; }));
-  }
-  return mergeGeometries(parts);
+function mergeTree(parts) { return mergeGeometries(parts.map((g) => { if (g.index) g = g.toNonIndexed(); if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2).fill(0.999), 2)); return g; })); }
+function roundTreeGeo() {
+  const rnd = mulberryLocal(11), bark = [0.11, 0.075, 0.05], parts = [];
+  parts.push(limb([0, 0, 0], [0.1, 3.0, 0], 0.38, 0.26, bark, 7));
+  for (const t of [[1.7, 4.6, 0.6], [-1.5, 4.8, -0.8], [0.3, 6.0, -0.3], [-0.5, 4.5, 1.6]]) parts.push(limb([0.1, 2.9, 0], t, 0.2, 0.08, bark));
+  parts.push(cards([[0, 5.0, 0, 2.7], [1.7, 4.6, 0.6, 2.0], [-1.5, 4.8, -0.8, 2.1], [0.3, 6.3, -0.4, 1.9], [-0.5, 4.4, 1.6, 1.8]], [1.0, 1.05, 0.9], 'broad', rnd, 1.9, 5.2));
+  return mergeTree(parts);
 }
-function bambooGeo(lod) {
-  const parts = [], n = lod ? 4 : 11;
+function teakGeo() {
+  const rnd = mulberryLocal(23), bark = [0.16, 0.12, 0.085], parts = [];
+  parts.push(limb([0, 0, 0], [0.2, 8.6, 0.1], 0.42, 0.24, bark, 7));
+  for (const t of [[1.9, 9.6, 0.6], [-1.7, 10.0, -0.9], [0.4, 12.0, -0.3], [-0.6, 9.2, 1.8], [1.2, 11.0, 1.6]]) parts.push(limb([0.2, 8.0, 0.1], t, 0.18, 0.07, bark));
+  parts.push(cards([[0, 10, 0, 3.0], [1.9, 9.2, 0.6, 2.3], [-1.7, 9.6, -0.9, 2.4], [0.4, 12, -0.3, 2.2], [-0.6, 8.8, 1.8, 2.1], [1.2, 11, 1.6, 1.8]], [0.95, 1.0, 0.82], 'broad', rnd, 2.4, 4.0));
+  return mergeTree(parts);
+}
+function casGeo() {
+  const rnd = mulberryLocal(37), parts = [];
+  parts.push(limb([0, 0, 0], [0, 11, 0], 0.22, 0.08, [0.1, 0.07, 0.05], 6));
+  const blobs = []; for (let k = 0; k < 6; k++) blobs.push([Math.sin(k * 2.1) * 0.3, 4.4 + k * 1.35, Math.cos(k * 2.1) * 0.3, 2.0 - k * 0.24]);
+  parts.push(cards(blobs, [0.85, 0.95, 0.8], 'needle', rnd, 1.6, 7));
+  return mergeTree(parts);
+}
+function bambooGeo() {
+  const parts = [], n = 11, rnd = mulberryLocal(53);
   for (let k = 0; k < n; k++) {
     const a = k * 2.4, r = 0.3 + (k % 3) * 0.35, h = 7 + (k % 4) * 1.6, lean = 0.08 + (k % 3) * 0.05;
-    const c = new THREE.CylinderGeometry(0.05, 0.08, h, 4, lod ? 1 : 4, true).toNonIndexed(); c.translate(0, h / 2, 0);
+    const c = new THREE.CylinderGeometry(0.05, 0.08, h, 4, 4, true).toNonIndexed(); c.translate(0, h / 2, 0);
     const p = c.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) + Math.cos(a) * (r + y * y * lean * 0.03)); p.setZ(i, p.getZ(i) + Math.sin(a) * (r + y * y * lean * 0.03)); }
-    c.computeVertexNormals(); parts.push(vcolor(c, (x, y) => [0.45 + (y % 1.2 < 0.08 ? -0.15 : 0), 0.55, 0.22]));
-    const tuft = new THREE.ConeGeometry(0.9, 2.6, lod ? 4 : 6, 1, true).toNonIndexed(); tuft.rotateX(Math.PI); tuft.translate(Math.cos(a) * (r + h * h * lean * 0.03), h - 0.3, Math.sin(a) * (r + h * h * lean * 0.03));
-    parts.push(vcolor(tuft, () => [0.25, 0.42, 0.12]));
+    c.computeVertexNormals(); c.deleteAttribute('uv'); parts.push(vcolor(c, (x, y) => [0.45 + (y % 1.2 < 0.08 ? -0.15 : 0), 0.55, 0.22]));
+    const tx = Math.cos(a) * (r + h * h * lean * 0.03), tz = Math.sin(a) * (r + h * h * lean * 0.03);
+    parts.push(cards([[tx, h - 0.8, tz, 1.1]], [0.85, 1.0, 0.7], 'needle', rnd, 1.3, 6));
   }
-  return mergeGeometries(parts);
+  return mergeTree(parts);
 }
-function bushGeo(lod) {
-  const parts = [], base = [0.2, 0.33, 0.12];
-  const bl = lod ? [[0, 0.7, 0, 1.0]] : [[0, 0.7, 0, 0.9], [0.7, 0.55, 0.3, 0.7], [-0.6, 0.6, -0.3, 0.75], [0.1, 0.5, 0.8, 0.6]];
-  for (const [x, y, z, r] of bl) { const sg = new THREE.IcosahedronGeometry(r, lod ? 0 : 1).toNonIndexed(); sg.translate(x, y, z); parts.push(vcolor(sg, (px, py) => { const l = 0.75 + 0.3 * (py - y + r) / (2 * r); return [base[0] * l, base[1] * l, base[2] * l]; })); }
-  return mergeGeometries(parts);
+function bushGeo() {
+  const rnd = mulberryLocal(71);
+  return mergeTree([cards([[0, 0.75, 0, 0.9], [0.7, 0.6, 0.3, 0.7], [-0.6, 0.65, -0.3, 0.75], [0.1, 0.55, 0.8, 0.6]], [0.9, 1.0, 0.8], 'broad', rnd, 1.0, 10)]);
 }
+
 const TREE_SP = ['palm', 'round', 'cas', 'teak', 'bamboo', 'bush'];
 // impostor cell size (width, height in metres at scale 1) per species
 const TREE_BOX = { palm: [11, 11.5], round: [8.5, 8.8], cas: [5.2, 13.5], teak: [10, 14.5], bamboo: [5.5, 11], bush: [2.8, 1.8] };
@@ -606,12 +647,17 @@ function buildTrees(scene, q, renderer) {
       transformed.z += cos(uTime*1.1 + ph)*0.03*hgt;`);
   };
   const palmMat = new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }); patch(palmMat, swayPatch);
-  const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }); patch(leafMat, swayPatch);
+  const leaves = leafAtlas();
+  const leafPatch = (s) => { swayPatch(s); s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); };
+  const leafMat = new THREE.MeshStandardMaterial({ map: leaves, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8 }); patch(leafMat, leafPatch, 'leafcards');
+  const leafDepth = new THREE.MeshDepthMaterial({ map: leaves, alphaTest: 0.5, depthPacking: THREE.RGBADepthPacking });
   const depthMat = new THREE.MeshDepthMaterial({ map: atlas, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking });
-  const geos = { palm: [palmGeo(false), palmGeo(true)], round: [roundTreeGeo(false), roundTreeGeo(true)], cas: [casGeo(false), casGeo(true)], teak: [teakGeo(false), teakGeo(true)], bamboo: [bambooGeo(false), bambooGeo(true)], bush: [bushGeo(false), bushGeo(true)] };
+  const geos = { palm: [palmGeo(false)], round: [roundTreeGeo()], cas: [casGeo()], teak: [teakGeo()], bamboo: [bambooGeo()], bush: [bushGeo()] };
   // bake impostors with plain (non-instanced, no sway) materials
   const bakeMats = { palm: new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }) };
-  for (const k of TREE_SP) if (k !== 'palm') bakeMats[k] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+  const bakeLeaf = new THREE.MeshStandardMaterial({ map: leaves, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+  patch(bakeLeaf, (s) => { s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); }, 'leafbake');
+  for (const k of TREE_SP) if (k !== 'palm') bakeMats[k] = bakeLeaf;
   const impAtlas = bakeTreeAtlas(renderer, geos, bakeMats, q.desktop ? 512 : 256);
   const imat = treeImpostorMaterial(); const u = imat.uniforms;
   u.uAtlas.value = impAtlas; u.uLight = U.uCrowdLight; u.uSel = TREE_IMP_SEL.uSel; u.uNear = TREE_IMP_SEL.uNear; u.uNearBush = TREE_IMP_SEL.uNearBush; u.uBushFar = TREE_IMP_SEL.uBushFar; u.uFar = TREE_IMP_SEL.uFar;
@@ -638,7 +684,7 @@ function buildTrees(scene, q, renderer) {
     const cap = Math.min(list.length, sp === 'bush' ? 2500 : 1600);
     const near = new THREE.InstancedMesh(geos[sp][0], sp === 'palm' ? palmMat : leafMat, Math.max(1, cap));
     near.count = 0; near.frustumCulled = false; near.castShadow = q.treeShadows; near.receiveShadow = false; near.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    if (sp === 'palm') near.customDepthMaterial = depthMat;
+    near.customDepthMaterial = sp === 'palm' ? depthMat : leafDepth;
     scene.add(near);
     world.treeSpecies[sp] = { list, mats, grid, near, cap };
   }
