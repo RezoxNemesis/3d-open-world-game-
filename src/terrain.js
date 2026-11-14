@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as M from './mapdata.js';
 import { U, NOISE, patch } from './shaders.js';
+import { TEX_GLSL } from './textures.js';
 import { fbm, smooth, clamp, lerp, mulberry32 } from './util.js';
 
 export const T = { tiles: [], grass: null, splatCanvas: null };
@@ -106,67 +107,87 @@ float hAt(vec2 p){
 }`;
 
 // ---------- terrain material ----------
-export function terrainMaterial(det, splat, q) {
+export function terrainMaterial(TX, splat, q) {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
-  mat.defines = { HIGHQ: q.desktop ? 1 : 0 };
+  mat.defines = { HIGHQ: q.desktop ? 1 : 0, NEARD: (q.desktop ? 320 : 150).toFixed(1) };
   patch(mat, (s) => {
-    Object.assign(s.uniforms, { uSplat: { value: splat }, uGrassT: { value: det.grass }, uRockT: { value: det.rock }, uSandT: { value: det.sand }, uDirtT: { value: det.dirt }, uSeason: U.uSeason, uWet: U.uWet, uTime: U.uTime });
+    Object.assign(s.uniforms, { uSplat: { value: splat }, uSeason: U.uSeason, uWet: U.uWet, uTime: U.uTime,
+      uGrassD: { value: TX.grass.d }, uGrassN: { value: TX.grass.n }, uForestD: { value: TX.forest.d }, uForestN: { value: TX.forest.n },
+      uSoilD: { value: TX.soil.d }, uSoilN: { value: TX.soil.n }, uGroundD: { value: TX.ground.d }, uGroundN: { value: TX.ground.n },
+      uSandD: { value: TX.sand.d }, uSandN: { value: TX.sand.n }, uRockD: { value: TX.rock.d }, uRockN: { value: TX.rock.n } });
     s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix*vec4(transformed,1.)).xyz; vWN = normalize(mat3(modelMatrix)*objectNormal);');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP; varying vec3 vWN;
-      uniform sampler2D uSplat, uGrassT, uRockT, uSandT, uDirtT; uniform vec4 uSeason; uniform float uWet, uTime;
+      uniform sampler2D uSplat, uGrassD, uGrassN, uForestD, uForestN, uSoilD, uSoilN, uGroundD, uGroundN, uSandD, uSandN, uRockD, uRockN;
+      uniform vec4 uSeason; uniform float uWet, uTime;
       ${NOISE}
-      vec4 tri(sampler2D t, vec3 p, vec3 n){ vec3 w = pow(abs(n), vec3(4.)); w /= (w.x+w.y+w.z);
-        return texture2D(t, p.zy)*w.x + texture2D(t, p.xz)*w.y + texture2D(t, p.xy)*w.z; }
-      vec4 twoScale(sampler2D t, vec2 p, float s){ return mix(texture2D(t, p*s), texture2D(t, p*s*0.173+0.37), 0.35); }
-      float gHeight; float gWet;
-      vec3 bumpN(vec3 sp, vec3 sn, float dhx, float dhy){ vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 r1 = cross(sy, sn), r2 = cross(sn, sx); float det = dot(sx, r1); vec3 g = sign(det)*(dhx*r1 + dhy*r2); return normalize(abs(det)*sn - g); }`)
+      ${TEX_GLSL}
+      float gNear; vec3 gWN; float gWet;
+      // one ground layer: albedo (two scales when near, one far) + normal accumulation
+      void layer(sampler2D D, sampler2D N, vec2 p, float s, float w, inout vec3 col, inout vec3 nrm){
+        if (w < 0.004) return;
+        vec4 c = gNear > 0.0 ? tex2s(D, p, s) : texture2D(D, mat2(0.8, -0.6, 0.6, 0.8)*p*s*0.23 + 0.31);
+        col += c.rgb*w;
+        if (gNear > 0.0) nrm += nmapXZ(unpackN(texture2D(N, p*s), 1.0), vWN)*w*gNear;
+      }`)
       .replace('#include <map_fragment>', `
       vec2 suv = (vWP.xz + ${M.HALF.toFixed(1)}) / ${(2 * M.HALF).toFixed(1)};
       vec4 sp = texture2D(uSplat, suv);
       float slope = 1.0 - clamp(vWN.y, 0., 1.);
       vec2 p = vWP.xz;
       float camD = length(vViewPosition);
-      vec4 gt = twoScale(uGrassT, p, 0.16);
-      vec4 st = twoScale(uSandT, p, 0.13);
-      vec4 dt = twoScale(uDirtT, p, 0.11);
-      #if HIGHQ == 1
-      vec4 rt = tri(uRockT, vWP*0.045, vWN) * 0.6 + tri(uRockT, vWP*0.011, vWN) * 0.4;
-      #else
-      vec4 rt = texture2D(uRockT, p*0.045 + vec2(vWP.y*0.03, 0.));
-      #endif
+      gNear = 1.0 - smoothstep(NEARD*0.6, NEARD, camD);
       float nn = vn(p*0.02), nm = vn(p*0.0035);
       float lush = uSeason.x, dry = uSeason.y;
-      vec3 grassC = gt.rgb * mix(vec3(1.05,1.12,0.85), vec3(1.5,1.25,0.7), dry*0.8) * mix(1., 1.18, lush) * (0.82 + 0.3*nm);
-      vec3 forestC = gt.rgb * vec3(0.62,0.72,0.52) * (0.8+0.3*nn) + dt.rgb*0.12;
-      vec2 fc = floor((p + vec2(13.,7.)) / vec2(70., 48.)); float fh = h21(mod(fc, 289.));
-      vec2 ff = fract((p + vec2(13.,7.)) / vec2(70., 48.));
-      float bund = 1. - step(0.035, min(min(ff.x, 1.-ff.x), min(ff.y, 1.-ff.y)));
-      float rows = 0.5 + 0.5*sin((fh > 0.5 ? p.x : p.y) * 3.4);
-      vec3 crop = fh < 0.25 ? vec3(0.25,0.45,0.12) : fh < 0.45 ? vec3(0.42,0.56,0.18) : fh < 0.62 ? vec3(0.45,0.34,0.22) : fh < 0.8 ? mix(vec3(0.45,0.55,0.15), vec3(0.85,0.75,0.2), dry*0.5 + uSeason.w) : vec3(0.68,0.6,0.32);
-      crop = mix(crop, crop*mix(1.0,0.75,rows), step(fh,0.62)) * (0.85 + 0.25*dt.a);
-      crop = mix(crop, dt.rgb*0.9, bund);
-      vec3 col = mix(grassC, forestC, sp.g);
-      col = mix(col, crop, sp.b);
-      vec3 urb = mix(dt.rgb, vec3(dot(dt.rgb, vec3(0.33))), 0.25) * vec3(1.3,1.24,1.14);
-      col = mix(col, urb, smoothstep(0.1, 0.6, sp.a + (nn-0.5)*0.4));
-      col = mix(col, st.rgb, smoothstep(0.35, 0.65, sp.r + (gt.a-0.5)*0.3));
       float rk = smoothstep(0.17, 0.34, slope + (nn-0.5)*0.12) + smoothstep(420., 900., vWP.y + nn*120.)*0.55*(1.-sp.g);
-      rk = max(rk, smoothstep(950., 1150., vWP.y)*0.7);
-      col = mix(col, rt.rgb, rk);
+      rk = clamp(max(rk, smoothstep(950., 1150., vWP.y)*0.7), 0., 1.);
+      float wS = smoothstep(0.35, 0.65, sp.r + (nn-0.5)*0.3);
+      float wU = smoothstep(0.1, 0.6, sp.a + (nn-0.5)*0.4);
+      float wF = sp.b, wFo = sp.g;
+      float kR = rk, kS = wS*(1.-rk), kU = wU*(1.-wS)*(1.-rk), kF = wF*(1.-wU)*(1.-wS)*(1.-rk);
+      float kFo = wFo*(1.-wF)*(1.-wU)*(1.-wS)*(1.-rk), kG = max(0., 1. - kR - kS - kU - kF - kFo);
+      vec3 col = vec3(0.), nrm = vec3(0.);
+      vec3 gc = vec3(0.), dummy = vec3(0.);
+      layer(uGrassD, uGrassN, p, 0.42, kG, gc, nrm);
+      col += gc*mix(vec3(0.82,1.18,0.62), vec3(1.2,1.1,0.7), dry*0.85)*mix(1., 1.15, lush)*(0.85 + 0.3*nm);
+      vec3 fo = vec3(0.); layer(uForestD, uForestN, p, 0.35, kFo, fo, nrm); col += fo*vec3(0.82,0.9,0.75);
+      if (kF > 0.004) {
+        vec3 so = vec3(0.); layer(uSoilD, uSoilN, p, 0.3, kF, so, nrm);
+        // crop fields: rows of green / golden crops on red laterite soil, separated by earthen bunds
+        vec2 fc = floor((p + vec2(13.,7.)) / vec2(70., 48.)); float fh = h21(mod(fc, 289.));
+        vec2 ff = fract((p + vec2(13.,7.)) / vec2(70., 48.));
+        float bund = 1. - step(0.035, min(min(ff.x, 1.-ff.x), min(ff.y, 1.-ff.y)));
+        float rows = smoothstep(0.25, 0.75, 0.5 + 0.5*sin((fh > 0.5 ? p.x : p.y) * 3.4));
+        vec3 crop = fh < 0.3 ? vec3(0.2,0.4,0.1) : fh < 0.5 ? vec3(0.36,0.5,0.14) : fh < 0.62 ? vec3(0.) : fh < 0.82 ? mix(vec3(0.4,0.5,0.12), vec3(0.75,0.62,0.2), dry*0.6 + uSeason.w) : vec3(0.58,0.5,0.25);
+        float cover = fh < 0.5 ? 0.8 : fh < 0.62 ? 0.0 : 0.65;
+        vec3 soilC = so/max(kF, 0.001);
+        vec3 fieldC = mix(soilC, crop*(0.75 + 0.5*dot(soilC, vec3(0.5))), cover*rows*(1.-bund));
+        col += fieldC*kF;
+      }
+      layer(uGroundD, uGroundN, p, 0.33, kU, col, nrm);
+      layer(uSandD, uSandN, p, 0.24, kS, col, nrm);
+      if (kR > 0.004) {
+        #if HIGHQ == 1
+        vec3 w3 = pow(abs(vWN), vec3(4.)); w3 /= (w3.x + w3.y + w3.z);
+        vec3 rc = (texture2D(uRockD, vWP.zy*0.07).rgb*w3.x + texture2D(uRockD, vWP.xz*0.07).rgb*w3.y + texture2D(uRockD, vWP.xy*0.07).rgb*w3.z);
+        rc = mix(rc, (texture2D(uRockD, vWP.zy*0.013).rgb*w3.x + texture2D(uRockD, vWP.xz*0.013).rgb*w3.y + texture2D(uRockD, vWP.xy*0.013).rgb*w3.z), 0.4);
+        #else
+        vec3 rc = texture2D(uRockD, p*0.06 + vec2(vWP.y*0.05, 0.)).rgb;
+        #endif
+        col += rc*kR;
+        if (gNear > 0.0) nrm += nmapXZ(unpackN(texture2D(uRockN, p*0.06 + vec2(vWP.y*0.05, 0.)), 1.2), vWN)*kR*gNear;
+      }
       float snow = smoothstep(880., 1020., vWP.y + nn*60.) * uSeason.w * (1. - smoothstep(0.45, 0.65, slope));
       col = mix(col, vec3(0.92,0.94,0.98), snow);
-      gHeight = mix(mix(mix(gt.a, dt.a, sp.a), st.a, sp.r), rt.a, rk);
-      float lowArea = 1. - smoothstep(0., 40., vWP.y);
       gWet = uWet * (1. - rk*0.5);
-      col *= mix(1.0, 0.62, gWet * (1. - sp.r*0.4));
-      float fade = smoothstep(1800., 6000., camD);
-      diffuseColor.rgb = mix(col, col*0.97, fade);`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.35, gWet*0.8);')
+      col *= mix(1.0, 0.6, gWet * (1. - kS*0.4));
+      gWN = normalize(mix(vWN, nrm + vWN*(1.-gNear), gNear > 0.0 ? 1.0 : 0.0));
+      gWN = normalize(mix(gWN, vWN, snow));
+      diffuseColor.rgb = col;`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.32, gWet*0.85);')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        float bumpS = 0.3 * (1. - smoothstep(20., 140., length(vViewPosition)));
-        normal = bumpN(-vViewPosition, normal, dFdx(gHeight)*bumpS, dFdy(gHeight)*bumpS);`);
+        normal = normalize((viewMatrix*vec4(gWN, 0.)).xyz);`);
   });
   return mat;
 }
@@ -250,13 +271,16 @@ export function waterMaterial(level, hTex) {
       vec3 V = normalize(cameraPosition - vW);
       float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
       vec3 Rf = reflect(-V, n);
-      vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.));
+      vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
+      vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y, 0.3));
       float murky = (uLevel > 1. || (p.x > -2900. && p.x < 6100.)) ? 1. : 0.;
       vec3 deep = mix(vec3(0.01,0.08,0.12), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.05,0.32,0.31), vec3(0.2,0.24,0.14), murky);
-      vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6;
+      vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6 + vec3(0.05,0.07,0.12)*uNight*max(moonD.y, 0.3);
       vec3 col = mix(mix(shal, deep, smoothstep(0., 9., depth))*light, sky, fres*0.85);
       float sd = max(dot(Rf, uSunDir), 0.);
       col += uSunColor*(pow(sd, 700.)*25. + pow(sd, 50.)*0.25)*step(0.,uSunDir.y)*(1.-uRain*0.8);
+      float md = max(dot(Rf, moonD), 0.);
+      col += vec3(0.55,0.65,0.9)*(pow(md, 400.)*6. + pow(md, 24.)*0.18)*uNight*step(0., moonD.y)*(1.-uRain*0.8);
       float band = sin(depth*6. - uTime*1.6 + vn(p*0.3)*6.)*0.5+0.5;
       float foam = (1. - smoothstep(0., 1.5, depth))*smoothstep(0.6, 0.95, band*0.75 + vn(p*0.35+uTime*0.2)*0.35)*0.7;
       foam = max(foam, smoothstep(0.35, 0.0, depth)*0.6);
@@ -283,18 +307,25 @@ export function buildWaters(scene, hTex, fallsTop) {
 
 // ---------- grass + crops (camera-following, GPU placed) ----------
 export function buildGrass(scene, hTex, occTex, splat, q) {
-  const R = q.grassR, sp = q.grassSp;
-  if (R <= 0) return;
+  if (q.grassR <= 0) return;
+  const R1 = Math.round(q.grassR * 0.42);
+  const inner = grassRing(scene, hTex, occTex, splat, q, R1, q.grassSp, 0);
+  const outer = grassRing(scene, hTex, occTex, splat, q, q.grassR, q.grassSp * 2, R1);
+  T.grass = { meshes: [inner.mesh, outer.mesh], unis: [inner.uni, outer.uni] };
+}
+function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
   const n = Math.floor((2 * R) / sp), count = n * n;
-  // clump of 3 blades
-  const P = [], C = [];
-  for (let b = 0; b < 3; b++) {
-    const a = b * 2.1 + 0.3, ox = Math.cos(a * 1.7) * 0.12, oz = Math.sin(a * 1.3) * 0.12, w = 0.045;
-    const dx = Math.cos(a) * w, dz = Math.sin(a) * w, seg = 3;
-    for (let s = 0; s < seg; s++) {
-      const t0 = s / seg, t1 = (s + 1) / seg, w0 = 1 - t0, w1 = 1 - t1;
-      const quad = [[-dx * w0, t0, -dz * w0, t0], [dx * w0, t0, dz * w0, t0], [-dx * w1, t1, -dz * w1, t1], [dx * w1, t1, dz * w1, t1]];
-      for (const id of [0, 2, 1, 1, 2, 3]) { const qv = quad[id]; P.push(qv[0] + ox, qv[1], qv[2] + oz); C.push(qv[3]); }
+  // one tuft = 5 curved, tapering leaves leaning outwards (built at unit height; the shader scales it)
+  const P = [], C = [], NB = q.desktop ? 5 : 4, SEG = q.desktop ? 4 : 3;
+  for (let b = 0; b < NB; b++) {
+    const a = b * 2.399 + 0.4, lean = 0.18 + (b % 3) * 0.1, ox = Math.cos(a) * 0.05, oz = Math.sin(a) * 0.05, w = 0.035 + (b % 2) * 0.012;
+    const lx = Math.cos(a), lz = Math.sin(a), px = -lz, pz = lx; // lean direction and leaf width direction
+    const hScale = 0.75 + (b % 4) * 0.1;
+    const pt = (t, side) => { const ww = w * (1 - t * 0.92), bend = lean * t * t; return [ox + lx * bend + px * ww * side, t * hScale * (1 - 0.25 * lean * t), oz + lz * bend + pz * ww * side, t]; };
+    for (let sg = 0; sg < SEG; sg++) {
+      const t0 = sg / SEG, t1 = (sg + 1) / SEG;
+      const q = [pt(t0, -1), pt(t0, 1), pt(t1, -1), pt(t1, 1)];
+      for (const id of [0, 2, 1, 1, 2, 3]) { const v = q[id]; P.push(v[0], v[1], v[2]); C.push(v[3]); }
     }
   }
   const g = new THREE.InstancedBufferGeometry();
@@ -304,48 +335,65 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
   const off = new Float32Array(count * 2);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = i + j * n; off[k * 2] = (i + Math.random() * 0.9) * sp; off[k * 2 + 1] = (j + Math.random() * 0.9) * sp; }
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 2)); g.instanceCount = count;
-  const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
-  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uTime: U.uTime, uSeason: U.uSeason };
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide });
+  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uR0: { value: R0 }, uTime: U.uTime, uSeason: U.uSeason, uSunColor: U.uSunColor, uSunDir: U.uSunDir };
   patch(mat, (s) => {
     Object.assign(s.uniforms, uni);
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>
-      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uTime; uniform vec4 uSeason; varying float vT; varying vec3 vGc;
+      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uR0, uTime; uniform vec4 uSeason; varying float vT; varying vec3 vGc; varying float vDist;
       ${HEIGHT_GLSL}
       float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }`)
       .replace('#include <begin_vertex>', `
       float span = 2.0*uR;
       vec2 wp = aOff + span*floor((uCam.xz - aOff)/span + 0.5);
+      vec2 suv0 = (wp + uHalf)/(2.*uHalf);
+      float field = texture2D(uSplat, suv0).b;
+      vec2 fc = floor((wp + vec2(13.,7.)) / vec2(70., 48.)); float fh = fract(sin(dot(mod(fc,289.), vec2(12.9898,78.233)))*43758.5453);
+      // crops grow in straight rows 0.9 m apart
+      if (field > 0.5) { if (fh > 0.5) wp.y = (floor(wp.y/0.9) + 0.5)*0.9; else wp.x = (floor(wp.x/0.9) + 0.5)*0.9; }
       float r1 = hh(floor(wp*3.1)), r2 = hh(floor(wp*1.7)+3.);
       vec2 suv = (wp + uHalf)/(2.*uHalf);
       vec4 spl = texture2D(uSplat, suv);
       float occ = texture2D(uOcc, suv).r;
       float y = hAt(wp);
-      float dist = length(wp - uCam.xz);
-      float field = spl.b;
+      float dist = length(wp - uCam.xz); vDist = dist;
       float dens = (1. - spl.r)*(1. - smoothstep(0.2,0.6,spl.a))*(1.-spl.g*0.35)*step(occ, 0.02);
-      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.75, uR, dist));
+      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.7, uR, dist)) * step(uR0, dist);
       float slopeOk = 1.0 - smoothstep(0.6, 1.4, abs(hAt(wp+vec2(2.,0.)) - y) + abs(hAt(wp+vec2(0.,2.)) - y));
       dens *= slopeOk;
-      vec2 fc = floor((wp + vec2(13.,7.)) / vec2(70., 48.)); float fh = fract(sin(dot(mod(fc,289.), vec2(12.9898,78.233)))*43758.5453);
-      float ht = mix(0.22 + r2*0.3, fh < 0.25 ? 2.3 : fh < 0.45 ? 0.55 : fh < 0.62 ? 0.0 : fh < 0.8 ? 1.1 : 0.85, field);
-      ht *= mix(1.0, 1.35, uSeason.x) * mix(1.0, 0.7, uSeason.y);
-      vec3 base = mix(vec3(0.11,0.2,0.05), vec3(0.18,0.24,0.06), uSeason.y);
-      vec3 tip = mix(mix(vec3(0.38,0.58,0.16), vec3(0.62,0.6,0.28), uSeason.y), vec3(0.32,0.62,0.14), uSeason.x);
-      if (field > 0.5) { if (fh < 0.25) { base = vec3(0.12,0.24,0.06); tip = vec3(0.35,0.55,0.18); } else if (fh < 0.45) { tip = vec3(0.4,0.75,0.2); } else if (fh < 0.8 && fh >= 0.62) { tip = mix(vec3(0.5,0.6,0.15), vec3(0.98,0.82,0.12), 0.4 + uSeason.w*0.6); } else { tip = vec3(0.8,0.68,0.3); base = vec3(0.4,0.33,0.15); } }
-      vGc = mix(base, tip, aT); vT = aT;
+      float bund = 1. - step(0.05, min(min(fract((wp.x+13.)/70.), 1.-fract((wp.x+13.)/70.)), min(fract((wp.y+7.)/48.), 1.-fract((wp.y+7.)/48.))));
+      float cropH = fh < 0.25 ? 1.45 : fh < 0.45 ? 0.62 : fh < 0.62 ? 0.0 : fh < 0.8 ? 0.95 : 0.7;
+      float ht = mix(0.2 + r2*0.22, cropH*(0.85 + r2*0.3), field) * (1. - bund*field);
+      ht *= mix(1.0, 1.25, uSeason.x) * mix(1.0, 0.75, uSeason.y);
+      vec3 base = mix(vec3(0.09,0.16,0.04), vec3(0.16,0.17,0.06), uSeason.y);
+      vec3 tip = mix(mix(vec3(0.3,0.48,0.12), vec3(0.55,0.52,0.24), uSeason.y), vec3(0.28,0.52,0.11), uSeason.x);
+      tip *= 0.85 + 0.3*r2;
+      if (field > 0.5) {
+        if (fh < 0.25) { base = vec3(0.1,0.2,0.05); tip = vec3(0.32,0.5,0.16); }
+        else if (fh < 0.45) { base = vec3(0.12,0.26,0.06); tip = vec3(0.38,0.66,0.18); }
+        else if (fh < 0.8 && fh >= 0.62) { base = vec3(0.2,0.26,0.07); tip = mix(vec3(0.45,0.55,0.15), vec3(0.85,0.7,0.16), 0.35 + uSeason.w*0.6); }
+        else { tip = vec3(0.7,0.6,0.28); base = vec3(0.35,0.3,0.14); }
+      }
+      vGc = mix(base, tip, smoothstep(0.0, 1.0, aT)); vT = aT;
       float s = ht * dens;
-      vec3 transformed = position * vec3(1.0 + field*0.8, s, 1.0 + field*0.8);
+      float wsc = mix(1.0, 1.6, field);
+      vec3 transformed = position * vec3(wsc*max(s, 0.25)/0.5, s, wsc*max(s, 0.25)/0.5);
+      transformed.xz *= step(0.001, s);
       float ang = r1*6.283; transformed.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * transformed.xz;
       float wind = sin(uTime*1.7 + wp.x*0.15 + wp.y*0.11)*0.5 + sin(uTime*3.1 + wp.x*0.5)*0.2;
-      transformed.x += wind*aT*aT*0.35*s; transformed.z += wind*aT*aT*0.15*s;
-      transformed += vec3(wp.x, y - 0.05, wp.y);`)
-      .replace('#include <color_vertex>', '#include <color_vertex>');
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vT; varying vec3 vGc;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGc;');
+      transformed.x += wind*aT*aT*0.25*s; transformed.z += wind*aT*aT*0.12*s;
+      transformed *= mix(1.0, 1.25, step(0.5, uR0)); // outer ring tufts are a little larger to keep coverage
+      transformed += vec3(wp.x, y - 0.04, wp.y);`);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vT; varying vec3 vGc; varying float vDist; uniform vec3 uSunColor; uniform vec3 uSunDir;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGc*(0.55 + 0.45*vT);')
+      // blades are lit like the ground they grow from: an up-facing normal on both sides (no black back faces)
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize((viewMatrix*vec4(0.,1.,0.,0.)).xyz); nonPerturbedNormal = normal;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGc*uSunColor*0.18*vT*vT*max(uSunDir.y, 0.);');
   });
-  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.receiveShadow = true; scene.add(mesh);
-  T.grass = { mesh, uni };
+  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.userData.noAO = true; scene.add(mesh);
+  return { mesh, uni };
 }
-export function updateGrass(cam) { if (T.grass) T.grass.uni.uCam.value.copy(cam); }
+export function updateGrass(cam) { if (T.grass) for (const u of T.grass.unis) u.uCam.value.copy(cam); }
 export function occTexture() {
   // occupancy (5 m) downsampled to 2 x 2 max
   const S = 2000, src = M.occ, SN = 4000, d = new Uint8Array(S * S);

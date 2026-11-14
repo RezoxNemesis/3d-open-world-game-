@@ -46,6 +46,8 @@ jobs:
         env: { ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }
       - run: npm run build
       - run: python3 -m pip install --quiet pillow
+      - name: Phones use the 1K texture set (keeps the APK small)
+        run: rm -rf dist/assets/tex/2k
       - run: npx cap add android
       - run: python3 tools/patch_android.py
       - run: npx cap sync android

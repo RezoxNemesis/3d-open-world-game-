@@ -16,6 +16,36 @@ function vc(g, fn) {
 }
 const solid = (h) => { const c = lin(h); return () => c; };
 const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+const SKIN = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+// add the back faces of a flat part (ears, tail fan) so one material can stay single-sided
+function twoSided(g) {
+  if (g.index) g = g.toNonIndexed(); const b = g.clone(), p = b.attributes.position.array, n = b.attributes.normal.array, c = b.attributes.color && b.attributes.color.array;
+  for (let i = 0; i < p.length; i += 9) for (let k = 0; k < 3; k++) { const t = p[i + 3 + k]; p[i + 3 + k] = p[i + 6 + k]; p[i + 6 + k] = t; const tn = n[i + 3 + k]; n[i + 3 + k] = n[i + 6 + k]; n[i + 6 + k] = tn; if (c) { const tc = c[i + 3 + k]; c[i + 3 + k] = c[i + 6 + k]; c[i + 6 + k] = tc; } }
+  for (let i = 0; i < n.length; i++) n[i] = -n[i];
+  return mergeGeometries([g, b]);
+}
+// Merge every part of an animal into ONE skinned mesh (rigid skinning: each part follows its joint bone).
+// The joints stay Bones, so all the existing leg/neck/tail/trunk animation code keeps working, but the animal is a single draw call.
+function skinify(root) {
+  root.updateMatrixWorld(true);
+  const bones = []; root.traverse((o) => { if (o.isBone) bones.push(o); });
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), geos = [], meshes = [];
+  root.traverse((o) => { if (o.isMesh && !o.userData.keep) meshes.push(o); });
+  for (const m of meshes) {
+    let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+    const n = g.attributes.position.count;
+    if (!g.attributes.color) { const c = m.material.color || new THREE.Color(1, 1, 1), a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); }
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+    let b = m.parent; while (b && !b.isBone) b = b.parent; const bi = Math.max(0, bones.indexOf(b));
+    const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4); for (let i = 0; i < n; i++) { si[i * 4] = bi; sw[i * 4] = 1; }
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+    geos.push(g); m.parent.remove(m);
+  }
+  const sm = new THREE.SkinnedMesh(mergeGeometries(geos), SKIN); sm.castShadow = true; sm.receiveShadow = true;
+  root.add(sm); root.updateMatrixWorld(true); sm.bind(new THREE.Skeleton(bones));
+  return sm;
+}
 const SPECIES = {
   horse: { len: 1.0, bodyR: [0.36, 0.42, 0.95], back: 1.5, leg: [0.42, 0.5], legR: 0.075, neck: [0.75, 0.8], head: [0.13, 0.17, 0.33], tail: 0.75, ears: 1, colors: [0x5d3a1a, 0x2b1b10, 0xe8e0d0, 0x8b5a2b, 0x111111], speed: [1.8, 5, 9.5, 16], mane: true },
   cow: { len: 1.0, bodyR: [0.42, 0.45, 0.9], back: 1.35, leg: [0.36, 0.42], legR: 0.07, neck: [0.4, 0.35], head: [0.14, 0.17, 0.3], tail: 0.7, horns: 1, hump: 1, colors: [0xeeeae0, 0xd8d2c4, 0x9e9a92, 0x7a5a3a], speed: [0.9, 2, 4, 6] },
@@ -36,61 +66,127 @@ function buildQuad(type, color) {
     if (S.stripes && y < -L[1] * 0.5) return lin(0xf5ead5);
     return y < -L[1] * 0.6 && type !== 'elephant' ? c.map((v) => v * 0.8) : c;
   });
-  const body = new THREE.Group(); body.position.y = back - L[1] * 0.2; root.add(body);
+  const body = new THREE.Bone(); body.position.y = back - L[1] * 0.2; root.add(body);
   const bm = new THREE.Mesh(bodyG, MAT); bm.castShadow = true; body.add(bm);
   if (S.hump) { const h = new THREE.Mesh(vc(new THREE.SphereGeometry(0.22, 10, 8).scale(1, 1.1, 1.2), solid(col)), MAT); h.position.set(0, L[1] * 0.85, L[2] * 0.45); body.add(h); }
   // legs
   parts.legs = [];
   for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-    const hip = new THREE.Group(); hip.position.set(sx * L[0] * 0.62, legTop - body.position.y, sz * L[2] * 0.68); body.add(hip);
+    const hip = new THREE.Bone(); hip.position.set(sx * L[0] * 0.62, legTop - body.position.y, sz * L[2] * 0.68); body.add(hip);
     const ug = vc(new THREE.CylinderGeometry(S.legR * 1.35, S.legR, S.leg[0], 8).translate(0, -S.leg[0] / 2, 0), solid(col));
     hip.add(new THREE.Mesh(ug, MAT)); hip.children[0].castShadow = true;
-    const knee = new THREE.Group(); knee.position.y = -S.leg[0]; hip.add(knee);
+    const knee = new THREE.Bone(); knee.position.y = -S.leg[0]; hip.add(knee);
     const lg = vc(new THREE.CylinderGeometry(S.legR, S.legR * 0.85, S.leg[1], 8).translate(0, -S.leg[1] / 2, 0), solid(type === 'horse' && Math.random() < 0.3 ? 0xf5f0e6 : col));
     knee.add(new THREE.Mesh(lg, MAT));
     const hoof = new THREE.Mesh(vc(new THREE.CylinderGeometry(S.legR * 1.1, S.legR * 1.2, S.legR * 1.4, 8).translate(0, -S.leg[1] - S.legR * 0.5, 0.0), solid(type === 'elephant' ? 0x5e5a56 : 0x1a1410)), MAT); knee.add(hoof);
     parts.legs.push({ hip, knee, front: sz > 0, side: sx });
   }
   // neck + head
-  const neck = new THREE.Group(); neck.position.set(0, L[1] * 0.35, L[2] * 0.82); neck.rotation.x = -S.neck[1]; body.add(neck);
+  const neck = new THREE.Bone(); neck.position.set(0, L[1] * 0.35, L[2] * 0.82); neck.rotation.x = -S.neck[1]; body.add(neck);
   neck.add(new THREE.Mesh(vc(new THREE.CylinderGeometry(S.head[0] * 0.9, L[0] * 0.55, S.neck[0], 10).translate(0, S.neck[0] / 2, 0), solid(col)), MAT));
   if (S.mane) neck.add(new THREE.Mesh(vc(new THREE.BoxGeometry(0.06, S.neck[0] * 1.05, 0.14).translate(0, S.neck[0] / 2, -L[0] * 0.35), solid(0x1a1008)), MAT));
-  const head = new THREE.Group(); head.position.y = S.neck[0]; head.rotation.x = S.neck[1] + 0.35; neck.add(head);
+  const head = new THREE.Bone(); head.position.y = S.neck[0]; head.rotation.x = S.neck[1] + 0.35; neck.add(head);
   const hg = vc(new THREE.SphereGeometry(1, 12, 10).scale(S.head[0], S.head[1], S.head[2]).translate(0, 0, S.head[2] * 0.5), (x, y, z) => (S.face && z > S.head[2] * 0.6 ? lin(0x1a1410) : c));
   head.add(new THREE.Mesh(hg, MAT));
-  for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(S.head[0] * 0.14, 6, 4), new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.2 })); e.position.set(sx * S.head[0] * 0.8, S.head[1] * 0.35, S.head[2] * 0.8); head.add(e); }
+  for (const sx of [-1, 1]) { const e = new THREE.Mesh(vc(new THREE.SphereGeometry(S.head[0] * 0.14, 6, 4), solid(0x050505)), MAT); e.position.set(sx * S.head[0] * 0.8, S.head[1] * 0.35, S.head[2] * 0.8); head.add(e); }
   if (S.ears) for (const sx of [-1, 1]) { const e = new THREE.Mesh(vc(new THREE.ConeGeometry(S.head[0] * 0.3, S.head[1] * 0.9, 5).translate(0, S.head[1] * 0.45, 0), solid(col)), MAT); e.position.set(sx * S.head[0] * 0.55, S.head[1] * 0.75, S.head[2] * 0.15); e.rotation.z = -sx * 0.3; head.add(e); }
-  if (S.bigEars) for (const sx of [-1, 1]) { const e = new THREE.Mesh(vc(new THREE.CircleGeometry(0.75, 12).scale(0.8, 1.1, 1), solid(0x5e5a56)), new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 })); e.position.set(sx * 0.6, 0.05, 0.1); e.rotation.y = sx * 1.2; head.add(e); parts.ears = parts.ears || []; parts.ears.push(e); }
+  if (S.bigEars) for (const sx of [-1, 1]) { const eb = new THREE.Bone(); eb.position.set(sx * 0.6, 0.05, 0.1); eb.rotation.y = sx * 1.2; head.add(eb); const e = new THREE.Mesh(twoSided(vc(new THREE.CircleGeometry(0.75, 12).scale(0.8, 1.1, 1), solid(0x5e5a56))), MAT); eb.add(e); parts.ears = parts.ears || []; parts.ears.push(eb); }
   if (S.horns) for (const sx of [-1, 1]) { const h = new THREE.Mesh(vc(new THREE.ConeGeometry(0.035, 0.3, 6).translate(0, 0.15, 0), solid(0x3e2f22)), MAT); h.position.set(sx * S.head[0] * 0.6, S.head[1] * 0.85, S.head[2] * 0.2); h.rotation.set(-0.4, 0, -sx * 0.55); head.add(h); }
-  if (S.antlers) for (const sx of [-1, 1]) { const a = new THREE.Group(); a.position.set(sx * 0.05, S.head[1] * 0.8, 0.05); a.rotation.z = -sx * 0.4; head.add(a); a.add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.45, 5).translate(0, 0.22, 0), new THREE.MeshStandardMaterial({ color: 0x6d5a40 }))); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.013, 0.2, 5).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: 0x6d5a40 })); b.position.y = 0.25; b.rotation.x = 0.7; a.add(b); }
-  if (S.trunk) { parts.trunk = []; let p = head; for (let k = 0; k < 6; k++) { const seg = new THREE.Group(); seg.position.set(0, k === 0 ? -0.2 : -0.28, k === 0 ? S.head[2] * 1.0 : 0); p.add(seg); seg.add(new THREE.Mesh(vc(new THREE.CylinderGeometry(0.17 - k * 0.022, 0.19 - k * 0.022, 0.3, 8).translate(0, -0.14, 0), solid(col)), MAT)); parts.trunk.push(seg); p = seg; } }
-  if (S.tusks) for (const sx of [-1, 1]) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.8, 6).rotateX(Math.PI * 0.65), new THREE.MeshStandardMaterial({ color: 0xf2ead8 })); t.position.set(sx * 0.25, -0.35, S.head[2] * 0.9); head.add(t); }
+  if (S.antlers) for (const sx of [-1, 1]) { const a = new THREE.Group(); a.position.set(sx * 0.05, S.head[1] * 0.8, 0.05); a.rotation.z = -sx * 0.4; head.add(a); a.add(new THREE.Mesh(vc(new THREE.CylinderGeometry(0.012, 0.018, 0.45, 5).translate(0, 0.22, 0), solid(0x6d5a40)), MAT)); const b = new THREE.Mesh(vc(new THREE.CylinderGeometry(0.01, 0.013, 0.2, 5).translate(0, 0.1, 0), solid(0x6d5a40)), MAT); b.position.y = 0.25; b.rotation.x = 0.7; a.add(b); }
+  if (S.trunk) { parts.trunk = []; let p = head; for (let k = 0; k < 6; k++) { const seg = new THREE.Bone(); seg.position.set(0, k === 0 ? -0.2 : -0.28, k === 0 ? S.head[2] * 1.0 : 0); p.add(seg); seg.add(new THREE.Mesh(vc(new THREE.CylinderGeometry(0.17 - k * 0.022, 0.19 - k * 0.022, 0.3, 8).translate(0, -0.14, 0), solid(col)), MAT)); parts.trunk.push(seg); p = seg; } }
+  if (S.tusks) for (const sx of [-1, 1]) { const t = new THREE.Mesh(vc(new THREE.ConeGeometry(0.06, 0.8, 6).rotateX(Math.PI * 0.65), solid(0xf2ead8)), MAT); t.position.set(sx * 0.25, -0.35, S.head[2] * 0.9); head.add(t); }
   // tail
-  const tail = new THREE.Group(); tail.position.set(0, L[1] * 0.4, -L[2] * 0.95); tail.rotation.x = type === 'dog' ? -0.8 : type === 'langur' ? -1.2 : 0.35; body.add(tail);
+  const tail = new THREE.Bone(); tail.position.set(0, L[1] * 0.4, -L[2] * 0.95); tail.rotation.x = type === 'dog' ? -0.8 : type === 'langur' ? -1.2 : 0.35; body.add(tail);
   tail.add(new THREE.Mesh(vc(new THREE.CylinderGeometry(S.legR * 0.5, S.legR * 0.25, S.tail, 6).translate(0, -S.tail / 2, 0), solid(type === 'horse' ? 0x1a1008 : col)), MAT));
   parts.neck = neck; parts.head = head; parts.tail = tail; parts.body = body;
-  if (type === 'horse') { const saddle = new THREE.Mesh(new THREE.BoxGeometry(L[0] * 1.6, 0.08, 0.6), new THREE.MeshStandardMaterial({ color: 0x5d2f12, roughness: 0.6 })); saddle.position.set(0, L[1] * 0.93, 0.05); body.add(saddle); saddle.visible = false; parts.saddle = saddle; }
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  if (type === 'horse') { const saddle = new THREE.Mesh(new THREE.BoxGeometry(L[0] * 1.6, 0.08, 0.6), new THREE.MeshStandardMaterial({ color: 0x5d2f12, roughness: 0.6 })); saddle.position.set(0, L[1] * 0.93, 0.05); body.add(saddle); saddle.visible = false; saddle.userData.keep = true; saddle.castShadow = true; parts.saddle = saddle; }
+  skinify(root);
   return { root, parts };
 }
+// lofted tube along a path of rings {c:[x,y,z], ax:[x,y,z], a, b} -> smooth BufferGeometry (used by the horse)
+function loftG(rings, seg = 12, caps = true) {
+  const P = [], I = [];
+  for (const r of rings) {
+    // a = half width (horizontal, sideways), b = half height (or depth for near-vertical tubes)
+    const ax = new THREE.Vector3(...r.ax).normalize();
+    let side = new THREE.Vector3().crossVectors(ax, new THREE.Vector3(0, 1, 0));
+    side = side.lengthSq() < 0.04 ? new THREE.Vector3(1, 0, 0) : side.normalize();
+    const up2 = new THREE.Vector3().crossVectors(side, ax).normalize();
+    for (let k = 0; k < seg; k++) { const t = (k / seg) * Math.PI * 2; const o = side.clone().multiplyScalar(Math.cos(t) * r.a).addScaledVector(up2, Math.sin(t) * r.b); P.push(r.c[0] + o.x, r.c[1] + o.y, r.c[2] + o.z); }
+  }
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < seg; k++) { const a = i * seg + k, b = i * seg + (k + 1) % seg; I.push(a, a + seg, b, b, a + seg, b + seg); }
+  if (caps) for (const [ri, dir] of [[0, -1], [rings.length - 1, 1]]) { const ci = P.length / 3; P.push(...rings[ri].c); for (let k = 0; k < seg; k++) { const a = ri * seg + k, b = ri * seg + (k + 1) % seg; if (dir > 0) I.push(ci, a, b); else I.push(ci, b, a); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
+}
+function horseModel(color) {
+  const S = SPECIES.horse, root = new THREE.Group(), parts = {}, c = lin(color), dark = lin(0x15100c), mane = lin(Math.random() < 0.5 ? 0x15100c : color === 0xe8e0d0 ? 0xd8d0c0 : 0x2a1a10);
+  const sock = Math.random() < 0.35 ? lin(0xf2ece0) : c;
+  const body = new THREE.Bone(); body.position.y = S.back - S.bodyR[1] * 0.2; root.add(body);
+  const by = 1.12 - body.position.y; // geometry centre of the barrel relative to the body bone
+  // barrel: rump -> flank -> girth -> chest (ax along +z)
+  const BR = [[-0.95, 0.07, 0.11, 0.1], [-0.86, 0.22, 0.28, 0.08], [-0.66, 0.31, 0.36, 0.04], [-0.38, 0.33, 0.38, 0.0], [-0.05, 0.33, 0.4, -0.02], [0.3, 0.33, 0.41, -0.01], [0.58, 0.3, 0.41, 0.03], [0.78, 0.23, 0.36, 0.09], [0.9, 0.12, 0.22, 0.17]];
+  body.add(new THREE.Mesh(vc(loftG(BR.map(([z, a, b, cy]) => ({ c: [0, by + cy, z], ax: [0, 0, 1], a, b })), 16), (x, y) => (y < by - 0.28 ? c.map((v) => v * 0.82) : c)), MAT));
+  // legs: hip at the top of the leg, knee bone half way; geometry reaches the ground
+  parts.legs = [];
+  const legTop = S.back - S.bodyR[1] * 0.6, upper = 0.48, lower = legTop - upper - 0.07;
+  for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const front = sz > 0;
+    const hip = new THREE.Bone(); hip.position.set(sx * 0.2, legTop - body.position.y, sz * (front ? 0.6 : 0.62)); body.add(hip);
+    // upper leg: muscular forearm (front) / gaskin (rear)
+    hip.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.12, front ? 0 : -0.06], ax: [0, -1, 0], a: 0.1, b: front ? 0.12 : 0.17 }, { c: [0, -0.14, front ? 0.01 : -0.07], ax: [0, -1, 0], a: 0.08, b: front ? 0.1 : 0.12 }, { c: [0, -upper + 0.04, 0], ax: [0, -1, 0], a: 0.055, b: 0.06 }], 10), solid(color)), MAT));
+    const knee = new THREE.Bone(); knee.position.y = -upper; hip.add(knee);
+    knee.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.03, 0], ax: [0, -1, 0], a: 0.055, b: 0.06 }, { c: [0, -0.12, 0], ax: [0, -1, 0], a: 0.04, b: 0.045 }, { c: [0, -lower + 0.12, 0.005], ax: [0, -1, 0], a: 0.04, b: 0.045 }, { c: [0, -lower + 0.06, 0.015], ax: [0, -1, 0.15], a: 0.05, b: 0.055 }], 10), (x, y) => (y < -lower * 0.55 ? sock : c)), MAT));
+    knee.add(new THREE.Mesh(vc(loftG([{ c: [0, -lower + 0.03, 0.02], ax: [0, -1, 0.1], a: 0.055, b: 0.06 }, { c: [0, -lower - 0.05, 0.035], ax: [0, -1, 0], a: 0.065, b: 0.072 }], 10), solid(0x1a1410)), MAT));
+    parts.legs.push({ hip, knee, front, side: sx });
+  }
+  // neck: arched, from the chest up and forward
+  const neck = new THREE.Bone(); neck.position.set(0, by + 0.18, 0.72); neck.rotation.x = -S.neck[1]; body.add(neck);
+  neck.add(new THREE.Mesh(vc(loftG([{ c: [0, -0.1, 0.0], ax: [0, 1, 0.1], a: 0.15, b: 0.27 }, { c: [0, 0.25, 0.05], ax: [0, 1, 0.15], a: 0.12, b: 0.21 }, { c: [0, 0.55, 0.08], ax: [0, 1, 0.2], a: 0.1, b: 0.16 }, { c: [0, 0.78, 0.06], ax: [0, 1, 0.1], a: 0.09, b: 0.13 }], 12), solid(color)), MAT));
+  // mane: a crest of strands along the top of the neck
+  const maneG = []; for (let k = 0; k < 9; k++) { const t = k / 8; maneG.push(vc(loftG([{ c: [0, -0.02 + t * 0.8, -0.2 + t * 0.12], ax: [0.6, 0.2, -1], a: 0.03, b: 0.012 }, { c: [0.1 - (k % 2) * 0.2, -0.12 + t * 0.8, -0.27 + t * 0.12], ax: [0.6, -1, -0.3], a: 0.022, b: 0.01 }], 5), () => mane)); }
+  neck.add(new THREE.Mesh(mergeGeometries(maneG), MAT));
+  const head = new THREE.Bone(); head.position.y = 0.8; head.rotation.x = S.neck[1] + 0.35; neck.add(head);
+  // head: poll -> cheeks -> long face -> muzzle
+  head.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.03, -0.04], ax: [0, 0.1, 1], a: 0.085, b: 0.1 }, { c: [0, 0.0, 0.1], ax: [0, -0.1, 1], a: 0.1, b: 0.12 }, { c: [0, -0.05, 0.3], ax: [0, -0.15, 1], a: 0.075, b: 0.085 }, { c: [0, -0.08, 0.48], ax: [0, -0.1, 1], a: 0.07, b: 0.075 }, { c: [0, -0.1, 0.56], ax: [0, -0.2, 1], a: 0.065, b: 0.07 }], 12), (x, y, z) => (z > 0.5 ? c.map((v) => v * 0.6) : (Math.random() < 0 ? c : c))), MAT));
+  for (const sx of [-1, 1]) {
+    head.add(new THREE.Mesh(vc(new THREE.SphereGeometry(0.018, 8, 6).translate(sx * 0.085, 0.03, 0.12), solid(0x050505)), MAT));
+    head.add(new THREE.Mesh(vc(new THREE.ConeGeometry(0.032, 0.13, 6).translate(0, 0.065, 0).rotateZ(-sx * 0.25).translate(sx * 0.05, 0.11, -0.02), solid(color)), MAT));
+    head.add(new THREE.Mesh(vc(new THREE.SphereGeometry(0.014, 6, 4).translate(sx * 0.035, -0.07, 0.58), solid(0x080605)), MAT));
+  }
+  head.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.14, -0.06], ax: [0, -0.3, 1], a: 0.05, b: 0.02 }, { c: [0, 0.1, 0.12], ax: [0, -0.5, 1], a: 0.045, b: 0.015 }], 5), () => mane), MAT));
+  // tail: flowing strands from the dock
+  const tail = new THREE.Bone(); tail.position.set(0, by + 0.12, -0.95); tail.rotation.x = 0.35; body.add(tail);
+  const tg = []; for (let k = 0; k < 5; k++) { const sx = (k - 2) * 0.025; tg.push(loftG([{ c: [sx * 0.4, 0, 0], ax: [0, -1, -0.3], a: 0.04, b: 0.04 }, { c: [sx, -0.3, -0.12], ax: [0, -1, -0.1], a: 0.035, b: 0.03 }, { c: [sx * 1.4, -0.65, -0.13], ax: [0, -1, 0.05], a: 0.03, b: 0.025 }, { c: [sx * 1.6, -0.85, -0.1], ax: [0, -1, 0], a: 0.012, b: 0.012 }], 6)); }
+  tail.add(new THREE.Mesh(vc(mergeGeometries(tg), () => mane), MAT));
+  parts.neck = neck; parts.head = head; parts.tail = tail; parts.body = body;
+  // saddle with blanket, cantle and stirrups (hidden until the horse is tacked up)
+  const sg = mergeGeometries([vc(loftG([{ c: [0, 0, -0.32], ax: [0, 0, 1], a: 0.36, b: 0.06 }, { c: [0, 0.01, 0.0], ax: [0, 0, 1], a: 0.38, b: 0.06 }, { c: [0, 0, 0.3], ax: [0, 0, 1], a: 0.35, b: 0.06 }], 12), solid(0x8a1c1c)),
+    vc(loftG([{ c: [0, 0.05, -0.26], ax: [0, 0, 1], a: 0.2, b: 0.07 }, { c: [0, 0.03, 0.0], ax: [0, 0, 1], a: 0.22, b: 0.05 }, { c: [0, 0.08, 0.22], ax: [0, 0, 1], a: 0.16, b: 0.08 }], 12), solid(0x4a2a12)),
+    ...[-1, 1].flatMap((sx) => [vc(new THREE.BoxGeometry(0.015, 0.4, 0.03).translate(sx * 0.3, -0.2, 0.05), solid(0x2a1a0e)), vc(new THREE.TorusGeometry(0.05, 0.01, 4, 10).rotateY(Math.PI / 2).translate(sx * 0.3, -0.42, 0.05), solid(0x9e9e9e))])]);
+  const saddle = new THREE.Mesh(sg, MAT); saddle.position.set(0, by + 0.39, 0.12); body.add(saddle); saddle.visible = false; saddle.userData.keep = true; saddle.castShadow = true; parts.saddle = saddle;
+  skinify(root);
+  return { root, parts };
+}
+
 function peacock() {
-  const root = new THREE.Group(), blue = 0x0d47a1, parts = {};
+  const top = new THREE.Group(), root = new THREE.Bone(), blue = 0x0d47a1, parts = {}; top.add(root);
   const body = new THREE.Mesh(vc(new THREE.SphereGeometry(0.2, 10, 8).scale(1, 1, 1.6), solid(blue)), MAT); body.position.y = 0.55; root.add(body);
   const neck = new THREE.Mesh(vc(new THREE.CylinderGeometry(0.04, 0.07, 0.4, 6), solid(0x1565c0)), MAT); neck.position.set(0, 0.85, 0.22); neck.rotation.x = 0.3; root.add(neck);
   const head = new THREE.Mesh(vc(new THREE.SphereGeometry(0.06, 8, 6), solid(0x1565c0)), MAT); head.position.set(0, 1.06, 0.3); root.add(head);
   for (const sx of [-1, 1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.45, 4), MAT); l.position.set(sx * 0.07, 0.22, 0); root.add(l); }
   const fanG = vc(new THREE.CircleGeometry(1.1, 24, 0, Math.PI), (x, y) => { const r = Math.hypot(x, y), ring = Math.sin(r * 22) > 0.7; return ring ? lin(0x1e88e5) : r > 0.9 ? lin(0x2e7d32) : lin(0x558b2f); });
-  const fan = new THREE.Mesh(fanG, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.2 }));
-  fan.position.set(0, 0.6, -0.25); root.add(fan); parts.fan = fan;
-  const trainG = vc(new THREE.ConeGeometry(0.22, 1.2, 8).rotateX(-Math.PI / 2 - 0.1), solid(0x2e7d32)); const train = new THREE.Mesh(trainG, MAT); train.position.set(0, 0.45, -0.75); root.add(train); parts.train = train;
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, parts };
+  const fan = new THREE.Mesh(twoSided(fanG), MAT);
+  const fanB = new THREE.Bone(); fanB.position.set(0, 0.6, -0.25); root.add(fanB); fanB.add(fan); parts.fan = fanB;
+  const trainG = vc(new THREE.ConeGeometry(0.22, 1.2, 8).rotateX(-Math.PI / 2 - 0.1), solid(0x2e7d32)); const train = new THREE.Mesh(trainG, MAT); const trainB = new THREE.Bone(); trainB.position.set(0, 0.45, -0.75); root.add(trainB); trainB.add(train); parts.train = trainB;
+  skinify(top);
+  return { root: top, parts };
 }
 
 export class Animal {
   constructor(game, type, x, z, color) {
     this.game = game; this.type = type; this.S = SPECIES[type] || { speed: [0.6, 1.5, 4, 6], len: 0.3 };
-    const m = type === 'peacock' ? peacock() : buildQuad(type, color ?? SPECIES[type].colors[Math.floor(Math.random() * SPECIES[type].colors.length)]);
+    const col = color ?? (SPECIES[type] ? SPECIES[type].colors[Math.floor(Math.random() * SPECIES[type].colors.length)] : 0);
+    const m = type === 'peacock' ? peacock() : type === 'horse' ? horseModel(col) : buildQuad(type, col);
     this.obj = m.root; this.parts = m.parts; game.scene.add(this.obj);
     this.pos = new THREE.Vector3(x, M.groundAt(x, z), z); this.home = this.pos.clone(); this.yaw = Math.random() * 6.28; this.speed = 0; this.want = 0; this.ph = Math.random() * 10;
     this.state = 'graze'; this.t = Math.random() * 5; this.target = null; this.rider = null; this.hp = type === 'elephant' ? 600 : type === 'tiger' ? 220 : type === 'horse' ? 150 : 60; this.vy = 0; this.air = false;
@@ -99,8 +195,10 @@ export class Animal {
   }
   update(dt, P) {
     const d = P ? Math.hypot(P.x - this.pos.x, P.z - this.pos.z) : 1e9;
-    this.obj.visible = d < 650 || !!this.rider;
-    if (!this.obj.visible && Math.random() > 0.05) return;
+    const far = this.game.q.animalFar || 300, big = this.type === 'elephant' || this.type === 'horse' || this.type === 'cow';
+    this.obj.visible = d < (big ? far * 1.4 : far) || !!this.rider;
+    // far animals: update rarely (cheap AI LOD); their time step is accumulated so they keep moving consistently
+    if (!this.obj.visible) { this.skip = (this.skip || 0) + dt; if (this.skip < 1) return; dt = this.skip; } this.skip = 0;
     if (this.dead) { this.parts.body && (this.parts.body.rotation.z = damp(this.parts.body.rotation.z, 1.5, 3, dt)); return; }
     this.t -= dt;
     if (this.rider) this.ridden(dt);
@@ -167,7 +265,7 @@ export class Animal {
   }
   animate(dt) {
     const P = this.parts, sp = this.speed;
-    if (this.type === 'peacock') { const show = this.state === 'graze' && Math.sin(this.ph * 0.3) > 0.4; this.ph += dt; P.fan.visible = show; P.train.visible = !show; return; }
+    if (this.type === 'peacock') { const show = this.state === 'graze' && Math.sin(this.ph * 0.3) > 0.4; this.ph += dt; P.fan.scale.setScalar(show ? 1 : 0.001); P.train.scale.setScalar(show ? 0.001 : 1); return; }
     const gallop = sp > this.S.speed[2] * 0.8, rate = sp < 0.2 ? 0 : (gallop ? 2.6 : 1.8) * Math.sqrt(sp) / Math.sqrt(this.S.len + 0.3);
     this.ph += dt * rate * 2;
     const A = clamp(sp / (this.S.speed[1] + 0.1), 0, 1) * (gallop ? 0.75 : 0.5);

@@ -107,7 +107,7 @@ export class HUD {
     if (s.objective) { this.obj.style.display = 'block'; this.obj.textContent = s.objective; } else this.obj.style.display = 'none';
     const st = audio.subtitle; if (st && performance.now() - st.t < 9000) { this.sub.style.display = 'block'; this.sub.innerHTML = `<b>${st.who}:</b> ${st.text}`; } else this.sub.style.display = 'none';
     if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) this.toastEl.style.display = 'none'; }
-    this.fps.textContent = s.fpsOn ? `${Math.round(s.fps)} fps` : '';
+    this.fps.textContent = s.fpsOn ? `${Math.round(s.fps)} fps` + (s.res ? ` · ${s.res}% res` : '') : '';
     this.mmT -= dt; if (this.mmT <= 0) { this.mmT = 1 / 15; this.drawMinimap(s); }
   }
   hurtFlash(a) { this.flash.style.opacity = a; setTimeout(() => (this.flash.style.opacity = 0), 120); }
@@ -172,6 +172,13 @@ export class HUD {
     set('Weather', [['clear', 'Clear'], ['rain', 'Rain / storm']], g.weather.targetRain > 0 ? 'rain' : 'clear', (k) => { g.weather.targetRain = k === 'rain' ? 0.9 : 0; g.weather.timer = 300; });
     set('Time', [[6, 'Dawn'], [11, 'Day'], [16.5, 'Afternoon'], [18.2, 'Sunset'], [22, 'Night']], null, (k) => (g.sky.hour = k));
     set('Day speed', [[0, 'Frozen'], [30, 'Slow'], [60, 'Normal'], [240, 'Fast']], g.timeScale, (k) => (g.timeScale = k));
+    sec('PERFORMANCE');
+    const gv = g.gov;
+    if (gv) {
+      set('Frame rate', [[30, '30'], [45, '45'], [60, '60'], [120, 'Max']], gv.cap, (k) => { gv.cap = k; try { localStorage.setItem('damanduo.fps', String(k)); } catch (e) {} });
+      set('Auto resolution', [[true, 'On'], [false, 'Off']], gv.enabled, (k) => { gv.enabled = k; if (!k && gv.scale !== 1) { gv.scale = 1; gv.onScale(1); } try { localStorage.setItem('damanduo.drs', k ? '1' : '0'); } catch (e) {} });
+    }
+    if (g.gpu && g.gpu.renderer) $('div', { class: 'lbl', text: `GPU: ${g.gpu.renderer}`, style: 'font-size:11px;opacity:.55;margin:4px 0;text-transform:none;letter-spacing:0' }, b);
     sec('GRAPHICS (restarts)');
     set('Preset', [['low', 'Low'], ['mobile', 'Mobile'], ['high', 'High'], ['ultra', 'Ultra']], g.presetKey, (k) => g.applyPreset(k));
     set('Crowd', [[50000, '50K'], [100000, '1 Lakh'], [200000, '2 Lakh'], [300000, '3 Lakh']], g.q.crowd, (k) => g.applyCrowd(k));

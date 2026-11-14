@@ -13,7 +13,7 @@ export class NPCs {
   constructor(game) { this.game = game; this.enemies = []; this.civs = []; this.wanted = 0; this.calm = 0; this.rng = mulberry32(55); this.gangRespawn = 0; }
   spawnEnemy(team, x, z, opts = {}) {
     const r = this.rng;
-    const look = team === 'police' ? { skin: 0xc68642, top: 0xc8ad7f, bottom: 0xc8ad7f, shoes: 0x2b1b10, hair: 0x120c08, hairStyle: 'short', sleeves: 'short', cap: 0x6d5a3a, beard: r() < 0.5 }
+    const look = team === 'police' ? { skin: [0xc68642, 0x8d5524, 0xa86b3c, 0xe0ac69][Math.floor(r() * 4)], top: 0xb39a6b, bottom: 0xa88f60, denim: false, shoes: 0x120d0a, sole: 0x0a0a0a, hair: 0x120c08, hairStyle: 'short', sleeves: 'short', cap: 0x1f2a44, beard: r() < 0.4, police: true }
       : { ...randomLook(r, false), top: r() < 0.6 ? 0x111111 : 0x3e2723, bottom: 0x1a1a2e, cap: 0xb71c1c, beard: r() < 0.6, jacket: r() < 0.3 ? 0x212121 : null };
     const c = new Character(this.game, look, { team, x, z, hp: team === 'police' ? 110 : opts.boss ? 400 : 90, runSpeed: 5, sprintSpeed: 7.4, detail: 1, name: team === 'police' ? 'Constable' : opts.boss ? 'Gang Boss' : 'Gangster' });
     c.weapon = opts.weapon ?? (r() < (team === 'police' ? 0.75 : 0.45) ? 1 : 0); if (opts.rifle) c.weapon = 2;

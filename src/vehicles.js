@@ -10,7 +10,8 @@ import { sfx, engineLoop, updateEngine, stopLoop } from './audio.js';
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 // shared material for vehicle "statics" (vertex coloured, paint tinted)
 export function vehicleMaterial(instanced) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45 });
+  // player/parked cars get a clear-coated paint (MeshPhysical); traffic uses the cheaper standard material
+  const m = instanced ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45 }) : new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.05 });
   patch(m, (s) => {
     s.uniforms.uNight = U.uNight; s.uniforms.uTint = { value: new THREE.Color(1, 1, 1) }; m.userData.uTint = s.uniforms.uTint; s.uniforms.uBrake = { value: 0 }; m.userData.uBrake = s.uniforms.uBrake;
     s.uniforms.uTime = U.uTime;
@@ -23,12 +24,14 @@ export function vehicleMaterial(instanced) {
       .replace('#include <color_fragment>', `#include <color_fragment>
       vec3 tint = ${instanced ? 'vTint' : 'uTint'};
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*tint, vPaint);`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.18, vPaint);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vEmit > 4.5 && vEmit < 5.5 ? 0.04 : vEmit > 5.5 ? 0.14 : mix(0.72, 0.3, vPaint);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vEmit > 5.5 ? 1.0 : vEmit > 4.5 ? 0.0 : mix(0.0, 0.5, vPaint);')
+      .replace('#include <lights_physical_fragment>', THREE.ShaderChunk.lights_physical_fragment.replace('material.clearcoat = clearcoat;', 'material.clearcoat = clearcoat * vPaint;'))
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       if (vEmit > 0.5 && vEmit < 1.5) totalEmissiveRadiance += vec3(1.,0.95,0.8)*(0.15 + uNight*3.5);
       if (vEmit > 1.5 && vEmit < 2.5) totalEmissiveRadiance += vec3(1.,0.05,0.03)*(0.1 + uNight*2. + uBrake*3.);
       if (vEmit > 2.5 && vEmit < 3.5) totalEmissiveRadiance += vec3(1.,0.1,0.1)*step(0.5, fract(uTime*2.5))*4.;
-      if (vEmit > 3.5) totalEmissiveRadiance += vec3(0.1,0.3,1.)*step(0.5, fract(uTime*2.5+0.5))*4.;`);
+      if (vEmit > 3.5 && vEmit < 4.5) totalEmissiveRadiance += vec3(0.1,0.3,1.)*step(0.5, fract(uTime*2.5+0.5))*4.;`);
   }, instanced ? 'inst' : 'single');
   return m;
 }

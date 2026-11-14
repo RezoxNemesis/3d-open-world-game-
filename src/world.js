@@ -4,6 +4,7 @@ import * as M from './mapdata.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
 import * as TR from './terrain.js';
+import { loadTextures, TEX, TEX_GLSL } from './textures.js';
 
 export const world = { colliders: [], animated: [], beams: [], lightsMat: null, labels: [] };
 
@@ -46,6 +47,29 @@ function canvasTex(w, h, draw, srgb = true) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d'); draw(ctx, w, h);
   const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
 }
+// ---- tiled LOD registry: big instanced sets are split into map tiles so the camera frustum and a far distance can skip them
+const LOD = [];
+function regLod(obj, cx, cz, far) { LOD.push({ obj, cx, cz, far2: far * far }); }
+export function updateWorldLOD(cam) { for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; t.obj.visible = dx * dx + dz * dz < t.far2; } }
+function bucket(items, size, xz) {
+  const m = new Map();
+  for (const it of items) { const [x, z] = xz(it); const k = Math.floor((x + M.HALF) / size) + Math.floor((z + M.HALF) / size) * 1000; if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
+  return [...m].map(([k, list]) => ({ list, cx: (k % 1000) * size - M.HALF + size / 2, cz: Math.floor(k / 1000) * size - M.HALF + size / 2 }));
+}
+function instTiles(scene, geo, mat, items, size, far, place, opts = {}) {
+  const out = [];
+  for (const T of bucket(items, size, opts.xz || ((it) => [it.x, it.z]))) {
+    let g = geo;
+    if (opts.inst) { g = new THREE.BufferGeometry(); for (const k in geo.attributes) g.setAttribute(k, geo.attributes[k]); if (geo.index) g.setIndex(geo.index); }
+    const m = new THREE.InstancedMesh(g, mat, T.list.length);
+    T.list.forEach((it, i) => place(m, it, i, g));
+    if (opts.inst) for (const [name, size2, fn] of opts.inst) { const a = new Float32Array(T.list.length * size2); T.list.forEach((it, i) => a.set(fn(it), i * size2)); g.setAttribute(name, new THREE.InstancedBufferAttribute(a, size2)); }
+    m.castShadow = opts.shadow !== false; m.receiveShadow = opts.receive !== false; m.computeBoundingSphere(); m.matrixAutoUpdate = false;
+    if (opts.depth) m.customDepthMaterial = opts.depth;
+    scene.add(m); regLod(m, T.cx, T.cz, far); out.push(m);
+  }
+  return out;
+}
 function addCol(x0, z0, x1, z1, y0, y1, extra = {}) { world.colliders.push({ x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), y0, y1, ...extra }); }
 
 // ---------------- textures ----------------
@@ -74,9 +98,15 @@ function plasterTex() {
 }
 
 // ---------------- roads ----------------
-function buildRoads(scene, stoneMat) {
-  const P = [], UV = [], A = [], I = [];
-  let vi = 0;
+function buildRoads(scene, stoneMat, q) {
+  const RB = new Map(), RT = 1000;
+  let P, UV, A, I, vi;
+  const use = (x, z) => {
+    const k = Math.floor((x + M.HALF) / RT) + Math.floor((z + M.HALF) / RT) * 1000;
+    if (!RB.has(k)) RB.set(k, { P: [], UV: [], A: [], I: [], vi: 0, k });
+    const b = RB.get(k); P = b.P; UV = b.UV; A = b.A; I = b.I; vi = b.vi; return b;
+  };
+  let cur = null; const done = () => { if (cur) cur.vi = vi; };
   const kit = new Kit();
   const typeCode = { major: 0, coast: 0, street: 1, link: 1, village: 2, fort: 3, runway: 4 };
   function ribbon(pts, w, lanes, t, len, lit, cw) {
@@ -91,6 +121,7 @@ function buildRoads(scene, stoneMat) {
       if (k < pts.length - 1) { I.push(vi, vi + 2, vi + 1, vi + 1, vi + 2, vi + 3); }
       vi += 2;
     }
+    done();
   }
   for (const e of M.edges) {
     const Aa = M.nodes[e.a], B = M.nodes[e.b];
@@ -102,6 +133,7 @@ function buildRoads(scene, stoneMat) {
       const y = e.elev ? lerp(Aa.y, B.y, clamp(s / e.len, 0, 1)) : M.terrainH(x, z) + 0.17;
       pts.push({ x, z, y, s });
     }
+    cur = use((Aa.x + B.x) / 2, (Aa.z + B.z) / 2);
     const lit = e.type === 'major' || e.type === 'coast' || e.type === 'fort' ? 1 : 0;
     const sw = !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link') ? 1 : 0;
     ribbon(pts, e.w + sw * 5.2, e.type === 'village' ? 0 : e.lanes, (typeCode[e.type] ?? 1) + sw * 100, e.len, lit, e.w);
@@ -123,37 +155,35 @@ function buildRoads(scene, stoneMat) {
     let w = 0, side = 0; for (const ei of nd.e) { const E = M.edges[ei]; w = Math.max(w, E.w); if (['nani', 'moti', 'devka', 'jampore'].includes(E.zone) && E.type !== 'fort' && E.type !== 'village') side = 1; }
     w += side * 5.2;
     const pts = [{ x: nd.x, z: nd.z - w / 2 - 1, y: M.terrainH(nd.x, nd.z) + 0.2, s: 0 }, { x: nd.x, z: nd.z + w / 2 + 1, y: M.terrainH(nd.x, nd.z) + 0.2, s: w + 2 }];
+    cur = use(nd.x, nd.z);
     ribbon(pts, w + 2, -1, 9, w + 2, 0);
   }
   // runway + taxiway
   const ap = M.L.airport, rl = ap.runX1 - ap.runX0;
+  cur = use((ap.runX0 + ap.runX1) / 2, ap.runZ); // runway is long: keep it in one tile mesh
   const rp = []; for (let k = 0; k <= 60; k++) { const s = rl * k / 60; rp.push({ x: ap.runX0 + s, z: ap.runZ, y: M.terrainH(ap.runX0 + s, ap.runZ) + 0.13, s }); }
   ribbon(rp, 46, 3, 4, rl, 0);
   const tp = []; for (let k = 0; k <= 30; k++) { const s = rl * 0.8 * k / 30; tp.push({ x: ap.runX0 + 100 + s, z: ap.runZ + 120, y: M.terrainH(ap.runX0 + 100 + s, ap.runZ + 120) + 0.13, s }); }
   ribbon(tp, 22, 0, 5, rl * 0.8, 0);
   const ap2 = []; for (let k = 0; k <= 10; k++) { const s = 400 * k / 10; ap2.push({ x: -500 + s * 0 + 0, z: 0, y: 0, s }); }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
-  geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(A, 4));
-  const norm = new Float32Array(P.length); for (let i = 1; i < norm.length; i += 3) norm[i] = 1;
-  geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
-  geo.setIndex(I); geo.computeBoundingSphere();
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -12 });
   patch(mat, (s) => {
-    s.uniforms.uNight = U.uNight;
+    s.uniforms.uNight = U.uNight; s.uniforms.uWet = U.uWet;
+    Object.assign(s.uniforms, { uAsphD: { value: TEX.asphalt.d }, uAsphN: { value: TEX.asphalt.n }, uPaveD: { value: TEX.pavers.d }, uPaveN: { value: TEX.pavers.n }, uCobD: { value: TEX.cobble.d }, uSoilD: { value: TEX.soil.d } });
     s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aRoad; varying vec4 vRoad; varying vec2 vRUV; varying vec3 vWP;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvRoad = aRoad; vRUV = uv;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix*vec4(transformed,1.)).xyz;');
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; varying vec4 vRoad; varying vec2 vRUV; varying vec3 vWP;\n' + NOISE)
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; uniform float uWet; uniform sampler2D uAsphD, uAsphN, uPaveD, uPaveN, uCobD, uSoilD; varying vec4 vRoad; varying vec2 vRUV; varying vec3 vWP; vec3 rN; float rWet;\n' + NOISE + TEX_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float w = vRoad.x, lanes = vRoad.y, len = vRoad.z, side = step(99., vRoad.w), code = mod(vRoad.w, 100.), tcode = mod(code, 10.), lit = floor(code/10.);
         float totalW = w + side*5.2;
         float across = (vRUV.x-0.5)*totalW, a = abs(across), v = vRUV.y;
-        float grain = vn(vWP.xz*2.5)*0.5 + vn(vWP.xz*0.4)*0.5;
-        vec3 asph = vec3(0.13,0.13,0.14)*(0.8+0.4*grain);
-        if (tcode > 1.5 && tcode < 2.5) asph = vec3(0.42,0.36,0.28)*(0.8+0.4*grain);
-        if (tcode > 2.5 && tcode < 3.5) { vec2 c = fract(vWP.xz*0.7); asph = vec3(0.45,0.42,0.38)*(0.75+0.3*grain)*(0.85+0.15*step(0.08,min(c.x,c.y))); }
+        float camDr = length(vViewPosition), nearR = 1. - smoothstep(60., 110., camDr);
+        float grain = vn(vWP.xz*0.4);
+        vec3 asph = tex2s(uAsphD, vWP.xz, 0.26).rgb*vec3(0.62,0.62,0.66);
+        rN = nearR > 0. ? unpackN(texture2D(uAsphN, vWP.xz*0.26), 0.8) : vec3(0.,0.,1.);
+        if (tcode > 1.5 && tcode < 2.5) { asph = tex2s(uSoilD, vWP.xz, 0.3).rgb*1.05; rN = vec3(0.,0.,1.); }
+        if (tcode > 2.5 && tcode < 3.5) { asph = texture2D(uCobD, vWP.xz*0.32).rgb*0.95; }
         float edgeDirt = smoothstep(w*0.5-1.2, w*0.5, a);
         asph = mix(asph, vec3(0.38,0.33,0.26), edgeDirt*0.7*step(tcode,2.5));
         float fade = smoothstep(0., 2.5, v - w*0.6) * smoothstep(0., 2.5, len - v - w*0.6);
@@ -175,126 +205,213 @@ function buildRoads(scene, stoneMat) {
         mk *= fade*(0.55+0.45*wear)*step(tcode, 8.);
         diffuseColor.rgb = mix(asph, mc, clamp(mk,0.,1.)*0.85);
         if (a > w*0.5 && side > 0.5) {
-          vec2 tl = fract(vWP.xz/0.6); float joint = step(0.06, min(tl.x, tl.y));
-          vec3 pave = mix(vec3(0.5,0.48,0.45), vec3(0.62,0.58,0.52), vn(floor(vWP.xz/0.6)*1.7))*(0.82 + 0.18*joint)*(0.85+0.2*grain);
+          vec3 pave = texture2D(uPaveD, vWP.xz*0.42).rgb*(0.9 + 0.2*grain);
+          rN = nearR > 0. ? unpackN(texture2D(uPaveN, vWP.xz*0.42), 1.0) : vec3(0.,0.,1.);
           float curb = 1. - step(w*0.5 + 0.28, a);
           pave = mix(pave, vec3(0.72,0.72,0.68), curb);
+          if (curb > 0.5) rN = vec3(0.,0.,1.);
           if (curb > 0.5 && fract(v/2.0) < 0.5) pave = vec3(0.85,0.82,0.15)*0.8;
           pave = mix(pave, vec3(0.42,0.37,0.3), smoothstep(w*0.5+2.0, w*0.5+2.6, a)*0.6);
           diffuseColor.rgb = pave;
         }
         float pool = 0.;
         if (lit > 0.5) { float dv = mod(v - 15., 38.) - 19.; pool = exp(-dv*dv/70.)*exp(-a*a/(w*w*0.4)); }`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.,0.7,0.4)*pool*uNight*0.35;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.,0.7,0.4)*pool*uNight*0.35;')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.88, 0.22, uWet);\ndiffuseColor.rgb *= mix(1.0, 0.55, uWet);')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize((viewMatrix*vec4(nmapXZ(rN, vec3(0.,1.,0.)), 0.)).xyz);');
   });
-  const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; scene.add(m);
+  for (const b of RB.values()) {
+    if (!b.I.length) continue;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.P, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(b.UV, 2));
+    geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(b.A, 4));
+    const norm = new Float32Array(b.P.length); for (let i = 1; i < norm.length; i += 3) norm[i] = 1;
+    geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+    geo.setIndex(b.I); geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.matrixAutoUpdate = false; scene.add(m);
+    regLod(m, (b.k % 1000) * RT - M.HALF + RT / 2, Math.floor(b.k / 1000) * RT - M.HALF + RT / 2, q.roadFar || 5000);
+  }
   kit.build({ concrete: stoneMat.concrete }, scene);
-  world.roadMesh = m;
 }
 
 // ---------------- buildings ----------------
-function buildBuildings(scene) {
+function buildBuildings(scene, q) {
   const B = M.buildings, n = B.length;
   const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0); box.deleteAttribute('uv');
-  const info = new Float32Array(n * 2);
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.0 });
-  const mesh = new THREE.InstancedMesh(box, mat, n);
   const roofs = [], tanks = [];
   for (let i = 0; i < n; i++) {
     const b = B[i], w = b.x1 - b.x0, d = b.z1 - b.z0, top = b.y + b.h + 0.4;
-    _m.compose(_p.set((b.x0 + b.x1) / 2, b.y, (b.z0 + b.z1) / 2), _q.identity(), _s.set(w, b.h + 0.4, d));
-    mesh.setMatrixAt(i, _m); mesh.setColorAt(i, new THREE.Color(b.color));
-    info[i * 2] = b.seed; info[i * 2 + 1] = b.style;
     let rh = 0;
     if (b.roof) { rh = Math.min(w, d) * 0.32; roofs.push({ b, rh, top }); }
     else if ((b.style === 0 || b.style === 1) && R() < 0.55) tanks.push({ x: b.x0 + 1.6 + R() * (w - 3.2), z: b.z0 + 1.6 + R() * (d - 3.2), y: top });
     addCol(b.x0, b.z0, b.x1, b.z1, b.y, top + rh * 0.55, { bld: i });
   }
-  box.setAttribute('aInfo', new THREE.InstancedBufferAttribute(info, 2));
+  const bfar = q.bldFar || 6000, _c = new THREE.Color();
+  instTiles(scene, box, mat, B, 1000, bfar, (m, b, i) => {
+    _m.compose(_p.set((b.x0 + b.x1) / 2, b.y, (b.z0 + b.z1) / 2), _q.identity(), _s.set(b.x1 - b.x0, b.h + 0.4, b.z1 - b.z0)); m.setMatrixAt(i, _m); m.setColorAt(i, _c.set(b.color));
+  }, { xz: (b) => [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2], inst: [['aInfo', 2, (b) => [b.seed, b.style]]] });
   patch(mat, (s) => {
-    s.uniforms.uNight = U.uNight; s.uniforms.uTime = U.uTime;
-    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; varying vec3 vFac; varying vec2 vInfo; varying float vHt;')
+    s.uniforms.uNight = U.uNight; s.uniforms.uTime = U.uTime; s.uniforms.uWet = U.uWet; s.uniforms.uHorizon = U.uHorizon; s.uniforms.uZenith = U.uZenith; s.uniforms.uSunDir = U.uSunDir;
+    Object.assign(s.uniforms, { uPlD: { value: TEX.plaster.d }, uPlN: { value: TEX.plaster.n }, uStD: { value: TEX.stained.d }, uStN: { value: TEX.stained.n }, uBrD: { value: TEX.brick.d }, uBrN: { value: TEX.brick.n }, uShD: { value: TEX.shutter.d }, uTinD: { value: TEX.tin.d }, uCrD: { value: TEX.cracked.d } });
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; varying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
         if (abs(normal.x) > 0.5) vFac = vec3((position.z+0.5)*sc.z, position.y*sc.y, 0.);
         else if (abs(normal.z) > 0.5) vFac = vec3((position.x+0.5)*sc.x, position.y*sc.y, 0.);
         else vFac = vec3(position.x*sc.x, position.z*sc.z, 1.);
-        vInfo = aInfo; vHt = sc.y;`);
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; uniform float uTime; varying vec3 vFac; varying vec2 vInfo; varying float vHt;\n' + NOISE)
+        vInfo = aInfo; vHt = sc.y; vBN = normal;
+        vBW = (modelMatrix*instanceMatrix*vec4(position, 1.)).xyz;`);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight, uTime, uWet; uniform vec3 uHorizon, uZenith, uSunDir; uniform sampler2D uPlD, uPlN, uStD, uStN, uBrD, uBrN, uShD, uTinD, uCrD;\nvarying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN; vec3 bTN; float bWin; float bNearK;\n' + NOISE + TEX_GLSL + `
+      // interior mapping: a fake room behind each window (walls, floor, ceiling, curtain, ceiling light)
+      vec3 room(vec2 f, float cw, float fh, float seed, float lit, out float emis){
+        vec3 V = normalize(vBW - cameraPosition);
+        vec3 Uw = abs(vBN.x) > 0.5 ? vec3(0.,0.,1.) : vec3(1.,0.,0.);
+        vec3 rd = vec3(dot(V, Uw), V.y, dot(V, -vBN)); rd.z = max(rd.z, 0.05);
+        vec3 p0 = vec3((f.x-0.5)*cw, (f.y-0.42)*fh, 0.);
+        float D = 3.5 + 2.0*h21(vec2(seed, 3.1));
+        float tx = ((rd.x > 0. ? cw*0.5 : -cw*0.5) - p0.x)/rd.x, ty = ((rd.y > 0. ? fh*0.58 : -fh*0.42) - p0.y)/rd.y, tz = D/rd.z;
+        float t = min(tx, min(ty, tz)); vec3 h = p0 + rd*t;
+        vec3 wallC = 0.55 + 0.4*cos(6.2831*(h21(vec2(seed, 1.7)) + vec3(0.,0.33,0.67))); wallC = mix(wallC, vec3(0.85,0.82,0.75), 0.7);
+        vec3 c;
+        if (t == tz) { c = wallC*0.85; float shelf = step(0.6, h21(vec2(seed, 5.))) * step(abs(h.x), cw*0.3) * step(abs(h.y + 0.2), 0.5); c = mix(c, vec3(0.35,0.22,0.12), shelf); }
+        else if (t == tx) c = wallC*0.62;
+        else if (rd.y < 0.) c = mix(vec3(0.42,0.3,0.2), vec3(0.6,0.58,0.55), step(0.5, h21(vec2(seed, 9.)))) * (0.8 + 0.2*step(0.5, fract(h.x*1.5 + floor(h.z*1.5)*0.5)));
+        else c = vec3(0.9,0.88,0.84);
+        float depthK = 1.0 - clamp(h.z/D, 0., 1.)*0.45;
+        float lamp = exp(-dot(h.xz - vec2(0., D*0.5), h.xz - vec2(0., D*0.5))*0.4) * step(0., rd.y) * step(t, ty + 0.001) * step(ty, t + 0.001);
+        // curtain hanging just behind the glass on one or both sides
+        float cv = h21(vec2(seed, 11.)); vec3 curtC = mix(vec3(0.62,0.58,0.52), 0.45 + 0.4*cos(6.2831*(cv + vec3(0.1,0.4,0.7))), 0.45);
+        float curt = cv < 0.75 ? step(f.x, 0.18 + 0.3*cv) + step(1.0 - 0.18 - 0.25*fract(cv*7.), f.x) : 0.;
+        vec3 lightC = mix(vec3(1.0,0.78,0.5), vec3(0.85,0.92,1.0), step(0.75, h21(vec2(seed, 13.))));
+        vec3 inside = c*depthK;
+        emis = lit;
+        vec3 col = mix(inside*(0.1 + 0.12*(1.-uNight)), inside*lightC*(0.8 + 1.2*lamp), lit*uNight);
+        col = mix(col, curtC*mix(0.18, 0.9*lit*uNight + 0.2, uNight), clamp(curt, 0., 1.));
+        // glass reflection (sky), stronger at grazing angles and in daylight
+        float fres = pow(1.0 - clamp(rd.z, 0., 1.), 3.0);
+        vec3 refl = mix(uHorizon, uZenith, clamp(-V.y*2.0 + 0.3, 0., 1.)) * (1.0 - uNight*0.85);
+        return mix(col, refl*0.85, clamp(0.3 + 0.65*fres, 0., 0.9)*(1.0 - lit*uNight*0.75));
+      }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        vec3 bEm = vec3(0.); float bWin = 0.;
+        vec3 bEm = vec3(0.); bWin = 0.; bTN = vec3(0.,0.,1.);
         float seed = vInfo.x*97.3, style = vInfo.y;
+        float camDb = length(vViewPosition); bNearK = 1.0 - smoothstep(90., 160., camDb);
+        bool detail = camDb < 520.;
+        float hb = h21(vec2(seed, 0.37));
+        vec3 paint = diffuseColor.rgb;
         if (vFac.z < 0.5) {
+          vec2 wuv = vFac.xy*0.3 + vec2(seed*3.7, 0.);
+          // ---- wall material
+          vec3 wall;
+          if (style > 2.5 && style < 3.5) { wall = texture2D(uTinD, vFac.xy*vec2(0.22, 0.2)).rgb*mix(vec3(1.), paint*1.6, 0.55); }
+          else if (hb < 0.14 && style < 1.5) { wall = texture2D(uBrD, vFac.xy*vec2(0.42, 0.42)).rgb*1.05; if (bNearK > 0.) bTN = unpackN(texture2D(uBrN, vFac.xy*0.42), 1.0); }
+          else {
+            vec3 pl = texture2D(uPlD, wuv).rgb, st = texture2D(uStD, wuv*0.8).rgb;
+            float weather = smoothstep(0.35, 0.85, vn(vec2(vFac.x*0.25, vFac.y*0.07) + seed) + 0.25*hb) * (style > 1.5 && style < 2.5 ? 0.25 : 1.0);
+            vec3 painted = paint*pl*1.45;
+            wall = mix(painted, painted*st*1.7, weather*0.8);
+            if (style > 3.5) wall = mix(wall, texture2D(uCrD, wuv*0.7).rgb*paint*1.4, smoothstep(0.55, 0.9, vn(vFac.xy*0.12 + seed)));
+            if (bNearK > 0.) bTN = unpackN(texture2D(uPlN, wuv), 1.0);
+          }
+          diffuseColor.rgb = wall;
           float fh = 3.3;
           float cw = style > 1.5 && style < 2.5 ? 2.6 : 3.4;
           float y = vFac.y - 0.4;
           float fl = floor(y/fh), cl = floor(vFac.x/cw);
           vec2 f = vec2(fract(vFac.x/cw), fract(y/fh));
           float hh = h31(vec3(seed, fl, cl));
+          float wseed = seed + fl*13.1 + cl*7.7;
+          float lit = step(0.52, hh);
           if (style > 2.5 && style < 3.5) {
-            diffuseColor.rgb *= 0.82 + 0.18*sin(vFac.x*9.4);
             float strip = step(vHt-3.6, vFac.y)*step(vFac.y, vHt-2.2)*step(0.1,fract(vFac.x/6.))*step(fract(vFac.x/6.),0.9);
             bWin = strip; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.15,0.18,0.2), strip);
             bEm += vec3(0.9,0.95,1.)*strip*uNight*step(0.4,hh)*0.8;
             float door = step(vFac.y, 5.5)*step(0.35, fract(vFac.x/22.))*step(fract(vFac.x/22.), 0.65);
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3,0.32,0.34)*(0.8+0.2*step(0.5,fract(vFac.y*2.))), door);
+            diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(uShD, vFac.xy*vec2(0.25, 0.3)).rgb*0.9, door);
           } else if (y > 0. && vFac.y < vHt - 0.9) {
             float isW;
             if (fl < 0.5 && style > 0.5 && style < 1.5) {
+              // ground-floor shop: rolling shutter (closed) or lit shop interior (open) under a painted signboard
               isW = step(0.05,f.x)*step(f.x,0.95)*step(0.03,f.y)*step(f.y,0.7);
-              float shut = step(0.5, h31(vec3(seed, 7., cl)));
-              vec3 shopc = shut > 0.5 ? vec3(0.45,0.47,0.5)*(0.85+0.15*step(0.5,fract(y*6.))) : vec3(0.25,0.2,0.15);
+              float shut = step(0.55, h31(vec3(seed, 7., cl))) * mix(1.0, step(0.3, h31(vec3(seed, 8., cl))), uNight);
+              float e;
+              vec3 shopIn = detail ? room(vec2(f.x, f.y*1.3), cw*0.9, fh, wseed, 1.0, e) : vec3(0.3,0.25,0.2);
+              shopIn = mix(shopIn, shopIn*vec3(1.1,1.0,0.8), 0.5)*0.7;
+              vec3 shopc = shut > 0.5 ? texture2D(uShD, vec2(vFac.x*0.3, y*0.35)).rgb*vec3(0.85,0.9,0.95) : shopIn;
               diffuseColor.rgb = mix(diffuseColor.rgb, shopc, isW);
-              bEm += vec3(1.,0.85,0.6)*isW*(1.-shut)*uNight*1.6;
+              bEm += vec3(1.,0.85,0.6)*isW*(1.-shut)*(0.08 + uNight*0.55)*(detail ? 0.45 : 1.0);
               float sign = step(0.74,f.y)*step(f.y,0.97)*step(0.02,f.x)*step(f.x,0.98);
               vec3 sc = 0.5+0.5*cos(6.2831*(h31(vec3(seed,3.,cl))+vec3(0.,0.33,0.67)));
+              float letters = step(0.55, vn(vec2(vFac.x*4.0, floor(f.y*14.)*3.1)))*step(0.78, f.y)*step(f.y, 0.93)*step(0.12, f.x)*step(f.x, 0.88);
+              sc = mix(sc, vec3(1.) - sc*0.8, letters);
               diffuseColor.rgb = mix(diffuseColor.rgb, sc, sign);
               bEm += sc*sign*uNight*0.9;
-              isW = 0.;
-            } else if (style > 1.5 && style < 2.5) {
-              isW = step(0.04,f.x)*step(f.x,0.96)*step(0.12,f.y)*step(f.y,0.92);
-            } else if (style > 3.5) {
-              isW = step(0.3,f.x)*step(f.x,0.7)*step(0.18,f.y)*step(f.y,0.86);
-              float arch = step(length(vec2((f.x-0.5)*2.5, (f.y-0.86)*3.)), 0.5);
-              isW = max(isW, arch*step(0.86,f.y));
-              diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*0.75, (1.-isW)*step(abs(f.x-0.5),0.28)*step(abs(f.y-0.5),0.42));
+              bWin = isW*(1.-shut)*0.6; isW = 0.;
+              if (sign + isW > 0.) bTN = vec3(0.,0.,1.);
             } else {
-              isW = step(0.28,f.x)*step(f.x,0.72)*step(0.32,f.y)*step(f.y,0.76);
-              float frame = step(0.25,f.x)*step(f.x,0.75)*step(0.29,f.y)*step(f.y,0.79)*(1.-isW);
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92,0.9,0.85), frame);
-              float chajja = step(0.2,f.x)*step(f.x,0.8)*step(0.8,f.y)*step(f.y,0.87);
-              diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*0.45, chajja);
-              float grill = isW*step(0.82, fract((vFac.x)*4.))*step(0.55, h31(vec3(seed,1.,1.)));
-              float balc = step(0.55, h31(vec3(seed,fl,2.)))*step(0.5,fl)*step(f.y,0.3)*step(0.06,f.x)*step(f.x,0.94);
-              float rail = balc*step(0.5, fract(vFac.x*3.));
-              diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*0.55, balc*0.6);
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2), rail*0.7 + grill*0.8);
-              float door = step(fl, 0.5)*step(0.35,f.x)*step(f.x,0.65)*step(f.y,0.8)*step(0.65, h31(vec3(seed,cl,4.)));
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.35,0.22,0.12), door);
+              if (style > 1.5 && style < 2.5) {
+                isW = step(0.04,f.x)*step(f.x,0.96)*step(0.12,f.y)*step(f.y,0.92);
+              } else if (style > 3.5) {
+                isW = step(0.3,f.x)*step(f.x,0.7)*step(0.18,f.y)*step(f.y,0.86);
+                float arch = step(length(vec2((f.x-0.5)*2.5, (f.y-0.86)*3.)), 0.5);
+                isW = max(isW, arch*step(0.86,f.y));
+                float surround = (1.-isW)*step(abs(f.x-0.5),0.28)*step(abs(f.y-0.52),0.42);
+                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93,0.91,0.86)*diffuseColor.rgb/max(dot(diffuseColor.rgb, vec3(0.33)), 0.2)*0.55, surround);
+                // wooden shutters on colonial houses
+                float sh = (1.-isW)*step(0.18,f.y)*step(f.y,0.86)*(step(0.12,f.x)*step(f.x,0.3) + step(0.7,f.x)*step(f.x,0.88))*step(0.4, h31(vec3(seed, cl, 2.)));
+                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2,0.38,0.3)*(0.8+0.2*step(0.5, fract(f.y*16.))), sh);
+              } else {
+                isW = step(0.28,f.x)*step(f.x,0.72)*step(0.32,f.y)*step(f.y,0.76);
+                float frame = step(0.25,f.x)*step(f.x,0.75)*step(0.29,f.y)*step(f.y,0.79)*(1.-isW);
+                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88,0.86,0.8), frame);
+                float chajja = step(0.2,f.x)*step(f.x,0.8)*step(0.8,f.y)*step(f.y,0.86);
+                diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*0.42, chajja);
+                float shade = step(0.2,f.x)*step(f.x,0.8)*step(0.71,f.y)*step(f.y,0.8)*0.35;
+                diffuseColor.rgb *= 1.0 - shade;
+                float grill = isW*step(0.86, fract(vFac.x*5.))*step(0.55, h31(vec3(seed,1.,1.)));
+                float balc = step(0.55, h31(vec3(seed,fl,2.)))*step(0.5,fl)*step(f.y,0.3)*step(0.06,f.x)*step(f.x,0.94);
+                float rail = balc*step(0.55, fract(vFac.x*3.))*step(0.08, f.y);
+                diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*0.6, balc*0.5);
+                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.18), rail*0.8 + grill*0.85);
+                float door = step(fl, 0.5)*step(0.35,f.x)*step(f.x,0.65)*step(f.y,0.8)*step(0.65, h31(vec3(seed,cl,4.)));
+                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.33,0.2,0.1)*(0.85+0.15*step(0.5, fract(f.x*8.))), door);
+                if (frame + door + rail > 0.) bTN = vec3(0.,0.,1.);
+              }
+              float e = 0.;
+              vec3 glass;
+              if (detail) {
+                // window-local coordinates (0..1 across the glass) for the interior room
+                vec2 wf = style > 1.5 && style < 2.5 ? vec2((f.x-0.04)/0.92, (f.y-0.12)/0.8) : style > 3.5 ? vec2((f.x-0.3)/0.4, (f.y-0.18)/0.68) : vec2((f.x-0.28)/0.44, (f.y-0.32)/0.44);
+                float ww = style > 1.5 && style < 2.5 ? cw*0.92 : style > 3.5 ? cw*0.4 : cw*0.44;
+                glass = room(clamp(wf, 0., 1.), ww*1.6, fh*0.9, wseed, lit, e);
+              } else {
+                glass = mix(vec3(0.16,0.2,0.24), uHorizon*0.6, 0.3);
+              }
+              diffuseColor.rgb = mix(diffuseColor.rgb, glass, isW);
+              vec3 wc = mix(vec3(1.,0.74,0.45), vec3(0.85,0.92,1.), step(0.8, h31(vec3(seed, cl, 9.))));
+              bEm += (detail ? glass*0.9 : wc*(0.55 + 0.9*h31(vec3(cl, fl, seed)))) * isW * lit * uNight;
+              bWin = isW;
+              if (isW > 0.) bTN = vec3(0.,0.,1.);
+              diffuseColor.rgb *= 1. - 0.25*smoothstep(0.05,0.,f.y)*(1.-isW);
             }
-            bWin = isW;
-            float h2 = h31(vec3(seed*1.7, fl+3., cl));
-            vec3 glass = mix(vec3(0.16,0.22,0.27), vec3(0.3,0.36,0.4), hh);
-            if (h2 < 0.35) glass = mix(vec3(0.62,0.45,0.32), vec3(0.45,0.55,0.62), h31(vec3(cl,fl,seed)))*0.7;
-            diffuseColor.rgb = mix(diffuseColor.rgb, glass, isW);
-            float on = step(0.48, hh)*isW*uNight;
-            vec3 wc = mix(vec3(1.,0.72,0.42), vec3(0.85,0.92,1.), step(0.8, h31(vec3(seed, cl, 9.))));
-            bEm += wc*on*(0.55 + 0.9*h31(vec3(cl, fl, seed)));
-            diffuseColor.rgb *= 1. - 0.25*smoothstep(0.05,0.,f.y)*(1.-isW);
           }
-          float streak = vn(vec2(vFac.x*0.7, vFac.y*0.06 + seed));
-          diffuseColor.rgb *= (0.82 + 0.18*streak)*(0.78 + 0.22*smoothstep(0., 2.5, vFac.y));
-          diffuseColor.rgb *= 1. - 0.15*step(vHt-0.9, vFac.y);
+          diffuseColor.rgb *= (0.8 + 0.2*smoothstep(0., 2.5, vFac.y));
+          float parapet = step(vHt-0.9, vFac.y); diffuseColor.rgb *= 1. - 0.12*parapet;
+          // rain streaks under sills and wet darkening
+          diffuseColor.rgb *= mix(1.0, 0.68, uWet*(1.-bWin));
         } else {
-          diffuseColor.rgb = vec3(0.5,0.49,0.46)*(0.8+0.2*vn(vFac.xy*0.6));
-          if (style > 2.5 && style < 3.5) diffuseColor.rgb = vec3(0.55,0.57,0.6)*(0.85+0.15*sin(vFac.x*6.));
+          vec3 rt = texture2D(uStD, vFac.xy*0.12).rgb;
+          diffuseColor.rgb = rt*vec3(0.62,0.6,0.57)*(0.85+0.2*vn(vFac.xy*0.3));
+          if (style > 2.5 && style < 3.5) diffuseColor.rgb = texture2D(uTinD, vFac.xy*0.2).rgb*0.8;
         }`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.1, bWin);')
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.85, bWin);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(mix(roughnessFactor, 0.4, uWet), 0.08, bWin);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.0, bWin);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (bNearK > 0. && vFac.z < 0.5) { vec3 Uw = abs(vBN.x) > 0.5 ? vec3(0.,0.,1.) : vec3(1.,0.,0.); vec3 nW = normalize(Uw*bTN.x + vec3(0.,1.,0.)*bTN.y + vBN*bTN.z); normal = normalize(mix(normal, (viewMatrix*vec4(nW, 0.)).xyz, bNearK)); }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += bEm;');
   });
-  mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh);
-  world.buildingMesh = mesh;
   // pitched tile roofs
   if (roofs.length) {
     const pr = new THREE.BufferGeometry();
@@ -309,20 +426,37 @@ function buildBuildings(scene) {
         float rows = step(0.25, fract(vRP.y*3.3)); float tl = step(0.12, fract((vRP.x+vRP.z)*2.2 + floor(vRP.y*3.3)*0.5));
         diffuseColor.rgb *= (0.72 + 0.28*rows*tl)*(0.8+0.3*vn(vRP.xz*0.5));`);
     });
-    const rm = new THREE.InstancedMesh(pg, rmat, roofs.length);
-    roofs.forEach((r, i) => {
+    instTiles(scene, pg, rmat, roofs, 1000, bfar, (m, r, i) => {
       const b = r.b, w = b.x1 - b.x0, d = b.z1 - b.z0, alongX = w > d;
       _q.setFromEuler(_e.set(0, alongX ? Math.PI / 2 : 0, 0));
       _m.compose(_p.set((b.x0 + b.x1) / 2, r.top, (b.z0 + b.z1) / 2), _q, _s.set((alongX ? d : w) + 0.8, r.rh, (alongX ? w : d) + 0.8));
-      rm.setMatrixAt(i, _m); rm.setColorAt(i, new THREE.Color().setHSL(0.02 + R() * 0.03, 0.55, 0.32 + R() * 0.1));
+      m.setMatrixAt(i, _m); m.setColorAt(i, _c.setHSL(0.02 + ((b.seed * 7.7) % 1) * 0.03, 0.55, 0.32 + ((b.seed * 3.3) % 1) * 0.1));
+    }, { xz: (r) => [(r.b.x0 + r.b.x1) / 2, (r.b.z0 + r.b.z1) / 2] });
+  }
+  // outdoor AC units hung under windows (real geometry, only near the camera)
+  const acs = [], hsh = (a, b, c) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return v - Math.floor(v); };
+  for (const b of B) {
+    if (b.style > 2) continue;
+    const cw = b.style === 2 ? 2.6 : 3.4, floors = Math.floor((b.h - 1.2) / 3.3);
+    const sides = [[b.x0, b.z0, b.x1, b.z0, 0, -1], [b.x1, b.z1, b.x0, b.z1, 0, 1], [b.x0, b.z1, b.x0, b.z0, -1, 0], [b.x1, b.z0, b.x1, b.z1, 1, 0]];
+    sides.forEach(([ax, az, bx, bz, nx, nz], si) => {
+      const len = Math.hypot(bx - ax, bz - az), cols = Math.floor(len / cw);
+      for (let fl = 1; fl < floors; fl++) for (let cl = 0; cl < cols; cl++) {
+        if (hsh(b.seed * 97.3, fl + si * 7, cl) > 0.13) continue;
+        // facade u runs along +x or +z (matches the window grid in the shader)
+        const u = (cl + 0.5) * cw, ux = nx === 0 ? Math.min(ax, bx) + u : ax, uz = nx === 0 ? az : Math.min(az, bz) + u;
+        acs.push({ x: ux + nx * 0.2 + (nx === 0 ? cw * 0.22 : 0), z: uz + nz * 0.2 + (nz === 0 ? cw * 0.22 : 0), y: b.y + 0.4 + fl * 3.3 + 0.55, r: nx !== 0 ? Math.PI / 2 : 0 });
+      }
     });
-    rm.castShadow = rm.receiveShadow = true; rm.computeBoundingSphere(); scene.add(rm);
+  }
+  if (acs.length) {
+    const acg = mergeGeometries([new THREE.BoxGeometry(0.8, 0.55, 0.3).toNonIndexed(), (() => { const d = new THREE.CircleGeometry(0.2, 10); d.translate(-0.12, 0, 0.152); return d.toNonIndexed(); })()].map((g) => { const n = g.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) c.set(i < 36 ? [0.82, 0.82, 0.8] : [0.15, 0.15, 0.15], i * 3); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.deleteAttribute('uv'); return g; }));
+    const acm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
+    instTiles(scene, acg, acm, acs, 500, q.desktop ? 650 : 280, (m, a, i) => { _q.setFromEuler(_e.set(0, a.r, 0)); _m.compose(_p.set(a.x, a.y, a.z), _q, _s.set(1, 1, 1)); m.setMatrixAt(i, _m); }, { shadow: q.desktop });
   }
   if (tanks.length) {
-    const tg = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 12); tg.translate(0, 0.75, 0);
-    const tm = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), tanks.length);
-    tanks.forEach((t, i) => { _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(1, 1, 1)); tm.setMatrixAt(i, _m); });
-    tm.castShadow = true; tm.computeBoundingSphere(); scene.add(tm);
+    const tg = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 10, 1, false); tg.translate(0, 0.75, 0);
+    instTiles(scene, tg, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), tanks, 500, Math.min(bfar, 1800), (m, t, i) => { _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
   }
 }
 
@@ -368,65 +502,162 @@ function palmGeo(lod) {
   const m = mergeGeometries(parts.map((g) => { if (g.index) g = g.toNonIndexed(); return g; }));
   return m;
 }
+// ---- leaf-card trees: trunk + branches + alpha-tested leaf clusters with canopy-shaped normals ----
+function leafAtlas() {
+  return canvasTex(1024, 512, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    const rnd = mulberryLocal(91);
+    // left half: broadleaf cluster (neem / mango / teak style)
+    for (let k = 0; k < 260; k++) {
+      const x = 40 + rnd() * 432, y = 40 + rnd() * 432, ang = rnd() * Math.PI * 2, L = 26 + rnd() * 34, W = L * (0.36 + rnd() * 0.12);
+      const dx = x - 256, dy = y - 256; if (dx * dx + dy * dy > 215 * 215) continue;
+      const g = 70 + rnd() * 70, r = 25 + rnd() * 40, b = 15 + rnd() * 25, l = 0.75 + 0.25 * (1 - (y / 512));
+      c.save(); c.translate(x, y); c.rotate(ang);
+      c.fillStyle = `rgb(${r * l | 0},${g * l + 20 | 0},${b * l | 0})`;
+      c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(L * 0.5, -W, L, 0); c.quadraticCurveTo(L * 0.5, W, 0, 0); c.fill();
+      c.strokeStyle = 'rgba(30,45,15,0.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(0, 0); c.lineTo(L * 0.92, 0); c.stroke();
+      c.restore();
+    }
+    c.fillStyle = '#ffffff'; c.fillRect(w - 12, 0, 12, 12); // opaque corner (uv 0.999) used by trunks and branches
+    c.strokeStyle = 'rgba(60,42,25,0.9)'; c.lineWidth = 3; for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(256, 470); c.quadraticCurveTo(256 + (rnd() - 0.5) * 200, 330, 256 + (rnd() - 0.5) * 380, 120 + rnd() * 200); c.stroke(); }
+    // right half: casuarina / bamboo needles
+    for (let k = 0; k < 900; k++) {
+      const cx = 512 + 60 + rnd() * 392, cy = 40 + rnd() * 432, a = -Math.PI / 2 + (rnd() - 0.5) * 1.6, L = 30 + rnd() * 50;
+      if ((cx - 768) ** 2 + (cy - 256) ** 2 > 220 * 220) continue;
+      const g = 75 + rnd() * 50; c.strokeStyle = `rgba(${35 + rnd() * 25 | 0},${g | 0},${30 + rnd() * 20 | 0},0.95)`; c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * L * 0.3, cy + Math.sin(a) * L); c.stroke();
+    }
+  });
+}
+function mulberryLocal(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function vcolor(g, fn) { const p = g.attributes.position, a = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const c = fn(p.getX(i), p.getY(i), p.getZ(i)); a[i * 3] = c[0]; a[i * 3 + 1] = c[1]; a[i * 3 + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; }
-function roundTreeGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.25, 0.4, 3.2, lod ? 4 : 7); tr.translate(0, 1.6, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.3, 0.22, 0.15]));
-  const blobs = lod ? [[0, 5, 0, 3.4]] : [[0, 5, 0, 2.8], [1.6, 4.4, 0.6, 2.1], [-1.4, 4.6, -0.8, 2.2], [0.3, 6.3, -0.4, 2.0], [-0.5, 4.3, 1.5, 1.9]];
-  const base = [0.2 + R() * 0.06, 0.34 + R() * 0.08, 0.12];
-  for (const [x, y, z, r] of blobs) {
-    const s = new THREE.IcosahedronGeometry(r, lod ? 0 : 2).toNonIndexed();
-    const p = s.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = 1 + (Math.sin(p.getX(i) * 3.1 + p.getY(i) * 2.3) * 0.12); p.setXYZ(i, p.getX(i) * k + x, p.getY(i) * k * 0.85 + y, p.getZ(i) * k + z); }
-    s.computeVertexNormals();
-    parts.push(vcolor(s, (px, py) => { const l = 0.75 + 0.35 * ((py - y) / r + 1) / 2; return [base[0] * l, base[1] * l, base[2] * l]; }));
-  }
-  return mergeGeometries(parts);
+// a branch: tapered cylinder from a to b
+function limb(a, b, r0, r1, col, segs = 5) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), L = d.length();
+  const g = new THREE.CylinderGeometry(r1, r0, L, segs, 1, true); g.translate(0, L / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate(...a);
+  const ng = g.toNonIndexed(); ng.deleteAttribute('uv'); ng.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(ng.attributes.position.count * 2).fill(0.999), 2));
+  return vcolor(ng, () => col);
 }
-function casGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.12, 0.22, 11, 5); tr.translate(0, 5.5, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.32, 0.25, 0.2]));
-  const layers = lod ? 2 : 5;
-  for (let k = 0; k < layers; k++) {
-    const r = 2.2 - k * 0.35, c = new THREE.ConeGeometry(r, 3.4, lod ? 5 : 9, 1, true).toNonIndexed();
-    c.translate(0, 4.5 + k * 1.7, 0);
-    const p = c.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + Math.sin(i * 1.7) * 0.25);
-    c.computeVertexNormals(); parts.push(vcolor(c, () => [0.14, 0.26 + k * 0.02, 0.12]));
+// leaf cards scattered over canopy blobs; normals point away from the canopy centre (soft, volumetric lighting)
+function cards(blobs, tint, kind, rnd, size = 2.0, dens = 6) {
+  const P = [], N = [], UV = [], C = [], center = new THREE.Vector3();
+  for (const [bx, by, bz] of blobs) center.add(new THREE.Vector3(bx, by, bz)); center.divideScalar(blobs.length);
+  const u0 = kind === 'needle' ? 0.5 : 0;
+  for (const [bx, by, bz, r] of blobs) {
+    const n = Math.round(r * r * dens);
+    for (let k = 0; k < n; k++) {
+      const th = rnd() * Math.PI * 2, ph = Math.acos(rnd() * 1.6 - 0.6), rr = r * (0.55 + 0.45 * Math.cbrt(rnd()));
+      const px = bx + Math.sin(ph) * Math.cos(th) * rr, py = by + Math.cos(ph) * rr * 0.8, pz = bz + Math.sin(ph) * Math.sin(th) * rr;
+      const sz = size * (0.7 + rnd() * 0.6) * (kind === 'needle' ? 0.9 : 1);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * Math.PI, rnd() * Math.PI * 2, rnd() * Math.PI));
+      const corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => new THREE.Vector3(x * sz, y * sz, 0).applyQuaternion(q).add(new THREE.Vector3(px, py, pz)));
+      const nrm = new THREE.Vector3(px - center.x, (py - center.y) * 1.3 + 0.4 * r, pz - center.z).normalize();
+      const shade = 0.72 + 0.28 * Math.min(1, rr / r) + (rnd() - 0.5) * 0.15;
+      for (const id of [0, 1, 2, 0, 2, 3]) { const v = corners[id]; P.push(v.x, v.y, v.z); N.push(nrm.x, nrm.y, nrm.z); UV.push(u0 + (id === 1 || id === 2 ? 0.5 : 0), id >= 2 ? 1 : 0); C.push(tint[0] * shade, tint[1] * shade, tint[2] * shade); }
+    }
   }
-  return mergeGeometries(parts);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  return g;
 }
-function teakGeo(lod) {
-  const parts = [];
-  const tr = new THREE.CylinderGeometry(0.22, 0.42, 9, lod ? 4 : 7); tr.translate(0, 4.5, 0); parts.push(vcolor(tr.toNonIndexed(), () => [0.36, 0.3, 0.24]));
-  const base = [0.17 + R() * 0.05, 0.3 + R() * 0.06, 0.1];
-  const blobs = lod ? [[0, 10.5, 0, 3.6]] : [[0, 10, 0, 3.0], [1.9, 9.2, 0.6, 2.3], [-1.7, 9.6, -0.9, 2.4], [0.4, 12, -0.3, 2.2], [-0.6, 8.8, 1.8, 2.1], [1.2, 11, 1.6, 1.8]];
-  for (const [x, y, z, r] of blobs) {
-    const sg = new THREE.IcosahedronGeometry(r, lod ? 0 : 1).toNonIndexed(), p = sg.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = 1 + Math.sin(p.getX(i) * 2.7 + p.getZ(i) * 3.3) * 0.18; p.setXYZ(i, p.getX(i) * k * 1.1 + x, p.getY(i) * k * 0.7 + y, p.getZ(i) * k * 1.1 + z); }
-    sg.computeVertexNormals();
-    parts.push(vcolor(sg, (px, py) => { const l = 0.7 + 0.4 * ((py - y) / r + 1) / 2; return [base[0] * l, base[1] * l, base[2] * l]; }));
-  }
-  return mergeGeometries(parts);
+function mergeTree(parts) { return mergeGeometries(parts.map((g) => { if (g.index) g = g.toNonIndexed(); if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2).fill(0.999), 2)); return g; })); }
+function roundTreeGeo() {
+  const rnd = mulberryLocal(11), bark = [0.11, 0.075, 0.05], parts = [];
+  parts.push(limb([0, 0, 0], [0.1, 3.0, 0], 0.38, 0.26, bark, 7));
+  for (const t of [[1.7, 4.6, 0.6], [-1.5, 4.8, -0.8], [0.3, 6.0, -0.3], [-0.5, 4.5, 1.6]]) parts.push(limb([0.1, 2.9, 0], t, 0.2, 0.08, bark));
+  parts.push(cards([[0, 5.0, 0, 2.7], [1.7, 4.6, 0.6, 2.0], [-1.5, 4.8, -0.8, 2.1], [0.3, 6.3, -0.4, 1.9], [-0.5, 4.4, 1.6, 1.8]], [1.0, 1.05, 0.9], 'broad', rnd, 1.9, 5.2));
+  return mergeTree(parts);
 }
-function bambooGeo(lod) {
-  const parts = [], n = lod ? 4 : 11;
+function teakGeo() {
+  const rnd = mulberryLocal(23), bark = [0.16, 0.12, 0.085], parts = [];
+  parts.push(limb([0, 0, 0], [0.2, 8.6, 0.1], 0.42, 0.24, bark, 7));
+  for (const t of [[1.9, 9.6, 0.6], [-1.7, 10.0, -0.9], [0.4, 12.0, -0.3], [-0.6, 9.2, 1.8], [1.2, 11.0, 1.6]]) parts.push(limb([0.2, 8.0, 0.1], t, 0.18, 0.07, bark));
+  parts.push(cards([[0, 10, 0, 3.0], [1.9, 9.2, 0.6, 2.3], [-1.7, 9.6, -0.9, 2.4], [0.4, 12, -0.3, 2.2], [-0.6, 8.8, 1.8, 2.1], [1.2, 11, 1.6, 1.8]], [0.95, 1.0, 0.82], 'broad', rnd, 2.4, 4.0));
+  return mergeTree(parts);
+}
+function casGeo() {
+  const rnd = mulberryLocal(37), parts = [];
+  parts.push(limb([0, 0, 0], [0, 11, 0], 0.22, 0.08, [0.1, 0.07, 0.05], 6));
+  const blobs = []; for (let k = 0; k < 6; k++) blobs.push([Math.sin(k * 2.1) * 0.3, 4.4 + k * 1.35, Math.cos(k * 2.1) * 0.3, 2.0 - k * 0.24]);
+  parts.push(cards(blobs, [0.85, 0.95, 0.8], 'needle', rnd, 1.6, 7));
+  return mergeTree(parts);
+}
+function bambooGeo() {
+  const parts = [], n = 11, rnd = mulberryLocal(53);
   for (let k = 0; k < n; k++) {
     const a = k * 2.4, r = 0.3 + (k % 3) * 0.35, h = 7 + (k % 4) * 1.6, lean = 0.08 + (k % 3) * 0.05;
-    const c = new THREE.CylinderGeometry(0.05, 0.08, h, 4, lod ? 1 : 4, true).toNonIndexed(); c.translate(0, h / 2, 0);
+    const c = new THREE.CylinderGeometry(0.05, 0.08, h, 4, 4, true).toNonIndexed(); c.translate(0, h / 2, 0);
     const p = c.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) + Math.cos(a) * (r + y * y * lean * 0.03)); p.setZ(i, p.getZ(i) + Math.sin(a) * (r + y * y * lean * 0.03)); }
-    c.computeVertexNormals(); parts.push(vcolor(c, (x, y) => [0.45 + (y % 1.2 < 0.08 ? -0.15 : 0), 0.55, 0.22]));
-    const tuft = new THREE.ConeGeometry(0.9, 2.6, lod ? 4 : 6, 1, true).toNonIndexed(); tuft.rotateX(Math.PI); tuft.translate(Math.cos(a) * (r + h * h * lean * 0.03), h - 0.3, Math.sin(a) * (r + h * h * lean * 0.03));
-    parts.push(vcolor(tuft, () => [0.25, 0.42, 0.12]));
+    c.computeVertexNormals(); c.deleteAttribute('uv'); parts.push(vcolor(c, (x, y) => [0.45 + (y % 1.2 < 0.08 ? -0.15 : 0), 0.55, 0.22]));
+    const tx = Math.cos(a) * (r + h * h * lean * 0.03), tz = Math.sin(a) * (r + h * h * lean * 0.03);
+    parts.push(cards([[tx, h - 0.8, tz, 1.1]], [0.85, 1.0, 0.7], 'needle', rnd, 1.3, 6));
   }
-  return mergeGeometries(parts);
+  return mergeTree(parts);
 }
-function bushGeo(lod) {
-  const parts = [], base = [0.2, 0.33, 0.12];
-  const bl = lod ? [[0, 0.7, 0, 1.0]] : [[0, 0.7, 0, 0.9], [0.7, 0.55, 0.3, 0.7], [-0.6, 0.6, -0.3, 0.75], [0.1, 0.5, 0.8, 0.6]];
-  for (const [x, y, z, r] of bl) { const sg = new THREE.IcosahedronGeometry(r, lod ? 0 : 1).toNonIndexed(); sg.translate(x, y, z); parts.push(vcolor(sg, (px, py) => { const l = 0.75 + 0.3 * (py - y + r) / (2 * r); return [base[0] * l, base[1] * l, base[2] * l]; })); }
-  return mergeGeometries(parts);
+function bushGeo() {
+  const rnd = mulberryLocal(71);
+  return mergeTree([cards([[0, 0.75, 0, 0.9], [0.7, 0.6, 0.3, 0.7], [-0.6, 0.65, -0.3, 0.75], [0.1, 0.55, 0.8, 0.6]], [0.9, 1.0, 0.8], 'broad', rnd, 1.0, 10)]);
 }
-function buildTrees(scene, q) {
+
+const TREE_SP = ['palm', 'round', 'cas', 'teak', 'bamboo', 'bush'];
+// impostor cell size (width, height in metres at scale 1) per species
+const TREE_BOX = { palm: [11, 11.5], round: [8.5, 8.8], cas: [5.2, 13.5], teak: [10, 14.5], bamboo: [5.5, 11], bush: [2.8, 1.8] };
+function bakeTreeAtlas(renderer, geos, mats, cellPx) {
+  const cols = 3, rows = 2, rt = new THREE.WebGLRenderTarget(cellPx * cols, cellPx * rows, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.4); dl.position.set(0.4, 1, 0.8); sc.add(dl);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  const prevT = renderer.getRenderTarget(), prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), prevTM = renderer.toneMapping, prevSM = renderer.shadowMap.enabled;
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.toneMapping = THREE.NoToneMapping;
+  rt.scissorTest = true;
+  TREE_SP.forEach((sp, i) => {
+    const [W, H] = TREE_BOX[sp], cx = i % cols, cy = Math.floor(i / cols);
+    const m = new THREE.Mesh(geos[sp][0], mats[sp]); m.frustumCulled = false; sc.add(m);
+    cam.left = -W / 2; cam.right = W / 2; cam.bottom = 0; cam.top = H; cam.position.set(0, 0, 40); cam.lookAt(0, 0, 0); cam.updateProjectionMatrix();
+    rt.viewport.set(cx * cellPx, cy * cellPx, cellPx, cellPx); rt.scissor.set(cx * cellPx, cy * cellPx, cellPx, cellPx);
+    renderer.setRenderTarget(rt); renderer.render(sc, cam); sc.remove(m);
+  });
+  rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); rt.scissor.set(0, 0, rt.width, rt.height); renderer.setRenderTarget(prevT); renderer.setClearColor(prevC, prevA); renderer.toneMapping = prevTM; renderer.shadowMap.enabled = prevSM;
+  return rt.texture;
+}
+const TREE_IMP_SEL = { uSel: { value: new THREE.Vector3(0, -1e5, 0) }, uNear: { value: 0 }, uNearBush: { value: 0 }, uBushFar: { value: 600 }, uFar: { value: 3000 } };
+function treeImpostorMaterial(atlas) {
+  return new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: null }, uLight: { value: null }, uSel: { value: null }, uNear: { value: 0 }, uNearBush: { value: 0 }, uBushFar: { value: 0 }, uFar: { value: 0 }, uBox: { value: TREE_SP.map((k) => new THREE.Vector2(...TREE_BOX[k])) } }]),
+    vertexShader: /* glsl */`
+      attribute vec4 aTree; attribute float aKind; uniform vec3 uSel; uniform float uNear; uniform float uNearBush; uniform float uBushFar; uniform float uFar; uniform vec2 uBox[6];
+      varying vec2 vUv; varying float vShade;
+      #include <fog_pars_vertex>
+      void main(){
+        int k = int(aKind + 0.5); vec2 box = uBox[k];
+        float d = distance(aTree.xz, uSel.xz), dc = distance(aTree.xz, cameraPosition.xz);
+        float sc = aTree.w * step(k == 5 ? uNearBush : uNear, d) * step(dc, k == 5 ? uBushFar : uFar);
+        vec2 tc = normalize(cameraPosition.xz - aTree.xz + vec2(1e-4)); vec2 right = vec2(tc.y, -tc.x);
+        float flip = fract(aTree.x*0.137 + aTree.z*0.291) > 0.5 ? 1.0 : -1.0;
+        vec3 p = vec3(aTree.x, aTree.y - 0.2, aTree.z) + vec3(right.x*position.x*box.x*sc, position.y*box.y*sc, right.y*position.x*box.x*sc);
+        vec2 cell = vec2(mod(float(k), 3.0), floor(float(k)/3.0));
+        vUv = (cell + vec2(position.x*flip + 0.5, position.y))/vec2(3.0, 2.0);
+        vShade = 0.85 + 0.3*fract(aTree.x*0.71 + aTree.z*0.37);
+        vec4 mvPosition = viewMatrix*vec4(p, 1.0); gl_Position = projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying float vShade;
+      #include <common>
+      #include <fog_pars_fragment>
+      void main(){
+        vec4 t = texture2D(uAtlas, vUv); if (t.a < 0.42) discard;
+        gl_FragColor = vec4(t.rgb/max(t.a, 0.01)*uLight*vShade*0.62, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+  });
+}
+function buildTrees(scene, q, renderer) {
   const atlas = frondAtlas();
   const swayPatch = (s) => {
     s.uniforms.uTime = U.uTime;
@@ -437,49 +668,102 @@ function buildTrees(scene, q) {
       transformed.z += cos(uTime*1.1 + ph)*0.03*hgt;`);
   };
   const palmMat = new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }); patch(palmMat, swayPatch);
-  const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }); patch(leafMat, swayPatch);
+  const leaves = leafAtlas();
+  const leafPatch = (s) => { swayPatch(s); s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); };
+  const leafMat = new THREE.MeshStandardMaterial({ map: leaves, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8 }); patch(leafMat, leafPatch, 'leafcards');
+  const leafDepth = new THREE.MeshDepthMaterial({ map: leaves, alphaTest: 0.5, depthPacking: THREE.RGBADepthPacking });
   const depthMat = new THREE.MeshDepthMaterial({ map: atlas, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking });
-  const geos = { palm: [palmGeo(false), palmGeo(true)], round: [roundTreeGeo(false), roundTreeGeo(true)], cas: [casGeo(false), casGeo(true)], teak: [teakGeo(false), teakGeo(true)], bamboo: [bambooGeo(false), bambooGeo(true)], bush: [bushGeo(false), bushGeo(true)] };
-  const TS = 500; world.treeTiles = [];
-  const keep = q.treeDensity;
-  for (const sp of Object.keys(geos)) {
-    const tiles = new Map();
+  const geos = { palm: [palmGeo(false)], round: [roundTreeGeo()], cas: [casGeo()], teak: [teakGeo()], bamboo: [bambooGeo()], bush: [bushGeo()] };
+  // bake impostors with plain (non-instanced, no sway) materials
+  const bakeMats = { palm: new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }) };
+  const bakeLeaf = new THREE.MeshStandardMaterial({ map: leaves, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+  patch(bakeLeaf, (s) => { s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); }, 'leafbake');
+  for (const k of TREE_SP) if (k !== 'palm') bakeMats[k] = bakeLeaf;
+  const impAtlas = bakeTreeAtlas(renderer, geos, bakeMats, q.desktop ? 512 : 256);
+  const imat = treeImpostorMaterial(); const u = imat.uniforms;
+  u.uAtlas.value = impAtlas; u.uLight = U.uCrowdLight; u.uSel = TREE_IMP_SEL.uSel; u.uNear = TREE_IMP_SEL.uNear; u.uNearBush = TREE_IMP_SEL.uNearBush; u.uBushFar = TREE_IMP_SEL.uBushFar; u.uFar = TREE_IMP_SEL.uFar;
+  TREE_IMP_SEL.uBushFar.value = q.treeFar * 0.4; TREE_IMP_SEL.uFar.value = q.treeFar;
+  const quad = new THREE.BufferGeometry();
+  quad.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3)); quad.setIndex([0, 1, 2, 0, 2, 3]);
+  const keep = q.treeDensity, CH = 1000, chunks = new Map(), all = {};
+  world.treeSpecies = {};
+  for (const sp of TREE_SP) {
+    const list = [];
     for (const t of M.trees[sp]) {
       if (keep < 1 && ((t.x * 7.13 + t.z * 3.71) % 1 + 1) % 1 > keep) continue;
-      const k = Math.floor((t.x + M.HALF) / TS) + Math.floor((t.z + M.HALF) / TS) * 1000; if (!tiles.has(k)) tiles.set(k, []); tiles.get(k).push(t);
+      list.push(t);
+      const k = Math.floor((t.x + M.HALF) / CH) + Math.floor((t.z + M.HALF) / CH) * 100;
+      if (!chunks.has(k)) chunks.set(k, []); chunks.get(k).push([t, TREE_SP.indexOf(sp)]);
+      if (sp !== 'bush') addCol(t.x - 0.35, t.z - 0.35, t.x + 0.35, t.z + 0.35, t.y, t.y + 6 * t.s, { tree: true, noTop: true });
     }
-    for (const [k, list] of tiles) {
-      const mesh = new THREE.InstancedMesh(geos[sp][0], sp === 'palm' ? palmMat : leafMat, list.length);
-      list.forEach((t, i) => { _e.set(t.lean * 0.3, t.r, t.lean * 0.2); _q.setFromEuler(_e); _m.compose(_p.set(t.x, t.y - 0.2, t.z), _q, _s.set(t.s, t.s, t.s)); mesh.setMatrixAt(i, _m); });
-      mesh.castShadow = q.treeShadows; mesh.receiveShadow = false; mesh.computeBoundingSphere();
-      if (sp === 'palm') mesh.customDepthMaterial = depthMat;
-      const cx = (k % 1000) * TS - M.HALF + TS / 2, cz = Math.floor(k / 1000) * TS - M.HALF + TS / 2;
-      world.treeTiles.push({ mesh, cx, cz, geos: geos[sp], lod: 0, small: sp === 'bush' });
-      scene.add(mesh);
-      if (sp !== 'bush') for (const t of list) addCol(t.x - 0.35, t.z - 0.35, t.x + 0.35, t.z + 0.35, t.y, t.y + 6 * t.s, { tree: true, noTop: true });
-    }
+    // all instance matrices, sorted into a 100 m grid for fast near-selection
+    const mats = new Float32Array(list.length * 16), grid = new Map();
+    list.forEach((t, i) => {
+      _e.set(t.lean * 0.3, t.r, t.lean * 0.2); _q.setFromEuler(_e); _m.compose(_p.set(t.x, t.y - 0.2, t.z), _q, _s.set(t.s, t.s, t.s)); _m.toArray(mats, i * 16);
+      const g = Math.floor((t.x + M.HALF) / 100) + Math.floor((t.z + M.HALF) / 100) * 1000; if (!grid.has(g)) grid.set(g, []); grid.get(g).push(i);
+    });
+    const cap = Math.min(list.length, sp === 'bush' ? 2500 : 1600);
+    const near = new THREE.InstancedMesh(geos[sp][0], sp === 'palm' ? palmMat : leafMat, Math.max(1, cap));
+    near.count = 0; near.frustumCulled = false; near.castShadow = q.treeShadows; near.receiveShadow = false; near.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    near.customDepthMaterial = sp === 'palm' ? depthMat : leafDepth;
+    scene.add(near);
+    world.treeSpecies[sp] = { list, mats, grid, near, cap };
   }
+  world.treeChunks = [];
+  for (const [k, arr] of chunks) {
+    const g = new THREE.InstancedBufferGeometry(); g.index = quad.index; g.setAttribute('position', quad.attributes.position);
+    const at = new Float32Array(arr.length * 4), ak = new Float32Array(arr.length);
+    arr.forEach(([t, kind], i) => { at.set([t.x, t.y, t.z, t.s], i * 4); ak[i] = kind; });
+    g.setAttribute('aTree', new THREE.InstancedBufferAttribute(at, 4)); g.setAttribute('aKind', new THREE.InstancedBufferAttribute(ak, 1)); g.instanceCount = arr.length;
+    const cx = (k % 100) * CH - M.HALF + CH / 2, cz = Math.floor(k / 100) * CH - M.HALF + CH / 2;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, M.terrainH(cx, cz) + 20, cz), CH * 0.75);
+    const mesh = new THREE.Mesh(g, imat); mesh.matrixAutoUpdate = false; scene.add(mesh);
+    world.treeChunks.push({ mesh, cx, cz });
+  }
+  world.treeSel = { at: new THREE.Vector3(0, -1e5, 0), t: -1e9 };
 }
+// near trees: pick the trees within treeLod of the camera into one InstancedMesh per species (full 3D, swaying, shadows);
+// everything else is drawn by the impostor chunks (which skip the trees inside the same radius).
 export function updateTrees(cam, q) {
-  for (const t of world.treeTiles) {
-    const d = Math.hypot(cam.x - t.cx, cam.z - t.cz);
-    t.mesh.visible = d < (t.small ? q.treeFar * 0.4 : q.treeFar);
-    const lod = d > q.treeLod ? 1 : 0;
-    if (lod !== t.lod) { t.lod = lod; t.mesh.geometry = t.geos[lod]; }
+  for (const c of world.treeChunks) c.mesh.visible = Math.hypot(cam.x - c.cx, cam.z - c.cz) < q.treeFar + 720;
+  const S = world.treeSel;
+  if (S.at.distanceToSquared(cam) < 36 && U.uTime.value - S.t < 0.6) return;
+  S.at.copy(cam); S.t = U.uTime.value;
+  let R = q.treeLod;
+  for (let attempt = 0; attempt < 4; attempt++) { if (selectTrees(cam, R)) break; R *= 0.7; }
+  TREE_IMP_SEL.uNear.value = R; TREE_IMP_SEL.uNearBush.value = Math.min(R, 90);
+  TREE_IMP_SEL.uSel.value.copy(cam);
+}
+function selectTrees(cam, R) {
+  for (const sp of TREE_SP) {
+    const T = world.treeSpecies[sp], Rs = sp === 'bush' ? Math.min(R, 90) : R, out = T.near.instanceMatrix.array, r2 = (Rs + 4) * (Rs + 4);
+    let n = 0;
+    const g0x = Math.floor((cam.x - Rs - 4 + M.HALF) / 100), g1x = Math.floor((cam.x + Rs + 4 + M.HALF) / 100), g0z = Math.floor((cam.z - Rs - 4 + M.HALF) / 100), g1z = Math.floor((cam.z + Rs + 4 + M.HALF) / 100);
+    for (let gz = g0z; gz <= g1z; gz++) for (let gx = g0x; gx <= g1x; gx++) {
+      const cell = T.grid.get(gx + gz * 1000); if (!cell) continue;
+      for (const i of cell) {
+        const dx = T.mats[i * 16 + 12] - cam.x, dz = T.mats[i * 16 + 14] - cam.z;
+        if (dx * dx + dz * dz > r2) continue;
+        if (n >= T.cap) return false;
+        out.set(T.mats.subarray(i * 16, i * 16 + 16), n * 16); n++;
+      }
+    }
+    T.near.count = n; T.near.instanceMatrix.clearUpdateRanges(); T.near.instanceMatrix.addUpdateRange(0, n * 16); T.near.instanceMatrix.needsUpdate = true;
   }
+  return true;
 }
 
 // ---------------- street lights ----------------
-function buildStreetLights(scene) {
-  const Ls = M.lights, n = Ls.length;
-  const pole = mergeGeometries([T(new THREE.CylinderGeometry(0.09, 0.14, 8, 6), 0, 4, 0), T(new THREE.BoxGeometry(0.1, 0.1, 2.4), 0, 7.9, 1.1)].map((g) => g.toNonIndexed()));
+function buildStreetLights(scene, q) {
+  const Ls = M.lights;
+  const pole = mergeGeometries([T(new THREE.CylinderGeometry(0.09, 0.14, 8, 5, 1, true), 0, 4, 0), T(new THREE.BoxGeometry(0.1, 0.1, 2.4), 0, 7.9, 1.1)].map((g) => g.toNonIndexed()));
   const head = T(new THREE.BoxGeometry(0.45, 0.16, 0.8), 0, 7.82, 2.2);
-  const pm = new THREE.InstancedMesh(pole, new THREE.MeshStandardMaterial({ color: 0x6f7377, metalness: 0.6, roughness: 0.4 }), n);
+  const pmat = new THREE.MeshStandardMaterial({ color: 0x6f7377, metalness: 0.6, roughness: 0.4 });
   const hmat = new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0xffc070, emissiveIntensity: 0 });
-  const hm = new THREE.InstancedMesh(head, hmat, n);
-  Ls.forEach((l, i) => { _q.setFromEuler(_e.set(0, l.ang, 0)); _m.compose(_p.set(l.x, l.y, l.z), _q, _s.set(1, 1, 1)); pm.setMatrixAt(i, _m); hm.setMatrixAt(i, _m); });
-  pm.castShadow = true; pm.computeBoundingSphere(); hm.computeBoundingSphere();
-  scene.add(pm, hm); world.lampMat = hmat;
+  const place = (m, l, i) => { _q.setFromEuler(_e.set(0, l.ang, 0)); _m.compose(_p.set(l.x, l.y, l.z), _q, _s.set(1, 1, 1)); m.setMatrixAt(i, _m); };
+  instTiles(scene, pole, pmat, Ls, 500, q.desktop ? 1100 : 650, place);
+  instTiles(scene, head, hmat, Ls, 500, q.desktop ? 2600 : 1600, place, { shadow: false, receive: false });
+  world.lampMat = hmat;
 }
 
 // ---------------- landmarks ----------------
@@ -920,47 +1204,46 @@ export function buildMapCanvas() {
 }
 
 // ---------------- main build ----------------
-export async function buildWorld(scene, q, progress) {
+export async function buildWorld(scene, q, progress, renderer) {
   M.setRes(q.terrainN);
   await M.buildMap(progress);
   await progress('Painting the land', 0.8);
   const splat = TR.buildSplat(q.splatSize);
-  await progress('Generating ground textures', 0.83);
-  const det = TR.makeDetailTextures(q.detailTex);
+  await progress('Loading photo textures', 0.81);
+  const TX = await loadTextures(renderer, q, (f) => progress('Loading photo textures', 0.81 + f * 0.03));
   const hTex = TR.heightTexture();
   computeFalls();
-  TR.buildTerrainTiles(scene, TR.terrainMaterial(det, splat, q), q);
+  TR.buildTerrainTiles(scene, TR.terrainMaterial(TX, splat, q), q);
   TR.buildWaters(scene, hTex, world.falls.top);
-  const stone = stoneTex(), plaster = plasterTex();
   const mats = {
-    stone: new THREE.MeshStandardMaterial({ map: stone, vertexColors: true, roughness: 0.92 }),
-    plaster: new THREE.MeshStandardMaterial({ map: plaster, vertexColors: true, roughness: 0.85 }),
+    stone: new THREE.MeshStandardMaterial({ map: TX.fortwall.d, normalMap: TX.fortwall.n, vertexColors: true, roughness: 0.92 }),
+    plaster: new THREE.MeshStandardMaterial({ map: TX.stained.d, normalMap: TX.stained.n, vertexColors: true, roughness: 0.85 }),
     white: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }),
     plain: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide }),
     red: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
-    tile: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }),
+    tile: new THREE.MeshStandardMaterial({ map: TX.rooftile.d, normalMap: TX.rooftile.n, vertexColors: true, roughness: 0.75 }),
     dark: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
     glass: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.9 }),
     metal: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.7 }),
     concrete: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }),
     grass: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
-    wood: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }),
+    wood: new THREE.MeshStandardMaterial({ map: TX.wood.d, vertexColors: true, roughness: 0.9 }),
     container: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 }),
-    rock: new THREE.MeshStandardMaterial({ map: det.rock, vertexColors: true, roughness: 0.95, flatShading: true }),
+    rock: new THREE.MeshStandardMaterial({ map: TX.rock.d, normalMap: TX.rock.n, vertexColors: true, roughness: 0.95 }),
     salt: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.1 }),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
     bulbs: new THREE.MeshBasicMaterial({ vertexColors: true }),
   };
-  world.mats = mats; world.det = det;
-  buildRoads(scene, mats);
+  world.mats = mats; world.TX = TX;
+  buildRoads(scene, mats, q);
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
   buildNature(scene, mats);
-  buildBuildings(scene);
+  buildBuildings(scene, q);
   buildBoats(scene);
   await progress('Growing the jungle', 0.93);
-  buildTrees(scene, q);
-  buildStreetLights(scene);
+  buildTrees(scene, q, renderer);
+  buildStreetLights(scene, q);
   M.setColliders(world.colliders);
   if (q.grassR > 0) TR.buildGrass(scene, hTex, TR.occTexture(), splat, q);
   world.mapCanvas = buildMapCanvas();

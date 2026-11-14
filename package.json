@@ -1,7 +1,7 @@
 {
   "name": "daman-duo",
   "productName": "Daman Duo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Daman Duo - an open-world 3D action game set in Daman, India. Built entirely in code.",
   "main": "electron/main.cjs",
   "author": "RezoxNemesis",
@@ -31,12 +31,62 @@
     "appId": "com.rezoxnemesis.damanduo",
     "productName": "Daman Duo",
     "artifactName": "DamanDuo-${os}-${arch}.${ext}",
-    "directories": { "output": "release", "buildResources": "build" },
-    "files": ["electron/**", "dist/**", "package.json"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }], "icon": "build/icon.png" },
-    "portable": { "artifactName": "DamanDuo-Windows-Portable.exe" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "artifactName": "DamanDuo-Windows-Setup.exe", "shortcutName": "Daman Duo" },
-    "linux": { "target": ["AppImage"], "category": "Game", "icon": "build/icon.png", "artifactName": "DamanDuo-Linux.AppImage" },
-    "mac": { "target": [{ "target": "dmg", "arch": ["universal"] }], "category": "public.app-category.action-games", "icon": "build/icon.png", "artifactName": "DamanDuo-macOS.dmg", "identity": null }
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "dist/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "DamanDuo-Windows-Portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "DamanDuo-Windows-Setup.exe",
+      "shortcutName": "Daman Duo"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game",
+      "icon": "build/icon.png",
+      "artifactName": "DamanDuo-Linux.AppImage"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.action-games",
+      "icon": "build/icon.png",
+      "artifactName": "DamanDuo-macOS.dmg",
+      "identity": null
+    }
   }
 }
