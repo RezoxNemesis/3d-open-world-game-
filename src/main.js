@@ -63,11 +63,29 @@ async function start(opts) {
 
 // ---------------- test scenarios (headless render test) ----------------
 function setupTests(game) {
+  const undo = [];
   const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); game.render(); };
   const at = (x, z, yaw) => { const p = game.player; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
   const S = {
     spawn: () => { game.sky.hour = 17.2; step(8); },
     duo_closeup: () => { const p = game.player; at(p.pos.x, p.pos.z, 0.6); game.rig.pitch = 0.05; game.rig.zoom = 0.55; game.sky.hour = 16.4; step(10); game.rig.zoom = 1; },
+    hero_face: () => { const p = game.player; at(M.coastX(-3700) + 60, -3700, 1.2); game.companion.pos.set(p.pos.x - Math.cos(p.yaw) * 0.9, p.pos.y, p.pos.z + Math.sin(p.yaw) * 0.9); game.companion.yaw = p.yaw; game.rig.yaw = p.yaw + 0.25; game.sky.hour = 16.2;
+      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)), r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)); const head = p.pos.clone().add(new THREE.Vector3(0, 1.62, 0)).addScaledVector(r, -0.45); return { pos: head.clone().addScaledVector(f, 1.6).addScaledVector(r, -0.25).add(new THREE.Vector3(0, 0.05, 0)), look: head }; };
+      step(12); },
+    car_closeup: () => {
+      const keys = ['rakshas', 'agni', 'regent', 'amba'], vs = keys.map((k) => game.vehicles.find((v) => v.key === k)).filter(Boolean);
+      const base = new THREE.Vector3(M.coastX(-3300) + 90, 0, -3300);
+      vs.forEach((v, i) => { v.pos.set(base.x + i * 4.2, M.groundAt(base.x + i * 4.2, base.z), base.z); v.yaw = 0.5; if (v.obj) { v.obj.position.copy(v.pos); v.obj.rotation.set(0, v.yaw, 0); } });
+      at(base.x - 6, base.z - 8, 0); game.sky.hour = 16.5;
+      game.camOverride = () => ({ pos: new THREE.Vector3(base.x + 3, base.y + M.groundAt(base.x, base.z) + 1.6, base.z + 7.5), look: new THREE.Vector3(base.x + 5, M.groundAt(base.x, base.z) + 0.6, base.z) });
+      step(6);
+    },
+    horse_closeup: () => {
+      const h = game.animals.find((a) => a.rideable && a.parts.saddle && a.parts.saddle.visible) || game.animals.find((a) => a.type === 'horse');
+      at(h.pos.x + 3, h.pos.z + 3, 0); h.want = 0; h.speed = 0; h.state = 'idle'; h.t = 99; game.sky.hour = 9.5; h.pos.y = M.groundAt(h.pos.x, h.pos.z); h.obj.position.copy(h.pos); const ft = h.update.bind(h); h.update = (dt) => { h.speed = 0; h.want = 0; h.animate(dt); h.obj.position.copy(h.pos); }; undo.push(() => (h.update = ft));
+      game.camOverride = () => { const s = new THREE.Vector3(Math.cos(h.yaw), 0, -Math.sin(h.yaw)); return { pos: h.pos.clone().addScaledVector(s, 4.2).add(new THREE.Vector3(0, 1.4, 0)).addScaledVector(new THREE.Vector3(Math.sin(h.yaw), 0, Math.cos(h.yaw)), 1.2), look: h.pos.clone().add(new THREE.Vector3(0, 1.0, 0)) }; };
+      step(5);
+    },
     supercar: () => { at(-2238, -770, Math.PI); const v = game.vehicles.find((v) => v.key === 'rakshas'); game.enterVehicle(v); input.tx = 0; input.ty = 1; for (let i = 0; i < 45; i++) { input.held.add('sprint'); game.update(1 / 30); } input.held.delete('sprint'); input.tx = 0; input.ty = 0; game.sky.hour = 17.8; step(3); },
     traffic_street: () => { const n = M.nodes.find((n) => n.e.length >= 3 && Math.abs(n.x + 2000) < 200 && Math.abs(n.z + 900) < 300) || M.nodes[0]; at(n.x + 6, n.z + 6, 2.3); game.sky.hour = 10.5; step(20); },
     devka_beach: () => { at(M.coastX(-3900) + 70, -3900, -Math.PI / 2); game.rig.pitch = 0.25; game.sky.hour = 17.6; step(10); },
@@ -90,7 +108,7 @@ function setupTests(game) {
   };
   window.__TEST = {
     ready: true, scenarios: Object.keys(S),
-    run: async (n) => { const t0 = performance.now(); S[n](); await nextFrame(); return { ms: Math.round(performance.now() - t0), state: game.player.state, hp: Math.round(game.player.hp), pos: game.playerPos().toArray().map(Math.round) }; },
+    run: async (n) => { game.camOverride = null; while (undo.length) undo.pop()(); const t0 = performance.now(); S[n](); await nextFrame(); return { ms: Math.round(performance.now() - t0), state: game.player.state, hp: Math.round(game.player.hp), pos: game.playerPos().toArray().map(Math.round) }; },
     stats: () => ({ ...world.stats, people: crowd.n, traffic: game.traffic.cars.length, animals: game.animals.length, vehicles: game.vehicles.length, programs: game.renderer.info.programs.length, tris: game.renderer.info.render.triangles, calls: game.renderer.info.render.calls }),
   };
 }

@@ -307,8 +307,13 @@ export function buildWaters(scene, hTex, fallsTop) {
 
 // ---------- grass + crops (camera-following, GPU placed) ----------
 export function buildGrass(scene, hTex, occTex, splat, q) {
-  const R = q.grassR, sp = q.grassSp;
-  if (R <= 0) return;
+  if (q.grassR <= 0) return;
+  const R1 = Math.round(q.grassR * 0.42);
+  const inner = grassRing(scene, hTex, occTex, splat, q, R1, q.grassSp, 0);
+  const outer = grassRing(scene, hTex, occTex, splat, q, q.grassR, q.grassSp * 2, R1);
+  T.grass = { meshes: [inner.mesh, outer.mesh], unis: [inner.uni, outer.uni] };
+}
+function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
   const n = Math.floor((2 * R) / sp), count = n * n;
   // one tuft = 5 curved, tapering leaves leaning outwards (built at unit height; the shader scales it)
   const P = [], C = [], NB = q.desktop ? 5 : 4, SEG = q.desktop ? 4 : 3;
@@ -331,11 +336,11 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = i + j * n; off[k * 2] = (i + Math.random() * 0.9) * sp; off[k * 2 + 1] = (j + Math.random() * 0.9) * sp; }
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 2)); g.instanceCount = count;
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide });
-  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uTime: U.uTime, uSeason: U.uSeason, uSunColor: U.uSunColor, uSunDir: U.uSunDir };
+  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uR0: { value: R0 }, uTime: U.uTime, uSeason: U.uSeason, uSunColor: U.uSunColor, uSunDir: U.uSunDir };
   patch(mat, (s) => {
     Object.assign(s.uniforms, uni);
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>
-      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uTime; uniform vec4 uSeason; varying float vT; varying vec3 vGc; varying float vDist;
+      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uR0, uTime; uniform vec4 uSeason; varying float vT; varying vec3 vGc; varying float vDist;
       ${HEIGHT_GLSL}
       float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }`)
       .replace('#include <begin_vertex>', `
@@ -353,7 +358,7 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
       float y = hAt(wp);
       float dist = length(wp - uCam.xz); vDist = dist;
       float dens = (1. - spl.r)*(1. - smoothstep(0.2,0.6,spl.a))*(1.-spl.g*0.35)*step(occ, 0.02);
-      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.7, uR, dist));
+      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.7, uR, dist)) * step(uR0, dist);
       float slopeOk = 1.0 - smoothstep(0.6, 1.4, abs(hAt(wp+vec2(2.,0.)) - y) + abs(hAt(wp+vec2(0.,2.)) - y));
       dens *= slopeOk;
       float bund = 1. - step(0.05, min(min(fract((wp.x+13.)/70.), 1.-fract((wp.x+13.)/70.)), min(fract((wp.y+7.)/48.), 1.-fract((wp.y+7.)/48.))));
@@ -377,6 +382,7 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
       float ang = r1*6.283; transformed.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * transformed.xz;
       float wind = sin(uTime*1.7 + wp.x*0.15 + wp.y*0.11)*0.5 + sin(uTime*3.1 + wp.x*0.5)*0.2;
       transformed.x += wind*aT*aT*0.25*s; transformed.z += wind*aT*aT*0.12*s;
+      transformed *= mix(1.0, 1.25, step(0.5, uR0)); // outer ring tufts are a little larger to keep coverage
       transformed += vec3(wp.x, y - 0.04, wp.y);`);
     s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vT; varying vec3 vGc; varying float vDist; uniform vec3 uSunColor; uniform vec3 uSunDir;')
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGc*(0.55 + 0.45*vT);')
@@ -384,10 +390,10 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize((viewMatrix*vec4(0.,1.,0.,0.)).xyz); nonPerturbedNormal = normal;')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGc*uSunColor*0.18*vT*vT*max(uSunDir.y, 0.);');
   });
-  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.receiveShadow = true; scene.add(mesh);
-  T.grass = { mesh, uni };
+  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.userData.noAO = true; scene.add(mesh);
+  return { mesh, uni };
 }
-export function updateGrass(cam) { if (T.grass) T.grass.uni.uCam.value.copy(cam); }
+export function updateGrass(cam) { if (T.grass) for (const u of T.grass.unis) u.uCam.value.copy(cam); }
 export function occTexture() {
   // occupancy (5 m) downsampled to 2 x 2 max
   const S = 2000, src = M.occ, SN = 4000, d = new Uint8Array(S * S);

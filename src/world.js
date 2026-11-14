@@ -433,6 +433,27 @@ function buildBuildings(scene, q) {
       m.setMatrixAt(i, _m); m.setColorAt(i, _c.setHSL(0.02 + ((b.seed * 7.7) % 1) * 0.03, 0.55, 0.32 + ((b.seed * 3.3) % 1) * 0.1));
     }, { xz: (r) => [(r.b.x0 + r.b.x1) / 2, (r.b.z0 + r.b.z1) / 2] });
   }
+  // outdoor AC units hung under windows (real geometry, only near the camera)
+  const acs = [], hsh = (a, b, c) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return v - Math.floor(v); };
+  for (const b of B) {
+    if (b.style > 2) continue;
+    const cw = b.style === 2 ? 2.6 : 3.4, floors = Math.floor((b.h - 1.2) / 3.3);
+    const sides = [[b.x0, b.z0, b.x1, b.z0, 0, -1], [b.x1, b.z1, b.x0, b.z1, 0, 1], [b.x0, b.z1, b.x0, b.z0, -1, 0], [b.x1, b.z0, b.x1, b.z1, 1, 0]];
+    sides.forEach(([ax, az, bx, bz, nx, nz], si) => {
+      const len = Math.hypot(bx - ax, bz - az), cols = Math.floor(len / cw);
+      for (let fl = 1; fl < floors; fl++) for (let cl = 0; cl < cols; cl++) {
+        if (hsh(b.seed * 97.3, fl + si * 7, cl) > 0.13) continue;
+        // facade u runs along +x or +z (matches the window grid in the shader)
+        const u = (cl + 0.5) * cw, ux = nx === 0 ? Math.min(ax, bx) + u : ax, uz = nx === 0 ? az : Math.min(az, bz) + u;
+        acs.push({ x: ux + nx * 0.2 + (nx === 0 ? cw * 0.22 : 0), z: uz + nz * 0.2 + (nz === 0 ? cw * 0.22 : 0), y: b.y + 0.4 + fl * 3.3 + 0.55, r: nx !== 0 ? Math.PI / 2 : 0 });
+      }
+    });
+  }
+  if (acs.length) {
+    const acg = mergeGeometries([new THREE.BoxGeometry(0.8, 0.55, 0.3).toNonIndexed(), (() => { const d = new THREE.CircleGeometry(0.2, 10); d.translate(-0.12, 0, 0.152); return d.toNonIndexed(); })()].map((g) => { const n = g.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) c.set(i < 36 ? [0.82, 0.82, 0.8] : [0.15, 0.15, 0.15], i * 3); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.deleteAttribute('uv'); return g; }));
+    const acm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
+    instTiles(scene, acg, acm, acs, 500, q.desktop ? 650 : 280, (m, a, i) => { _q.setFromEuler(_e.set(0, a.r, 0)); _m.compose(_p.set(a.x, a.y, a.z), _q, _s.set(1, 1, 1)); m.setMatrixAt(i, _m); }, { shadow: q.desktop });
+  }
   if (tanks.length) {
     const tg = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 10, 1, false); tg.translate(0, 0.75, 0);
     instTiles(scene, tg, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), tanks, 500, Math.min(bfar, 1800), (m, t, i) => { _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });

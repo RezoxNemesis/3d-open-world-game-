@@ -103,6 +103,71 @@ function buildQuad(type, color) {
   skinify(root);
   return { root, parts };
 }
+// lofted tube along a path of rings {c:[x,y,z], ax:[x,y,z], a, b} -> smooth BufferGeometry (used by the horse)
+function loftG(rings, seg = 12, caps = true) {
+  const P = [], I = [];
+  for (const r of rings) {
+    // a = half width (horizontal, sideways), b = half height (or depth for near-vertical tubes)
+    const ax = new THREE.Vector3(...r.ax).normalize();
+    let side = new THREE.Vector3().crossVectors(ax, new THREE.Vector3(0, 1, 0));
+    side = side.lengthSq() < 0.04 ? new THREE.Vector3(1, 0, 0) : side.normalize();
+    const up2 = new THREE.Vector3().crossVectors(side, ax).normalize();
+    for (let k = 0; k < seg; k++) { const t = (k / seg) * Math.PI * 2; const o = side.clone().multiplyScalar(Math.cos(t) * r.a).addScaledVector(up2, Math.sin(t) * r.b); P.push(r.c[0] + o.x, r.c[1] + o.y, r.c[2] + o.z); }
+  }
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < seg; k++) { const a = i * seg + k, b = i * seg + (k + 1) % seg; I.push(a, a + seg, b, b, a + seg, b + seg); }
+  if (caps) for (const [ri, dir] of [[0, -1], [rings.length - 1, 1]]) { const ci = P.length / 3; P.push(...rings[ri].c); for (let k = 0; k < seg; k++) { const a = ri * seg + k, b = ri * seg + (k + 1) % seg; if (dir > 0) I.push(ci, a, b); else I.push(ci, b, a); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
+}
+function horseModel(color) {
+  const S = SPECIES.horse, root = new THREE.Group(), parts = {}, c = lin(color), dark = lin(0x15100c), mane = lin(Math.random() < 0.5 ? 0x15100c : color === 0xe8e0d0 ? 0xd8d0c0 : 0x2a1a10);
+  const sock = Math.random() < 0.35 ? lin(0xf2ece0) : c;
+  const body = new THREE.Bone(); body.position.y = S.back - S.bodyR[1] * 0.2; root.add(body);
+  const by = 1.12 - body.position.y; // geometry centre of the barrel relative to the body bone
+  // barrel: rump -> flank -> girth -> chest (ax along +z)
+  const BR = [[-0.95, 0.07, 0.11, 0.1], [-0.86, 0.22, 0.28, 0.08], [-0.66, 0.31, 0.36, 0.04], [-0.38, 0.33, 0.38, 0.0], [-0.05, 0.33, 0.4, -0.02], [0.3, 0.33, 0.41, -0.01], [0.58, 0.3, 0.41, 0.03], [0.78, 0.23, 0.36, 0.09], [0.9, 0.12, 0.22, 0.17]];
+  body.add(new THREE.Mesh(vc(loftG(BR.map(([z, a, b, cy]) => ({ c: [0, by + cy, z], ax: [0, 0, 1], a, b })), 16), (x, y) => (y < by - 0.28 ? c.map((v) => v * 0.82) : c)), MAT));
+  // legs: hip at the top of the leg, knee bone half way; geometry reaches the ground
+  parts.legs = [];
+  const legTop = S.back - S.bodyR[1] * 0.6, upper = 0.48, lower = legTop - upper - 0.07;
+  for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const front = sz > 0;
+    const hip = new THREE.Bone(); hip.position.set(sx * 0.2, legTop - body.position.y, sz * (front ? 0.6 : 0.62)); body.add(hip);
+    // upper leg: muscular forearm (front) / gaskin (rear)
+    hip.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.12, front ? 0 : -0.06], ax: [0, -1, 0], a: 0.1, b: front ? 0.12 : 0.17 }, { c: [0, -0.14, front ? 0.01 : -0.07], ax: [0, -1, 0], a: 0.08, b: front ? 0.1 : 0.12 }, { c: [0, -upper + 0.04, 0], ax: [0, -1, 0], a: 0.055, b: 0.06 }], 10), solid(color)), MAT));
+    const knee = new THREE.Bone(); knee.position.y = -upper; hip.add(knee);
+    knee.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.03, 0], ax: [0, -1, 0], a: 0.055, b: 0.06 }, { c: [0, -0.12, 0], ax: [0, -1, 0], a: 0.04, b: 0.045 }, { c: [0, -lower + 0.12, 0.005], ax: [0, -1, 0], a: 0.04, b: 0.045 }, { c: [0, -lower + 0.06, 0.015], ax: [0, -1, 0.15], a: 0.05, b: 0.055 }], 10), (x, y) => (y < -lower * 0.55 ? sock : c)), MAT));
+    knee.add(new THREE.Mesh(vc(loftG([{ c: [0, -lower + 0.03, 0.02], ax: [0, -1, 0.1], a: 0.055, b: 0.06 }, { c: [0, -lower - 0.05, 0.035], ax: [0, -1, 0], a: 0.065, b: 0.072 }], 10), solid(0x1a1410)), MAT));
+    parts.legs.push({ hip, knee, front, side: sx });
+  }
+  // neck: arched, from the chest up and forward
+  const neck = new THREE.Bone(); neck.position.set(0, by + 0.18, 0.72); neck.rotation.x = -S.neck[1]; body.add(neck);
+  neck.add(new THREE.Mesh(vc(loftG([{ c: [0, -0.1, 0.0], ax: [0, 1, 0.1], a: 0.15, b: 0.27 }, { c: [0, 0.25, 0.05], ax: [0, 1, 0.15], a: 0.12, b: 0.21 }, { c: [0, 0.55, 0.08], ax: [0, 1, 0.2], a: 0.1, b: 0.16 }, { c: [0, 0.78, 0.06], ax: [0, 1, 0.1], a: 0.09, b: 0.13 }], 12), solid(color)), MAT));
+  // mane: a crest of strands along the top of the neck
+  const maneG = []; for (let k = 0; k < 9; k++) { const t = k / 8; maneG.push(vc(loftG([{ c: [0, -0.02 + t * 0.8, -0.2 + t * 0.12], ax: [0.6, 0.2, -1], a: 0.03, b: 0.012 }, { c: [0.1 - (k % 2) * 0.2, -0.12 + t * 0.8, -0.27 + t * 0.12], ax: [0.6, -1, -0.3], a: 0.022, b: 0.01 }], 5), () => mane)); }
+  neck.add(new THREE.Mesh(mergeGeometries(maneG), MAT));
+  const head = new THREE.Bone(); head.position.y = 0.8; head.rotation.x = S.neck[1] + 0.35; neck.add(head);
+  // head: poll -> cheeks -> long face -> muzzle
+  head.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.03, -0.04], ax: [0, 0.1, 1], a: 0.085, b: 0.1 }, { c: [0, 0.0, 0.1], ax: [0, -0.1, 1], a: 0.1, b: 0.12 }, { c: [0, -0.05, 0.3], ax: [0, -0.15, 1], a: 0.075, b: 0.085 }, { c: [0, -0.08, 0.48], ax: [0, -0.1, 1], a: 0.07, b: 0.075 }, { c: [0, -0.1, 0.56], ax: [0, -0.2, 1], a: 0.065, b: 0.07 }], 12), (x, y, z) => (z > 0.5 ? c.map((v) => v * 0.6) : (Math.random() < 0 ? c : c))), MAT));
+  for (const sx of [-1, 1]) {
+    head.add(new THREE.Mesh(vc(new THREE.SphereGeometry(0.018, 8, 6).translate(sx * 0.085, 0.03, 0.12), solid(0x050505)), MAT));
+    head.add(new THREE.Mesh(vc(new THREE.ConeGeometry(0.032, 0.13, 6).translate(0, 0.065, 0).rotateZ(-sx * 0.25).translate(sx * 0.05, 0.11, -0.02), solid(color)), MAT));
+    head.add(new THREE.Mesh(vc(new THREE.SphereGeometry(0.014, 6, 4).translate(sx * 0.035, -0.07, 0.58), solid(0x080605)), MAT));
+  }
+  head.add(new THREE.Mesh(vc(loftG([{ c: [0, 0.14, -0.06], ax: [0, -0.3, 1], a: 0.05, b: 0.02 }, { c: [0, 0.1, 0.12], ax: [0, -0.5, 1], a: 0.045, b: 0.015 }], 5), () => mane), MAT));
+  // tail: flowing strands from the dock
+  const tail = new THREE.Bone(); tail.position.set(0, by + 0.12, -0.95); tail.rotation.x = 0.35; body.add(tail);
+  const tg = []; for (let k = 0; k < 5; k++) { const sx = (k - 2) * 0.025; tg.push(loftG([{ c: [sx * 0.4, 0, 0], ax: [0, -1, -0.3], a: 0.04, b: 0.04 }, { c: [sx, -0.3, -0.12], ax: [0, -1, -0.1], a: 0.035, b: 0.03 }, { c: [sx * 1.4, -0.65, -0.13], ax: [0, -1, 0.05], a: 0.03, b: 0.025 }, { c: [sx * 1.6, -0.85, -0.1], ax: [0, -1, 0], a: 0.012, b: 0.012 }], 6)); }
+  tail.add(new THREE.Mesh(vc(mergeGeometries(tg), () => mane), MAT));
+  parts.neck = neck; parts.head = head; parts.tail = tail; parts.body = body;
+  // saddle with blanket, cantle and stirrups (hidden until the horse is tacked up)
+  const sg = mergeGeometries([vc(loftG([{ c: [0, 0, -0.32], ax: [0, 0, 1], a: 0.36, b: 0.06 }, { c: [0, 0.01, 0.0], ax: [0, 0, 1], a: 0.38, b: 0.06 }, { c: [0, 0, 0.3], ax: [0, 0, 1], a: 0.35, b: 0.06 }], 12), solid(0x8a1c1c)),
+    vc(loftG([{ c: [0, 0.05, -0.26], ax: [0, 0, 1], a: 0.2, b: 0.07 }, { c: [0, 0.03, 0.0], ax: [0, 0, 1], a: 0.22, b: 0.05 }, { c: [0, 0.08, 0.22], ax: [0, 0, 1], a: 0.16, b: 0.08 }], 12), solid(0x4a2a12)),
+    ...[-1, 1].flatMap((sx) => [vc(new THREE.BoxGeometry(0.015, 0.4, 0.03).translate(sx * 0.3, -0.2, 0.05), solid(0x2a1a0e)), vc(new THREE.TorusGeometry(0.05, 0.01, 4, 10).rotateY(Math.PI / 2).translate(sx * 0.3, -0.42, 0.05), solid(0x9e9e9e))])]);
+  const saddle = new THREE.Mesh(sg, MAT); saddle.position.set(0, by + 0.39, 0.12); body.add(saddle); saddle.visible = false; saddle.userData.keep = true; saddle.castShadow = true; parts.saddle = saddle;
+  skinify(root);
+  return { root, parts };
+}
+
 function peacock() {
   const top = new THREE.Group(), root = new THREE.Bone(), blue = 0x0d47a1, parts = {}; top.add(root);
   const body = new THREE.Mesh(vc(new THREE.SphereGeometry(0.2, 10, 8).scale(1, 1, 1.6), solid(blue)), MAT); body.position.y = 0.55; root.add(body);
@@ -120,7 +185,8 @@ function peacock() {
 export class Animal {
   constructor(game, type, x, z, color) {
     this.game = game; this.type = type; this.S = SPECIES[type] || { speed: [0.6, 1.5, 4, 6], len: 0.3 };
-    const m = type === 'peacock' ? peacock() : buildQuad(type, color ?? SPECIES[type].colors[Math.floor(Math.random() * SPECIES[type].colors.length)]);
+    const col = color ?? (SPECIES[type] ? SPECIES[type].colors[Math.floor(Math.random() * SPECIES[type].colors.length)] : 0);
+    const m = type === 'peacock' ? peacock() : type === 'horse' ? horseModel(col) : buildQuad(type, col);
     this.obj = m.root; this.parts = m.parts; game.scene.add(this.obj);
     this.pos = new THREE.Vector3(x, M.groundAt(x, z), z); this.home = this.pos.clone(); this.yaw = Math.random() * 6.28; this.speed = 0; this.want = 0; this.ph = Math.random() * 10;
     this.state = 'graze'; this.t = Math.random() * 5; this.target = null; this.rider = null; this.hp = type === 'elephant' ? 600 : type === 'tiger' ? 220 : type === 'horse' ? 150 : 60; this.vy = 0; this.air = false;

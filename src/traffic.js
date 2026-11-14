@@ -9,7 +9,7 @@ import { sfx } from './audio.js';
 
 const MIX = [['chhota', 22], ['sedan', 16], ['auto', 18], ['scooter', 22], ['kaveri', 7], ['bus', 4], ['truck', 5], ['amba', 3], ['regent', 2], ['police', 1], ['jeep', 2], ['bison', 0.5], ['agni', 0.4], ['shera', 0.5]];
 const VMAX = { scooter: 13, auto: 10, bus: 13, truck: 13, amba: 13, police: 18 };
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
+const _pm = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 export class Traffic {
   constructor(game, q) {
     this.game = game; this.cars = []; this.models = {}; this.hash = new Map();
@@ -26,11 +26,17 @@ export class Traffic {
         tint: new THREE.Color(paints[Math.floor(rng() * paints.length)]), x: 0, y: 0, z: 0, yaw: 0, alive: true, hp: key === 'bus' || key === 'truck' ? 160 : 70, stop: 0, idx: -1, init: false };
       this.cars.push(car); counts[key] = (counts[key] || 0) + 1;
     }
+    // two instanced meshes per model: full detail near the camera, a light version further away
+    const mat = vehicleMaterial(true);
     for (const key in counts) {
-      const g = vehicleGeometry(key).all.clone(); const tint = new THREE.InstancedBufferAttribute(new Float32Array(counts[key] * 3), 3); g.setAttribute('aTint', tint);
-      const mesh = new THREE.InstancedMesh(g, vehicleMaterial(true), counts[key]); mesh.count = 0; mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
-      game.scene.add(mesh); this.models[key] = { mesh, tint, n: 0 };
+      const vg = vehicleGeometry(key), mk = (src, shadow) => {
+        const g = src.clone(); const tint = new THREE.InstancedBufferAttribute(new Float32Array(counts[key] * 3), 3); g.setAttribute('aTint', tint);
+        const mesh = new THREE.InstancedMesh(g, mat, counts[key]); mesh.count = 0; mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.frustumCulled = false;
+        game.scene.add(mesh); return { mesh, tint, n: 0 };
+      };
+      this.models[key] = { hi: mk(vg.all, true), lo: vg.low ? mk(vg.low, false) : null };
     }
+    this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(new THREE.Vector3(), 6);
     for (const c of this.cars) this.place(c, true);
   }
   lanePos(c, out) {
@@ -53,8 +59,9 @@ export class Traffic {
     // spatial hash
     this.hash.clear();
     for (let i = 0; i < this.cars.length; i++) { const c = this.cars[i]; const k = Math.floor(c.x / 25) * 100000 + Math.floor(c.z / 25); let l = this.hash.get(k); if (!l) this.hash.set(k, (l = [])); l.push(i); }
-    for (const m of Object.values(this.models)) m.n = 0;
-    const far = q.desktop ? 900 : 550, simFar = 2500;
+    for (const m of Object.values(this.models)) { m.hi.n = 0; if (m.lo) m.lo.n = 0; }
+    const far = q.desktop ? 900 : 550, simFar = 2500, lodD = q.desktop ? 160 : 85;
+    const cam = this.game.cam; cam.updateMatrixWorld(); _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); this.frustum.setFromProjectionMatrix(_pm);
     const P = this.game.playerPos();
     const o = {};
     for (const c of this.cars) {
@@ -78,14 +85,16 @@ export class Traffic {
         if (dist < simFar) { c.x = damp(c.x, o.x, 7, step); c.z = damp(c.z, o.z, 7, step); c.y = o.y; } else { c.x = o.x; c.z = o.z; c.y = o.y; }
         c.yaw = dampAngle(c.yaw, o.yaw, 5, step);
       }
-      if (dist < far) {
-        const md = this.models[c.key]; if (!md) continue;
+      this.sphere.center.set(c.x, c.y + 1, c.z); this.sphere.radius = c.key === 'bus' || c.key === 'truck' ? 7 : 4;
+      if (dist < far && (dist < 25 || this.frustum.intersectsSphere(this.sphere))) {
+        const mm = this.models[c.key]; if (!mm) continue;
+        const md = dist < lodD || !mm.lo ? mm.hi : mm.lo;
         const i = md.n++; c.idx = i;
         _q.setFromEuler(_e.set(0, c.yaw, 0)); _m.compose(_p.set(c.x, c.y, c.z), _q, _s);
         md.mesh.setMatrixAt(i, _m); md.tint.setXYZ(i, c.tint.r, c.tint.g, c.tint.b);
-      } else c.idx = -1;
+      } else c.idx = dist < far ? 0 : -1;
     }
-    for (const m of Object.values(this.models)) { m.mesh.count = m.n; m.mesh.instanceMatrix.needsUpdate = true; m.tint.needsUpdate = true; }
+    for (const mm of Object.values(this.models)) for (const m of [mm.hi, mm.lo]) { if (!m) continue; m.mesh.count = m.n; m.mesh.instanceMatrix.clearUpdateRanges(); m.mesh.instanceMatrix.addUpdateRange(0, m.n * 16); m.mesh.instanceMatrix.needsUpdate = true; m.tint.needsUpdate = true; }
   }
   respawnFar(c, focus) {
     for (let k = 0; k < 20; k++) { const ei = Math.floor(Math.random() * M.edges.length), e = M.edges[ei]; if (e.lanes < 1 || e.type === 'fort') continue; const A = M.nodes[e.a]; if (Math.hypot(A.x - focus.x, A.z - focus.z) > 400) { c.edge = ei; c.s = 0; c.dir = 1; c.speed = 0; this.place(c, true); return; } }

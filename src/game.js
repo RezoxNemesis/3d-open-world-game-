@@ -58,8 +58,8 @@ export class Game {
     this.rain = initRain(S, q.desktop ? 9000 : 3500);
     // heroes
     const sp = M.spawns.start;
-    this.veer = new Character(this, { skin: 0xc68642, top: 0x263238, bottom: 0x1a3a5c, shoes: 0x3e2723, hair: 0x0e0a08, hairStyle: 'short', beard: true, jacket: 0x1b1b1b, sleeves: 'long' }, { name: 'Veer', team: 'hero', x: sp.x, z: sp.z, yaw: sp.ang, hp: 230, runSpeed: 5.7, sprintSpeed: 9.4, jumpV: 7.2, climbSpeed: 3.8, powers: true, dmgMul: 1.35 });
-    this.mira = new Character(this, { female: true, skin: 0xd29b67, top: 0xc62828, bottom: 0x263238, shoes: 0x212121, hair: 0x120c08, hairStyle: 'pony', midriff: false, sleeves: 'short', jacket: null }, { name: 'Mira', team: 'hero', x: sp.x + 1.5, z: sp.z - 1.5, yaw: sp.ang, hp: 190, runSpeed: 6.0, sprintSpeed: 10.2, jumpV: 7.8, climbSpeed: 4.6, powers: true, dmgMul: 1.0 });
+    this.veer = new Character(this, { skin: 0xc68642, top: 0x5f6a70, bottom: 0x1f3550, shoes: 0x3a2a20, sole: 0x2a221c, hair: 0x0e0a08, hairStyle: 'spiky', beard: true, jacket: 0x151515, sleeves: 'long', eyes: 0x2a1a0e }, { name: 'Veer', detail: 2, team: 'hero', x: sp.x, z: sp.z, yaw: sp.ang, hp: 230, runSpeed: 5.7, sprintSpeed: 9.4, jumpV: 7.2, climbSpeed: 3.8, powers: true, dmgMul: 1.35 });
+    this.mira = new Character(this, { female: true, skin: 0xd29b67, top: 0xb71c1c, bottom: 0x1c2733, shoes: 0xf0f0f0, sole: 0xffffff, hair: 0x120c08, hairStyle: 'pony', midriff: false, sleeves: 'short', jacket: null, eyes: 0x3b2314 }, { name: 'Mira', detail: 2, team: 'hero', x: sp.x + 1.5, z: sp.z - 1.5, yaw: sp.ang, hp: 190, runSpeed: 6.0, sprintSpeed: 10.2, jumpV: 7.8, climbSpeed: 4.6, powers: true, dmgMul: 1.0 });
     this.heroes = [this.veer, this.mira]; this.player = this.veer; this.companion = this.mira;
     for (const h of this.heroes) h.weapon = 0;
     // parked vehicles
@@ -87,7 +87,11 @@ export class Game {
     const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: q.msaa });
     this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.cam));
-    if (q.ao) { const ao = new GTAOPass(this.scene, this.cam, innerWidth, innerHeight); ao.blendIntensity = 0.85; ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: 12 }); this.composer.addPass(ao); this.aoPass = ao; }
+    if (q.ao) { const ao = new GTAOPass(this.scene, this.cam, innerWidth, innerHeight);
+      // grass and flat impostor cards don't belong in the AO normal/depth pass (cost + wrong occlusion)
+      const ov = ao.overrideVisibility.bind(ao), rv = ao.restoreVisibility.bind(ao); let hidden = [];
+      ao.overrideVisibility = () => { ov(); hidden = []; this.scene.traverseVisible((o) => { if (o.userData.noAO || (o.material && o.material.isShaderMaterial)) { hidden.push(o); } }); for (const o of hidden) o.visible = false; };
+      ao.restoreVisibility = () => { for (const o of hidden) o.visible = true; hidden = []; rv(); }; ao.blendIntensity = 0.85; ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: 12 }); this.composer.addPass(ao); this.aoPass = ao; }
     if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.45, 0.82); this.composer.addPass(this.bloom); }
     this.composer.addPass(new OutputPass());
   }
@@ -438,6 +442,7 @@ export class Game {
     if (this.inside) { opts.noCollide = true; opts.followPitch = 0.45; }
     this.camMode = mode;
     this.rig.update(dt, look, focus, mode, opts);
+    if (this.camOverride) { const o = this.camOverride(); this.cam.position.copy(o.pos); this.cam.lookAt(o.look); }
   }
   updateAudio(dt) {
     if (!audio.on) return;
