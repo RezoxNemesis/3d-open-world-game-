@@ -1,3 +1,14 @@
+## Daman Duo — v1.7 "Real People" update
+
+**What's new in 1.7**
+- **Realistic heroes:** Vikas, Mira and Arjun now have photo-scanned bodies with real skin, faces, hair and clothing textures, plus normal maps. They come from the Microsoft Rocketbox avatar library (MIT):
+  - **Vikas** wears a cap, a blue-and-white hoodie, jeans and white sneakers;
+  - **Mira** wears a black dress with heeled boots;
+  - **Arjun** wears a white kurta-pyjama and a prayer cap.
+- **Every move carries over.** The game's animation system drives the new bodies through live retargeting, so walking, sprinting, freeflow combos and finishers, riding bikes (Mira on the pillion), driving, swimming, diving, web-swinging and flying all work.
+- **Better clothes and skin on everyone else:** procedural fabric folds and bump detail, denim twill, leather creases, hair strands, cloth and skin sheen, and subsurface warmth that dims at night, so faces no longer glow in the dark.
+- Mobile stays fast: the three avatars add about 25k triangles in total.
+
 ## Daman Duo — v1.6 "Golden Hour" update
 
 **What's new in 1.6**

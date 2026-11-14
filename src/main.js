@@ -8,6 +8,7 @@ import { initInput, input } from './input.js';
 import { initAudio, audio } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
+import { loadAvatar, describe as describeAvatar } from './avatars.js';
 import { world } from './world.js';
 import { crowd } from './crowd.js';
 import { U } from './shaders.js';
@@ -45,7 +46,7 @@ async function start(opts) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = q.desktop ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   hud.loading(true);
-  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M; window.__press = (a) => { input.pressed.add(a); input.held.add(a); setTimeout(() => input.held.delete(a), 0); };
+  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M; window.__avatarInfo = async (n) => describeAvatar(await loadAvatar(n)); window.__RC = THREE.Raycaster; window.__press = (a) => { input.pressed.add(a); input.held.add(a); setTimeout(() => input.held.delete(a), 0); };
   if (opts.newGame) try { localStorage.removeItem('damanduo.save'); } catch (e) {}
   const t0 = performance.now();
   await game.init(async (msg, p) => { hud.progress(msg, p); await nextFrame(); });
@@ -81,9 +82,8 @@ function setupTests(game) {
   const S = {
     spawn: () => { game.sky.hour = 17.2; step(8); },
     duo_closeup: () => { const p = game.player; at(p.pos.x, p.pos.z, 0.6); game.rig.pitch = 0.05; game.rig.zoom = 0.55; game.sky.hour = 16.4; step(10); game.rig.zoom = 1; },
-    hero_face: () => { const p = game.player; at(M.coastX(-3700) + 60, -3700, 1.2); game.companion.pos.set(p.pos.x - Math.cos(p.yaw) * 0.9, p.pos.y, p.pos.z + Math.sin(p.yaw) * 0.9); game.companion.yaw = p.yaw; game.rig.yaw = p.yaw + 0.25; game.sky.hour = 16.2;
-      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)), r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)); const head = p.pos.clone().add(new THREE.Vector3(0, 1.62, 0)).addScaledVector(r, -0.45); return { pos: head.clone().addScaledVector(f, 1.6).addScaledVector(r, -0.25).add(new THREE.Vector3(0, 0.05, 0)), look: head }; };
-      step(12); },
+    hero_face: () => { const p = game.player; at(M.coastX(-3900) + 90, -3900, 1.2); const c = game.companion; c.pos.set(p.pos.x - Math.cos(p.yaw) * 1.1, p.pos.y, p.pos.z + Math.sin(p.yaw) * 1.1); c.yaw = p.yaw; game.sky.hour = 16.6;
+      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)), r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)); return { pos: p.pos.clone().add(new THREE.Vector3(0, 1.55, 0)).addScaledVector(f, 2.1).addScaledVector(r, -0.5), look: p.pos.clone().add(new THREE.Vector3(0, 1.35, 0)).addScaledVector(r, -0.45) }; }; step(8); },
     car_closeup: () => {
       const keys = ['rakshas', 'agni', 'regent', 'amba'], vs = keys.map((k) => game.vehicles.find((v) => v.key === k)).filter(Boolean);
       const base = new THREE.Vector3(M.coastX(-3300) + 90, 0, -3300);
@@ -145,6 +145,10 @@ function setupTests(game) {
       for (let i = 0; i < 110; i++) { if (game.counterTarget(p)) window.__press('counter'); else if (i % 6 === 0) window.__press('click'); game.update(1 / 30); } game.rig.zoom = 1.3; game.rig.pitch = 0.18; step(1); },
     street_wires: () => { const n = M.poles[Math.floor(M.poles.length * 0.31)]; at(n.x + 4, n.z + 4, n.ang); game.sky.hour = 17.8; game.rig.pitch = -0.12; game.rig.zoom = 1.4; step(4); game.rig.zoom = 1; },
     photo_mode: () => { at(-2238, -770, Math.PI); game.sky.hour = 18.1; step(2); game.startPhoto(); input.my = 0; game.photo.pitch = -0.05; game.photo.pos.y += 6; for (let i = 0; i < 4; i++) { game.update(1 / 30); game.render(); } game.stopPhoto(); },
+    hero_side: () => { const p = game.player; at(M.coastX(-3900) + 90, -3900, 1.2); input.tx = 0; input.ty = 1; for (let i = 0; i < 12; i++) game.update(1 / 30); game.sky.hour = 16.6;
+      game.camOverride = () => { const r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)); return { pos: p.pos.clone().add(new THREE.Vector3(0, 1.1, 0)).addScaledVector(r, 3.2), look: p.pos.clone().add(new THREE.Vector3(0, 0.95, 0)) }; }; step(1); input.ty = 0; },
+    aim_pistol: () => { const p = game.player; at(-2238, -770, Math.PI); game.setTool(p, 'pistol'); game.sky.hour = 15; input.held.add('aim'); for (let i = 0; i < 20; i++) game.update(1 / 30); input.held.delete('aim'); game.update(1 / 30);
+      game.camOverride = () => { const r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)), f = p.forward(); return { pos: p.pos.clone().add(new THREE.Vector3(0, 1.5, 0)).addScaledVector(r, -2.2).addScaledVector(f, 1.2), look: p.pos.clone().add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(f, 0.6) }; }; step(1); },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

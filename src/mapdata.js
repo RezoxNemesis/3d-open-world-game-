@@ -405,6 +405,7 @@ function hashEdges() {
     for (let gx = x0; gx <= x1; gx++) for (let gz = z0; gz <= z1; gz++) { const k = gx * 100000 + gz; if (!edgeHash.has(k)) edgeHash.set(k, []); edgeHash.get(k).push(i); }
   });
 }
+export function markSidewalks() { for (const e of edges) e.side = !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link'); }
 export function edgesNear(x, z) { return edgeHash.get(Math.floor(x / EH) * 100000 + Math.floor(z / EH)) || []; }
 export function nearestRoad(x, z) {
   let best = null, bd = 1e9;
@@ -717,6 +718,7 @@ export async function buildMap(progress) {
   plantTrees();
   placeLights();
   placePoles();
+  markSidewalks();
   await progress('Planting palms', 0.8);
   // spawns
   spawns.start = { x: -2241.6, z: -760, ang: Math.PI };
@@ -768,11 +770,14 @@ export function rampHeight(x, z) {
 }
 export function groundAt(x, z, y = 1e9, step = 0.7) {
   let g = terrainH(x, z);
+  const t0 = g;
   for (const ei of edgesNear(x, z)) {
-    const e = edges[ei]; if (!e.elev) continue;
+    const e = edges[ei];
     const A = nodes[e.a], B = nodes[e.b], dx = B.x - A.x, dz = B.z - A.z, l2 = dx * dx + dz * dz;
     const t = clamp(((x - A.x) * dx + (z - A.z) * dz) / l2, 0, 1), d = Math.hypot(A.x + dx * t - x, A.z + dz * t - z);
-    if (d < e.w / 2 + 1.2) { const yy = lerp(A.y, B.y, t) + 0.05; if (yy <= y + step && yy > g) g = yy; }
+    if (e.elev) { if (d < e.w / 2 + 1.2) { const yy = lerp(A.y, B.y, t) + 0.05; if (yy <= y + step && yy > g) g = yy; } }
+    // ordinary roads are drawn 17 cm above the terrain (20 cm on junction pads): stand and drive on the asphalt, not in it
+    else if (d < e.w / 2 + (e.side ? 2.8 : 0.3)) { const yy = t0 + ((t < 0.02 && A.e.length > 2) || (t > 0.98 && B.e.length > 2) ? 0.25 : 0.17); if (yy <= y + step && yy > g) g = yy; }
   }
   const rh = rampHeight(x, z); if (rh > g && rh <= y + step + 0.6) g = rh;
   for (const ci of collidersNear(x, z)) {

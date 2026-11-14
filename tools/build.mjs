@@ -9,6 +9,8 @@ const html = readFileSync('src/index.html', 'utf8');
 writeFileSync('dist/index.html', html.replace('<!--GAME-->', '<script src="game.js"></script>'));
 // photo textures: dist/assets/tex/{1k,2k} (the Android build drops 2k in CI)
 if (existsSync('assets/tex')) cpSync('assets/tex', 'dist/assets/tex', { recursive: true });
+// realistic hero avatars (Microsoft Rocketbox, MIT): dist/assets/avatars/<name>/{model.fbx, *.jpg}
+if (existsSync('assets/avatars')) cpSync('assets/avatars', 'dist/assets/avatars', { recursive: true });
 // single-file build: embed the 1K textures as data URLs so it still works from one HTML file
 let embed = '';
 if (existsSync('assets/tex/1k')) {
