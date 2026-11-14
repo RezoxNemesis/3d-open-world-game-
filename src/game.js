@@ -19,6 +19,8 @@ import { buildCrowd, updateCrowd, setPanic, crowdNear, crowdRay, densityAt, crow
 import { spawnAnimals, buildBirds } from './animals.js';
 import { Serpent } from './serpent.js';
 import { Makara, Rakshasa } from './bosses.js';
+import { Underwater, REEF, WRECK } from './underwater.js';
+import { Police } from './police.js';
 import { NPCs } from './npc.js';
 import { Interiors } from './interiors.js';
 import { Weather, SEASONS } from './weather.js';
@@ -57,6 +59,8 @@ export class Game {
     this.animals = spawnAnimals(this, q); this.birds = buildBirds(S);
     this.serpent = new Serpent(this); this.makara = new Makara(this); this.rakshasa = new Rakshasa(this);
     this.bosses = [this.serpent, this.makara, this.rakshasa];
+    this.uw = new Underwater(this); this.police = new Police(this);
+    world.labels.push({ name: 'Jampore Reef · São Jerónimo wreck (dive!)', x: WRECK.x, z: WRECK.z });
     for (const [b, nm] of [[this.serpent, 'BOSS · Kaala Naag Lair'], [this.makara, 'BOSS · Makara Bay'], [this.rakshasa, 'BOSS · Rakshasa Peak']]) { const h = b.home(); world.labels.push({ name: nm, x: h.x, z: h.z, boss: true }); }
     // put world content under one group so interiors can hide it without changing the light count (no shader recompiles)
     this.worldRoot = new THREE.Group(); this.worldRoot.name = 'worldRoot';
@@ -73,7 +77,8 @@ export class Game {
     this.heroes = [this.vikas, this.mira]; this.player = this.vikas; this.companion = this.mira;
     for (const h of this.heroes) h.weapon = 0;
     // parked vehicles
-    for (const c of M.spawns.cars) this.addVehicle('car', c.kind === 'super' ? 'rakshas' : c.kind === 'gt' ? 'agni' : 'bison', c.color, c.x, c.z, c.ang);
+    for (const c of M.spawns.cars) this.addVehicle('car', c.key || (c.kind === 'super' ? 'rakshas' : c.kind === 'gt' ? 'agni' : 'bison'), c.color, c.x, c.z, c.ang);
+    for (const b of M.spawns.bikes || []) this.addVehicle('car', b.key, CARS[b.key].paints[b.paint || 0], b.x, b.z, b.ang);
     const extra = [['shera', 0x1a8cff, -2255.4, -640, 0], ['regent', 0x0d0d0d, -2244.6, -1300, Math.PI], ['amba', 0xf5f5f5, -2244.6, 700, Math.PI], ['jeep', 0x556b2f, M.L.jungleCamp.x - 20, M.L.jungleCamp.z + 25, 0.5], ['kaveri', 0xb71c1c, -2255.4, 3300, 0], ['jeep', 0xd84315, M.L.ghatEnd ? M.L.ghatEnd.x - 20 : 6400, M.L.ghatEnd ? M.L.ghatEnd.z : -500, 1]];
     for (const [k, col, x, z, a] of extra) this.addVehicle('car', k, col, x, z, a);
     for (const h of M.spawns.heli) this.addVehicle('heli', 'heli', 0xffffff, h.x, h.z, 0);
@@ -255,8 +260,9 @@ export class Game {
     const p = this.player; p.vehicle = v; v.driver = p; p.state = 'seated'; p.vel.set(0, 0, 0); p.anchor = null; setWeb(null);
     v.obj.add(p.obj); p.obj.position.copy(v.seat); p.obj.rotation.set(0, 0, 0); p.seatPose = () => Pose.drive(v.kind === 'car' && v.spec.P && v.spec.P.roofY < 1.35);
     if (v.key === 'scooter') { p.seatPose = () => ({ ...Pose.sit(true), thighL: [-1.2, 0, 0.2], thighR: [-1.2, 0, -0.2] }); }
+    if (v.spec && v.spec.bike) { const sport = v.key === 'vayurr'; p.seatPose = (t) => Pose.bike(sport, t); }
     const c = this.companion;
-    if (c.alive && c.pos.distanceTo(v.pos) < 30 && v.kind !== 'boat' && v.key !== 'scooter') { c.vehicle = v; c.state = 'seated'; v.obj.add(c.obj); c.obj.position.set(-v.seat.x, v.seat.y, v.seat.z); c.obj.rotation.set(0, 0, 0); c.seatPose = () => Pose.passenger(v.kind === 'car' && v.spec.P && v.spec.P.roofY < 1.35); if (v.kind === 'jet') c.setVisible(false); }
+    if (c.alive && c.pos.distanceTo(v.pos) < 30 && v.kind !== 'boat' && v.key !== 'scooter' && v.key !== 'vayurr') { c.vehicle = v; c.state = 'seated'; v.obj.add(c.obj); c.obj.position.set(-v.seat.x, v.seat.y, v.seat.z); if (v.spec && v.spec.bike) { c.obj.position.set(0, v.seat.y + 0.06, v.seat.z - 0.48); c.seatPose = () => ({ ...Pose.bike(false), armL: [-0.7, 0, 0.35], foreL: [-1.0, 0, 0], armR: [-0.7, 0, -0.35], foreR: [-1.0, 0, 0], spine: [0.1, 0, 0] }); } c.obj.rotation.set(0, 0, 0); c.seatPose = () => Pose.passenger(v.kind === 'car' && v.spec.P && v.spec.P.roofY < 1.35); if (v.kind === 'jet') c.setVisible(false); }
     v.startEngine(); sfx('door', 0.8);
     if (v.kind === 'car') say(p.name, ['Nice ride.', 'Hold on, Mira!', 'Let us see what this beauty can do.'][Math.floor(Math.random() * 3)]);
   }
@@ -343,6 +349,7 @@ export class Game {
     if (p.vehicle) return { label: p.vehicle.kind === 'jet' || p.vehicle.kind === 'plane' ? (p.vehicle.pos.y - M.groundAt(p.vehicle.pos.x, p.vehicle.pos.z) > 20 ? 'Eject' : 'Exit') : 'Exit', id: 'exitv' };
     if (p.mount) return { label: 'Dismount', id: 'dismount' };
     if (this.interior.active) return this.interior.action(p.pos);
+    if ((p.state === 'dive' || p.state === 'swim') && this.uw) { const a = this.uw.action(p.pos); if (a) return a; }
     if (p.state !== 'ground' && p.state !== 'swim') return null;
     let bv = null, bd = 4.5; for (const v of this.vehicles) { if (v.dead || v.driver) continue; const d = v.pos.distanceTo(p.pos) - (v.len || 4) * 0.3; if (d < bd) { bd = d; bv = v; } }
     if (bv) return { label: (bv.kind === 'car' ? 'Drive ' : bv.kind === 'boat' ? 'Drive ' : 'Fly ') + bv.spec.name, id: 'enterv', v: bv };
@@ -368,6 +375,7 @@ export class Game {
       case 'building': this.enterInterior(this.interior.enter(a.b, a.idx, a.b.style === 1 ? 'shop' : a.b.style === 2 ? 'cafe' : a.b.style === 5 ? 'mansion' : 'home')); break;
       case 'exit': this.leaveInterior(); break;
       case 'shrine': { this.leaveInterior(); this.missions.event('shrine'); const s = this.serpent; p.pos.set(M.PLAT.lx - 330, 0, M.PLAT.lz - 120); p.pos.y = M.groundAt(p.pos.x, p.pos.z); if (!this.missions.cur) s.awaken(); this.hud.toast('NAAG SAROVAR', 2, '#e040fb'); break; }
+      case 'seachest': this.uw.open(a.c); break;
       case 'chest': this.money += 15000; sfx('coin'); this.hud.toast('Treasure! + ₹15,000', 2.5, '#ffd54f'); this.interior.chest = null; break;
       case 'buy': if (this.money >= 500) { this.money -= 500; for (const h of this.heroes) h.armor = 100; for (const h of this.heroes) { h.ammo.pistol += 60; h.ammo.rifle += 120; } sfx('coin'); this.hud.toast('Armour + ammo', 2, '#4fc3f7'); } break;
     }
@@ -456,7 +464,8 @@ export class Game {
     // companion
     const c = this.companion; if (c.state !== 'seated') c.update(dt, this.companionCtl(dt)); else c.update(dt, {});
     // other vehicles (parked / unmanned) still need physics when moving
-    for (const v of this.vehicles) if (v !== p.vehicle && (v.speed !== 0 || v.burn > 0 || v.kind === 'heli' && v.rotor > 0.01 || v.airborne)) v.update(dt, null);
+    this.police.update(dt);
+    for (const v of this.vehicles) if (v !== p.vehicle && !v.ai && (v.speed !== 0 || v.burn > 0 || v.kind === 'heli' && v.rotor > 0.01 || v.airborne)) v.update(dt, null);
     // vehicle vs pedestrians / traffic
     if (p.vehicle && p.vehicle.kind === 'car' && Math.abs(p.vehicle.speed) > 3) {
       const v = p.vehicle, f = v.forward.clone();
@@ -474,6 +483,7 @@ export class Game {
     if (!this.inside) this.traffic.update(dt, P, this.q);
     // camera
     this.updateCamera(dt);
+    this.uw.update(dt);
     // sky / weather / world
     this.sky.update(dt, P, this.time, this.timeScale);
     this.weather.update(dt, this.sky, this.sky.hour);
@@ -492,7 +502,7 @@ export class Game {
     if (v) { if (v.kind === 'car' || v.kind === 'boat') { speed = Math.abs(v.speed) * 3.6; unit = 'KM/H'; } else { speed = v.speed * 3.6; unit = `KM/H · ALT ${Math.round(v.pos.y - M.groundAt(v.pos.x, v.pos.z))} M` + (v.kind !== 'heli' ? ` · THR ${Math.round(v.throttle * 100)}%` : '') + (v.fighter ? ` · MSL ${v.missiles}` : ''); } }
     else if (p.mount) { speed = p.mount.speed * 3.6; unit = 'KM/H'; }
     else if (p.state === 'glide' || p.state === 'chute' || (p.state === 'air' && p.pos.y - M.groundAt(p.pos.x, p.pos.z) > 15)) { speed = p.pos.y - M.groundAt(p.pos.x, p.pos.z); unit = 'M ALTITUDE'; }
-    const mode = v ? (v.kind === 'car' ? 'car' : v.kind === 'boat' ? 'boat' : v.kind === 'heli' ? 'heli' : v.kind === 'jet' ? 'jet' : 'plane') : p.mount ? 'horse' : p.busy ? 'busy' : p.state === 'swim' ? 'swim' : p.state === 'glide' ? 'glide' : p.state === 'chute' ? 'chute' : p.state === 'climb' ? 'climb' : p.state === 'fly' ? 'fly' : p.state === 'air' || p.state === 'web' || p.state === 'slam' ? 'air' : 'foot';
+    const mode = v ? (v.kind === 'car' ? 'car' : v.kind === 'boat' ? 'boat' : v.kind === 'heli' ? 'heli' : v.kind === 'jet' ? 'jet' : 'plane') : p.mount ? 'horse' : p.busy ? 'busy' : p.state === 'swim' ? 'swim' : p.state === 'dive' ? 'dive' : p.state === 'glide' ? 'glide' : p.state === 'chute' ? 'chute' : p.state === 'climb' ? 'climb' : p.state === 'fly' ? 'fly' : p.state === 'air' || p.state === 'web' || p.state === 'slam' ? 'air' : 'foot';
     this.hud.setMode(mode, !!act);
     this.hud.update(dt, {
       hour: this.sky.hour, season: SEASONS[this.weather.season].name, rain: this.weather.rain, money: this.money, weaponName: v || p.mount ? '' : (() => { const t = this.toolOf(p); return t.id === 'pistol' || t.id === 'rifle' ? `${W.name}  ${p.clip[W.id]}/${p.ammo[W.id]}` : t.name + (t.power === 'flash' && p.flash > 0 ? ` ${Math.ceil(p.flash)}s` : ''); })(),
@@ -516,11 +526,12 @@ export class Game {
     else if (this.inside) mode = 'interior';
     else if (p.state === 'climb' || p.state === 'mantle') opts = { followYaw: p.yaw, followK: 3 };
     else if (I.held.has('aim') && p.weapon > 0) mode = 'aim';
-    else if (p.state === 'swim') mode = 'swim';
+    else if (p.state === 'swim' || p.state === 'dive') mode = 'swim';
     else if (p.state === 'glide' || p.state === 'chute' || p.state === 'web' || p.state === 'fly' || p.state === 'slam') { mode = 'air'; opts = { followYaw: Math.hypot(p.vel.x, p.vel.z) > 4 ? Math.atan2(p.vel.x, p.vel.z) : undefined, followK: 1.2, speedFov: clamp(p.vel.length() / 3, 0, 14) }; }
     if (this.inside) { opts.noCollide = true; opts.followPitch = 0.45; }
     this.camMode = mode;
     this.rig.update(dt, look, focus, mode, opts);
+    if (!p.vehicle && (p.state === 'swim' || p.state === 'dive')) { const cp = this.cam.position, wl = M.waterLevelAt(cp.x, cp.z); if (p.state === 'swim' && cp.y < wl + 0.35) cp.y = wl + 0.35; if (p.state === 'dive' && cp.y > wl - 0.35) cp.y = wl - 0.35; }
     if (this.camOverride) { const o = this.camOverride(); this.cam.position.copy(o.pos); this.cam.lookAt(o.look); }
     if (this.cine) {
       const c = this.cine; c.t += dt; const T = c.target(), P = this.playerPos();
@@ -554,7 +565,7 @@ export class Game {
   save() {
     try {
       const p = this.player, P = this.playerPos();
-      localStorage.setItem('damanduo.save', JSON.stringify({ money: this.money, done: [...this.missions.done], season: this.weather.season, hour: this.sky.hour, pos: this.inside ? null : [P.x, P.z], hero: p === this.mira ? 'mira' : 'veer', powers: [...this.powersUnlocked], tools: [this.vikas.toolId, this.mira.toolId], music: audio.musicVol, voices: audio.voiceOn, sens: input.sens }));
+      localStorage.setItem('damanduo.save', JSON.stringify({ money: this.money, done: [...this.missions.done], season: this.weather.season, hour: this.sky.hour, pos: this.inside ? null : [P.x, P.z], hero: 'vikas', chests: this.uw ? [...this.uw.found] : [], powers: [...this.powersUnlocked], tools: [this.vikas.toolId, this.mira.toolId], music: audio.musicVol, voices: audio.voiceOn, sens: input.sens }));
     } catch (e) {}
   }
   load() {
@@ -563,6 +574,7 @@ export class Game {
     this.money = s.money ?? this.money; for (const d of s.done || []) this.missions.done.add(d);
     if (s.season) this.weather.setSeason(s.season); if (s.hour !== undefined) this.sky.hour = s.hour;
     if (s.pos) { const [x, z] = s.pos; if (Math.abs(x) < M.HALF && Math.abs(z) < M.HALF && M.terrainH(x, z) > 0.5) { this.vikas.pos.set(x, M.groundAt(x, z), z); this.mira.pos.set(x + 1.5, M.groundAt(x + 1.5, z), z); } }
+    if (s.chests && this.uw) this.uw.restore(s.chests);
     for (const pw of s.powers || []) this.powersUnlocked.add(pw); if (s.tools) { this.vikas.toolId = s.tools[0]; this.mira.toolId = s.tools[1]; }
     if (s.music !== undefined) setVolumes(s.music, audio.sfxVol); if (s.voices !== undefined) audio.voiceOn = s.voices; if (s.sens) input.sens = s.sens;
   }
