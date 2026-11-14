@@ -11,16 +11,16 @@ export class Missions {
     const fort = L.motiFort;
     this.list = [
       { id: 'chai', name: 'Chai Pe Charcha', desc: 'Make masala chai with Mira', reward: 2000, steps: [
-        { say: [['Mira', 'Veer! Welcome back to Daman. First things first — chai.'], ['Veer', 'You read my mind. Let us find a stall near the jetty.']] },
+        { say: [['Mira', 'Vikas! Welcome back to Daman. First things first — chai.'], ['Vikas', 'You read my mind. Let us find a stall near the jetty.']] },
         { goto: 'stall', text: 'Go to a chai stall or into any home kitchen' }, { chai: true, text: 'Make masala chai (F)' },
-        { say: [['Veer', 'Ahh. Perfect masala chai. Now I am ready for anything.'], ['Mira', 'Good, because Daman needs us. Kaala Naag gang is back at the docks.']] }] },
+        { say: [['Vikas', 'Ahh. Perfect masala chai. Now I am ready for anything.'], ['Mira', 'Good, because Daman needs us. Kaala Naag gang is back at the docks.']] }] },
       { id: 'fort', name: 'Fort Run', desc: 'Parkour race over Moti Daman Fort to the lighthouse', reward: 5000, steps: [
         { goto: { x: fort.x1 + 22, z: (fort.z0 + fort.z1) / 2 }, r: 12, text: 'Go to the east gate of Moti Daman Fort' },
         { say: [['Mira', 'Race you to the lighthouse — over the walls, not around them!']] },
         { cps: [{ x: fort.x1, z: fort.z0 + 60, y: 1 }, { x: (fort.x0 + fort.x1) / 2, z: fort.z0, y: 1 }, { x: fort.x0 + 30, z: fort.z0, y: 1 }, { x: L.lighthouse.x, z: L.lighthouse.z, y: 0 }], time: 110, r: 9, text: 'Reach the checkpoints' }] },
       { id: 'gang', name: 'Kaala Naag Gang', desc: 'Clear the gang from Kachigam Docks', reward: 10000, steps: [
         { goto: { x: L.hideout.x - 120, z: L.hideout.z - 100 }, r: 20, text: 'Drive to Kachigam Docks' },
-        { say: [['Veer', 'There they are. Ten of them... and their boss.'], ['Mira', 'Stay close. I will cover you.']] },
+        { say: [['Vikas', 'There they are. Ten of them... and their boss.'], ['Mira', 'Stay close. I will cover you.']] },
         { kill: { n: 10, boss: true }, text: 'Defeat the Kaala Naag gang' }, { say: [['Mira', 'Docks are clear. But that boss kept talking about a serpent...']] }] },
       { id: 'dash', name: 'Devka Dash', desc: 'Supercar race up the coast to Devka', reward: 8000, steps: [
         { spawnCar: 'rakshas', text: 'Get in the Vayu Rakshas' }, { inCar: true, text: 'Get in the Vayu Rakshas' },
@@ -35,11 +35,11 @@ export class Missions {
       { id: 'jungle', name: 'Into the Jungle', desc: 'Ride a horse from Jungle Camp to Ganga Dhara Falls', reward: 8000, steps: [
         { goto: { x: L.jungleCamp.x, z: L.jungleCamp.z }, r: 30, text: 'Go to the Jungle Camp' }, { onHorse: true, text: 'Mount a horse (F)' },
         { goto: { x: (this.game.world.falls ? this.game.world.falls.bot : 5900) - 90, z: M.PLAT.z - 60 }, r: 25, text: 'Ride to the Ganga Dhara Falls' },
-        { say: [['Mira', 'Look at that waterfall... and those claw marks. Something enormous lives up there.'], ['Veer', 'Naag Gufa is in the mountains. That is where we go next.']] }] },
+        { say: [['Mira', 'Look at that waterfall... and those claw marks. Something enormous lives up there.'], ['Vikas', 'Naag Gufa is in the mountains. That is where we go next.']] }] },
       { id: 'naag', name: 'The Serpent Awakens', desc: 'Enter Naag Gufa and defeat Kaala Naag', reward: 100000, steps: [
         { goto: 'naagcave', r: 10, text: 'Find Naag Gufa (Serpent Cave) in the Ghats' }, { cave: 'naag', text: 'Enter the cave (F)' }, { shrine: true, text: 'Touch the serpent shrine' },
         { boss: true, text: 'Defeat Kaala Naag at Naag Sarovar — aim for the glowing gem!' },
-        { say: [['Veer', 'It is over. Daman is safe.'], ['Mira', 'Chai on me. Let us go home, partner.']] }] },
+        { say: [['Vikas', 'It is over. Daman is safe.'], ['Mira', 'Chai on me. Let us go home, partner.']] }] },
     ];
   }
   start(id) {

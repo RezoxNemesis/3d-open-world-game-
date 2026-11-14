@@ -25,8 +25,9 @@ export class Interiors {
   }
   // ----- building interiors -----
   enter(b, idx, kind) {
-    const w = clamp(b.x1 - b.x0, 7, 18), d = clamp(b.z1 - b.z0, 7, 16), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-    const ox = cx, oz = cz, H = 3.2, rng = mulberry32(idx * 7 + 3);
+    const lux = kind === 'mansion'; if (lux) kind = 'home';
+    const w = clamp(b.x1 - b.x0, 7, lux ? 26 : 18), d = clamp(b.z1 - b.z0, 7, lux ? 20 : 16), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+    const ox = cx, oz = cz, H = lux ? 4.8 : 3.2, rng = mulberry32(idx * 7 + 3);
     this.exitPos = this.doorOutside(b);
     this.origin = new THREE.Vector3(ox, Y0, oz); this.kind = kind; this.w = w; this.d = d;
     const parts = [], glow = [], cols = [];
@@ -34,7 +35,7 @@ export class Interiors {
     const cyl = (r, h, x, y, z, col) => { const g = new THREE.CylinderGeometry(r, r, h, 14); g.translate(ox + x, Y0 + y, oz + z); parts.push(colored(g, col)); };
     const wallC = [0xf3e5c0, 0xd8ecf0, 0xf5d6c6, 0xe3f0d6, 0xfff3d6, 0xe6dcf2][Math.floor(rng() * 6)];
     // floor (tiles) + ceiling + outer walls
-    for (let i = 0; i < Math.ceil(w / 0.8); i++) for (let j = 0; j < Math.ceil(d / 0.8); j++) { const g = new THREE.PlaneGeometry(0.78, 0.78); g.rotateX(-Math.PI / 2); g.translate(ox - w / 2 + 0.4 + i * 0.8, Y0 + 0.01, oz - d / 2 + 0.4 + j * 0.8); parts.push(colored(g, kind === 'home' ? ((i + j) % 2 ? 0xd7ccc8 : 0xbcaaa4) : (i + j) % 2 ? 0xeeeeee : 0x9e9e9e)); }
+    for (let i = 0; i < Math.ceil(w / 0.8); i++) for (let j = 0; j < Math.ceil(d / 0.8); j++) { const g = new THREE.PlaneGeometry(0.78, 0.78); g.rotateX(-Math.PI / 2); g.translate(ox - w / 2 + 0.4 + i * 0.8, Y0 + 0.01, oz - d / 2 + 0.4 + j * 0.8); parts.push(colored(g, lux ? ((i + j) % 2 ? 0xf3efe7 : 0xe2dbcf) : kind === 'home' ? ((i + j) % 2 ? 0xd7ccc8 : 0xbcaaa4) : (i + j) % 2 ? 0xeeeeee : 0x9e9e9e)); }
     const T = 0.2;
     // outer shell = inward-facing planes (camera can look in from outside, like a cutaway)
     const plane = (pw, ph, x, y, z, ry, rx, col) => { const g = new THREE.PlaneGeometry(pw, ph); g.rotateX(rx || 0); g.rotateY(ry); g.translate(ox + x, Y0 + y, oz + z); parts.push(colored(g, col)); };
@@ -74,6 +75,19 @@ export class Interiors {
       // photos & plants
       for (let k = 0; k < 3; k++) box(0.5, 0.4, 0.03, -w / 2 + 1.0 + k * 0.7, 1.8, d / 2 - 0.12, [0x3949ab, 0xffb300, 0x00897b][k], false, 0);
       cyl(0.18, 0.35, w / 2 - 0.4, 0.18, d / 2 - 0.5, 0x6d4c41); const pl = new THREE.IcosahedronGeometry(0.35, 1); pl.translate(ox + w / 2 - 0.4, Y0 + 0.65, oz + d / 2 - 0.5); parts.push(colored(pl, 0x2e7d32));
+      if (lux) {
+        // mansion extras: crystal chandelier, sweeping staircase, grand piano, marble columns, big rug, art, palms in pots
+        for (let r = 0; r < 3; r++) for (let a = 0; a < 6.28; a += 0.45 - r * 0.08) glow.push(colored(new THREE.SphereGeometry(0.07, 6, 4).translate(ox + Math.cos(a) * (0.9 - r * 0.28), Y0 + H - 1.2 - r * 0.25, oz + d * 0.12 + Math.sin(a) * (0.9 - r * 0.28)), 0xfff3c4));
+        cyl(0.03, 1.0, 0, H - 0.6, d * 0.12, 0xd4af37);
+        for (let k = 0; k < 14; k++) box(2.2, 0.22, 0.34, w / 2 - 1.4, 0.11 + k * 0.22, d * 0.18 - k * 0.32, 0xf5f0e6);
+        box(0.08, 1.0, 4.6, w / 2 - 2.5, 1.6, d * 0.18 - 2.2, 0xd4af37, false);
+        box(1.5, 0.95, 1.9, -w / 2 + 2.6, 0.48, -0.8, 0x111111); box(1.45, 0.08, 1.85, -w / 2 + 2.6, 1.0, -0.8, 0x050505, false); box(1.2, 0.1, 0.25, -w / 2 + 2.6, 0.88, 0.05, 0xf5f5f5, false);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.32, H, sx * w * 0.22, H / 2, sz * d * 0.2, 0xf1ece2);
+        const rug = new THREE.PlaneGeometry(6, 4); rug.rotateX(-Math.PI / 2); rug.translate(ox, Y0 + 0.025, oz + d * 0.12); parts.push(colored(rug, 0x7b1f2b));
+        box(3.4, 0.5, 1.0, 0, 0.25, d * 0.12 + 2.6, 0xe8e0d0); box(3.4, 0.6, 0.25, 0, 0.75, d * 0.12 + 3.0, 0xe8e0d0, false); box(1.6, 0.4, 0.9, 0, 0.2, d * 0.12, 0x3e2723);
+        for (let k = 0; k < 4; k++) box(1.4, 1.0, 0.05, -w / 2 + 3 + k * 2.4, 2.4, -d / 2 + 0.13, [0x1a5276, 0xb9770e, 0x6c3483, 0x117864][k], false);
+        for (const [px, pz] of [[-w / 2 + 0.7, d / 2 - 0.7], [w / 2 - 0.7, -d / 2 + 0.7], [-w / 2 + 0.7, -d / 2 + 0.7]]) { cyl(0.3, 0.6, px, 0.3, pz, 0xece6da); const pp = new THREE.ConeGeometry(0.7, 1.6, 7); pp.translate(ox + px, Y0 + 1.4, oz + pz); parts.push(colored(pp, 0x2e7d32)); }
+      }
     } else {
       // shop / cafe: counter + shelves + tables
       box(w * 0.55, 1.0, 0.7, 0, 0.5, -d / 2 + 2.0, 0x8d6e63); this.counter = new THREE.Vector3(ox, Y0, oz - d / 2 + 2.9);
@@ -93,6 +107,7 @@ export class Interiors {
     return new THREE.Vector3(ox, Y0, oz + d / 2 - 1.2);
   }
   doorOutside(b) {
+    if (b.estate !== undefined) { const e = M.estates[b.estate], x = (b.x0 + b.x1) / 2, z = e.face > 0 ? b.z1 + 4.5 : b.z0 - 4.5; return new THREE.Vector3(x, M.groundAt(x, z), z); }
     const nr = M.nearestRoad((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2; let x = cx, z = b.z1 + 1.5;
     if (nr) { const dx = nr.x - cx, dz = nr.z - cz; if (Math.abs(dx) > Math.abs(dz)) { x = dx > 0 ? b.x1 + 1.5 : b.x0 - 1.5; z = cz; } else { z = dz > 0 ? b.z1 + 1.5 : b.z0 - 1.5; x = cx; } }
@@ -132,7 +147,7 @@ export class Interiors {
     for (const l of this.lights) { l.intensity = 220; l.distance = 60; }
     this.door = new THREE.Vector3(ox, Y0, oz);
     this.active = true; this.floorY = Y0; this.type = 'cave';
-    say('Mira', cave.id === 'naag' ? 'This place hums... like something huge is breathing below us.' : 'Look at those crystals! Careful, Veer, it is slippery.');
+    say('Mira', cave.id === 'naag' ? 'This place hums... like something huge is breathing below us.' : 'Look at those crystals! Careful, Vikas, it is slippery.');
     return new THREE.Vector3(ox, Y0, oz).add(new THREE.Vector3(Math.sin(0) * 3, 0, 3));
   }
   // ----- shared -----

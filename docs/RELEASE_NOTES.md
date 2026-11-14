@@ -1,3 +1,33 @@
+## Daman Duo — v1.2 "Gods & Mansions" update
+
+**Downloads:** same files as before: `DamanDuo-Android.apk` (installs over the old version), the Windows installer or portable `.exe`, the Linux AppImage, the macOS `.dmg`, and `DamanDuo-Web.html`.
+
+**What's new in 1.2**
+- **Vikas is the hero.** Mira is now your friend: she follows, fights and rides with you, and the switch button is gone.
+- **New desktop controls.** You only need WASD/arrows, Tab, Shift, Space and Enter, plus the mouse:
+  - roll the wheel forward to walk; move the mouse to turn;
+  - hold the left button and drag to look around;
+  - left click to fight, fire or use a power;
+  - hold the right button to aim, then left click to fire any weapon, the web shooter or a power.
+- **Bosses you can actually find.** Each boss has a glowing beacon pillar, a ☠ pointer on the minimap that always shows the way, a labelled icon on the full map, and a **Menu → Bosses → FIGHT** button that takes you straight there.
+- **Kaala Naag, rebuilt:**
+  - a sculpted cobra head with a hood, hinged jaw, fangs, forked tongue and glowing eyes;
+  - armoured dorsal spikes and animated scales;
+  - a cinematic intro, then sweep and venom-rain attacks.
+- **Two new mythological bosses:**
+  - **Makara**, a jade-and-gold sea monster at Devka. It lunges up the beach, spouts water, dives and erupts beneath you.
+  - **Maha Rakshasa**, a 25 m demon king in the Ghats. He wields a mace and attacks with a charge, ground-stomp shockwaves and boulder throws.
+- **New powers** (beat a boss to unlock one; select it with Tab or GUN):
+  - **Flash Speed**: run 4× faster;
+  - **Thunder Slam**: leap and smash a shockwave;
+  - **Flight**: fly anywhere.
+- **Jampore Villa Colony:**
+  - dozens of walled estates with modern glass villas and Portuguese-colonial mansions;
+  - pools with caustics, lit loungers, lawns, hedges, tennis courts, fountains, gate lamps and guard cabins;
+  - parked supercars to take;
+  - the domed **Sagar Mahal** palace;
+  - mansion interiors with a marble hall, chandelier, grand staircase and piano.
+
 ## Daman Duo — v1.1 "Smooth & Real" update
 
 **Downloads**

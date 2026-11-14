@@ -1,6 +1,6 @@
 # Daman Duo
 
-An open-world 3D action game set in a 20 km × 20 km island version of **Daman, India**. You play as a duo, Veer and Mira, and switch between them at any time. Everything is generated in code with Three.js and WebGL2: terrain, buildings, people, cars, animals, the serpent, sky, music and sound. There are no external art or audio files.
+An open-world 3D action game set in a 20 km × 20 km island version of **Daman, India**. You play as **Vikas**, with your friend Mira fighting and riding alongside you. The world is built in code with Three.js and WebGL2: terrain, buildings, people, cars, animals, bosses, sky, music and sound. Surfaces use CC0 photo-scanned textures from Poly Haven.
 
 ## Download
 
@@ -27,7 +27,8 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 - **Jungle** in the eastern hills, home to horses, deer, elephants, tigers, langurs and peacocks.
 - **High mountains:** ridged peaks up to about 1.8 km, a grade-limited ghat road up to a **plateau lake**, a **waterfall**, and caves to explore.
 - **Kalpa Island** resort and the **Pani Kotha** sea fort.
-- More than 17,000 buildings, each with procedural windows, balconies, shop signs and lit rooms at night. Homes, shops and cafés can be entered and have interiors.
+- **Jampore Villa Colony:** walled estates with modern glass villas and Portuguese-colonial mansions, pools, lawns, tennis courts, fountains and the domed **Sagar Mahal** palace. You can walk into the mansions.
+- More than 16,000 buildings, each with procedural windows, balconies, shop signs and lit rooms at night. Homes, shops and cafés can be entered and have interiors.
 - Up to **3 lakh (300,000) people** on the map, animated on the GPU, plus live traffic driving on the left.
 
 ## What you can do
@@ -39,8 +40,12 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 - **Web-swing** between towers, Spider-Man style.
 - **Skydive** and open a **parachute**, or glide.
 - **Fight** with jabs, crosses, hooks, uppercuts, kicks, roundhouses, flying kicks and blocks. Use a pistol or rifle. A wanted-star system brings the police after you.
-- **Make masala chai:** at a chai tapri or on the stove in any home kitchen. It heals both heroes.
-- **Fight the Naag:** a 500 m long giant serpent with a hood, venom spit and body crush. Its forehead gem is the weak point.
+- **Make masala chai:** at a chai tapri or on the stove in any home kitchen. It heals you and your friend.
+- **Mythological bosses**, marked ☠ on the map and minimap. Start a fight from the map or from **Menu → Bosses → FIGHT**:
+  - **Kaala Naag**, a 500 m cobra in Naag Sarovar. Its forehead gem is the weak point.
+  - **Makara**, the sea monster of Devka. Its pearl is the weak point.
+  - **Maha Rakshasa**, a 25 m demon king in the Ghats. The gem on his chest is the weak point.
+- **Powers** won from the bosses: **Flash Speed**, **Thunder Slam** and **Flight**.
 - **Play 8 story missions:** Chai Pe Charcha, Fort Run, Kaala Naag Gang, Devka Dash, Sky Tower Dive, Wings Over Daman, Into the Jungle, and The Serpent Awakens.
 - **Time and weather:** a day–night cycle (morning, afternoon, golden-hour evening, starry night). Four seasons: summer, **monsoon** (rain, wet roads, lightning), post-monsoon and winter mist.
 - **Music and voices:** a procedural Indian soundtrack (sitar, tabla, dhol, bansuri, drones) that changes raga with the time of day and the action. The heroes speak through the device's text-to-speech, with subtitles.
@@ -48,29 +53,32 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 
 ## Controls
 
-**On foot**
+**Desktop, on foot.** Only the arrow keys, WASD, Tab, Shift, Space and Enter are needed, plus the mouse.
 
-| Action | Keyboard / mouse | Gamepad | Touch |
-|---|---|---|---|
-| Move · look | WASD · mouse | Left stick · right stick | Left stick · drag on the right side |
-| Jump · sprint | Space · Shift | A · press left stick | JUMP · SPRINT |
-| Punch (or fire a gun) · aim | Left click · right click | X or RT · LT | PUNCH / FIRE · AIM |
-| Kick · roll · drop down | E · X · C or Ctrl | B · — · — | KICK · ROLL |
-| Interact: enter a vehicle, mount, make chai, doors, caves | F | Y | F (appears when available) |
-| Web swing · parachute | R · G | RB · — | WEB · CHUTE |
-| Switch hero | Q | LB | ⇄ |
-| Change weapon | Tab or 1–4 | Back/View | GUN |
-| Map · pause menu | M · Esc | D-pad up · Start/Menu | MAP · ❚❚ |
-| Camera · horn | V · H | Press right stick · — | CAM · HORN |
+| Action | Keyboard / mouse |
+|---|---|
+| Move | WASD or arrow keys, or **roll the mouse wheel forward** to walk |
+| Turn | Move the mouse |
+| Look around freely | Hold the left button and drag |
+| Fight / fire / use | Left click (punch, shoot, web, or the selected power) |
+| Aim | Hold the right button. Left click fires the selected weapon or power; hold it to keep firing. |
+| Next weapon or power | Tab (Fists → Pistol → Rifle → Web Shooter → unlocked powers) |
+| Sprint · dodge roll · kick | Hold Shift · tap Shift · Shift + click |
+| Jump · flip · wingsuit · parachute | Space (again in the air) |
+| Interact (vehicles, horses, doors, mansions, chai) | Enter |
+| Map · menu | M · Esc |
 
-**In vehicles**
+**Desktop, in vehicles**
 
 | Vehicle | Controls |
 |---|---|
-| Car | W/S accelerate and brake, A/D steer, Space handbrake for drifting, Shift nitro, F exit |
-| Helicopter | Space climb, C descend, WASD fly, Z/Y turn, left click fire |
-| Plane / fighter jet | Space throttle up, C throttle down, WASD pitch and roll, Shift afterburner; on the jet, left click cannon and E missile |
-| Horse | W ride, Shift gallop, Space jump, F dismount |
+| Car | W/S gas and brake, A/D steer, Space handbrake drift, Shift nitro, left click horn, Enter exit |
+| Helicopter | WASD fly, Space up, Shift down, left click guns |
+| Plane / fighter jet | W/S pitch, A/D roll, ←/→ rudder, ↑ or Space throttle up, ↓ throttle down, Shift afterburner, left click cannon, right click missile, Enter eject |
+| Horse | WASD, tap Shift repeatedly to gallop, Space jump, Enter dismount |
+| Flight power | Fly where the camera points, Space climb, Shift boost, click again to drop |
+
+**Phone:** left stick to move, drag on the right side to look. Context buttons: PUNCH/FIRE, JUMP, KICK, SPRINT, WEB, AIM, ROLL and **GUN**, which cycles weapons and powers. FLY, SLAM and FLASH replace PUNCH when a power is selected. **Gamepad** is supported too.
 
 ## Building from source
 
@@ -88,7 +96,7 @@ python3 tools/render_test.py  # headless screenshot tests (needs playwright + Ch
 ## Notes
 
 - All vehicle brands (Vayu, Agni, Shera, Bison, Royal Amba, Sterling…) are fictional and inspired by real car classes.
-- The game aims for a stylized-realistic look. Because everything is generated by code, there are no scanned textures or motion capture.
+- The game aims for a realistic look on phone hardware. Models and animation are generated in code; ground, wall and roof surfaces use CC0 photo-scanned textures (see `assets/tex/CREDITS.md`).
 - The previous project in this repository, *Temple Realm* (Godot), is preserved on the `temple-realm-archive` branch.
 
 MIT License.

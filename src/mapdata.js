@@ -1,5 +1,5 @@
 // Daman geography + road network + building lots (all procedural, seeded)
-import { fbm, vnoise, smooth, clamp, lerp, R, rr, ri, pick } from './util.js';
+import { fbm, vnoise, smooth, clamp, lerp, R, rr, ri, pick, mulberry32 } from './util.js';
 
 // 20 km x 20 km island world. Daman city on the west coast, jungle + Ghats mountains to the east.
 export const HALF = 10000;
@@ -151,6 +151,8 @@ function computeLandmarks() {
   exRect(L.saltPans.x0, L.saltPans.z0, L.saltPans.x1, L.saltPans.z1, true, 'salt');
   exCirc(L.temple.x, L.temple.z, 60);
   addFlat(L.airport.x0, L.airport.z0, L.airport.x1, L.airport.z1, 80);
+  { const V = ZONES.villa; for (let x = V.x0; x < V.x1; x += V.sp) for (let z = V.z0; z < V.z1; z += V.sp) addFlat(x + 10, z + 10, x + V.sp - 10, z + V.sp - 10, 18); }
+  L.villas = { x: (ZONES.villa.x0 + ZONES.villa.x1) / 2, z: (ZONES.villa.z0 + ZONES.villa.z1) / 2 };
   addFlat(mf.x0, mf.z0, mf.x1, mf.z1, 40);
   addFlat(L.stadium.x - 95, L.stadium.z - 80, L.stadium.x + 95, L.stadium.z + 80, 40);
 }
@@ -187,6 +189,7 @@ export const ZONES = {
   jampore: { x0: -2900, z0: 2620, x1: -1860, z1: 4180, sp: 130 },
   industry: { x0: 1000, z0: -2650, x1: 4250, z1: -400, sp: 250 },
   dabhel: { x0: 0, z0: -4400, x1: 2400, z1: -2800, sp: 200 },
+  villa: { x0: -1800, z0: 2800, x1: -600, z1: 4000, sp: 200 },   // Jampore Villa Colony: mansions + villas on big walled lots
 };
 export function zoneAt(x, z) {
   for (const k in ZONES) { const Z = ZONES[k]; if (x >= Z.x0 - 20 && x <= Z.x1 + 20 && z >= Z.z0 - 20 && z <= Z.z1 + 20) return k; }
@@ -461,7 +464,7 @@ function zoneSpec(zone, nearMajor) {
 }
 function lotsAlong(e) {
   const A = nodes[e.a], B = nodes[e.b];
-  if (e.elev) return;
+  if (e.elev || e.zone === 'villa') return;
   const ax = Math.abs(A.x - B.x) < 0.5, az = Math.abs(A.z - B.z) < 0.5; if (!ax && !az) return;
   for (const side of [-1, 1]) {
     let t = 7 + rr(0, 3);
@@ -493,6 +496,46 @@ function fillZone(Z, tries, zone) {
     if (!occFree(x0 - 2, z0 - 2, x1 + 2, z1 + 2) || terrainH(x, z) < 1.5 || excluded(x, z, 8)) continue;
     const fl = ri(sp.fl[0], Math.max(sp.fl[0], sp.fl[1] - 1));
     addBuilding(x0, z0, x1, z1, sp.style === 3 ? rr(7, 12) : fl * 3.3 + 0.6, sp.style, pick(sp.pal), sp.style === 3 ? 0 : R() < sp.roof + 0.15 ? 1 : 0);
+  }
+}
+// ---------- Jampore Villa Colony: walled estates (one grand mansion or four villas per block) ----------
+export const estates = [];   // {x0,z0,x1,z1,cx,cz,y,kind,style,face,seed,house:{x0,z0,x1,z1,h,floors},pool:{...},color,trim}
+const estateCars = [];
+function placeEstates() {
+  const V = ZONES.villa, rng = mulberry32(4242), rr2 = (a, b) => a + (b - a) * rng();
+  const wallC = [0xf4efe6, 0xefe6d2, 0xe9e4dc, 0xf6f1ea], colonial = [0xf3d36b, 0xf2c36b, 0xf6e7b0, 0x9fc5e8, 0xf0b9a0, 0xffffff];
+  let bi = 0;
+  for (let i = 0; i * V.sp < V.x1 - V.x0; i++) for (let j = 0; j * V.sp < V.z1 - V.z0; j++, bi++) {
+    const bx0 = V.x0 + i * V.sp + 9, bz0 = V.z0 + j * V.sp + 9, bx1 = bx0 + V.sp - 18, bz1 = bz0 + V.sp - 18;
+    const palace = i === 3 && j === 1, four = !palace && rng() < 0.42;
+    const lots = four ? [[bx0, bz0, (bx0 + bx1) / 2 - 2, (bz0 + bz1) / 2 - 2], [(bx0 + bx1) / 2 + 2, bz0, bx1, (bz0 + bz1) / 2 - 2], [bx0, (bz0 + bz1) / 2 + 2, (bx0 + bx1) / 2 - 2, bz1], [(bx0 + bx1) / 2 + 2, (bz0 + bz1) / 2 + 2, bx1, bz1]] : [[bx0, bz0, bx1, bz1]];
+    for (let k = 0; k < lots.length; k++) {
+      const [x0, z0, x1, z1] = lots[k], cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, kind = palace ? 'palace' : four ? 'villa' : 'mansion';
+      const face = four ? (k < 2 ? -1 : 1) : rng() < 0.5 ? -1 : 1;           // front faces -z or +z (always onto a street)
+      const style = palace ? 'colonial' : rng() < (four ? 0.25 : 0.45) ? 'colonial' : 'modern';
+      const Lw = x1 - x0, Ld = z1 - z0;
+      const W = palace ? 74 : kind === 'mansion' ? rr2(42, 56) : rr2(18, 24), D = palace ? 36 : kind === 'mansion' ? rr2(24, 30) : rr2(12, 15);
+      const floors = palace ? 3 : kind === 'mansion' ? (rng() < 0.5 ? 3 : 2) : 2;
+      const hx = cx + (four ? 0 : rr2(-10, 10)), backZ = cz - face * (Ld / 2 - (four ? 10 : 26));     // house sits toward the back of the lot
+      const hz = backZ + face * D / 2;
+      const house = { x0: hx - W / 2, z0: hz - D / 2, x1: hx + W / 2, z1: hz + D / 2, h: floors * 3.7 + 0.6, floors };
+      const pl = palace ? { w: 46, d: 14 } : kind === 'mansion' ? { w: rr2(20, 28), d: rr2(8, 11) } : { w: rr2(8, 11), d: 4.5 };
+      const pz = hz + face * (D / 2 + (four ? 7 : 16) + pl.d / 2);
+      const pool = { x0: hx - pl.w / 2, z0: pz - pl.d / 2, x1: hx + pl.w / 2, z1: pz + pl.d / 2 };
+      let y = -1e9; for (let a = 0; a <= 4; a++) for (let b = 0; b <= 4; b++) y = Math.max(y, terrainH(x0 + (x1 - x0) * a / 4, z0 + (z1 - z0) * b / 4)); y += 0.08;
+      const e = { x0, z0, x1, z1, cx, cz, y, kind, style, face, seed: rng(), house, pool, bi, color: style === 'colonial' ? colonial[Math.floor(rng() * colonial.length)] : wallC[Math.floor(rng() * wallC.length)], tennis: kind === 'mansion' && rng() < 0.5, name: palace ? 'Sagar Mahal' : null };
+      estates.push(e);
+      occMark(x0, z0, x1, z1, 1);
+      // the house is a real building: collision, minimap, walk-in interior (drawn by estates.js, not the box renderer)
+      buildings.push({ x0: house.x0, z0: house.z0, x1: house.x1, z1: house.z1, y: y + 0.6, h: house.h - 0.6, style: 5, color: e.color, seed: e.seed, roof: 0, hidden: true, estate: estates.length - 1 });
+      // palms along the compound wall and beside the pool, flowering trees on the lawn
+      const step = four ? 11 : 13;
+      for (let x = x0 + 5; x < x1 - 4; x += step) for (const zz of [z0 + 4, z1 - 4]) if (Math.abs(x - cx) > 9 || zz * face < cz * face) trees.palm.push({ x, z: zz, y, s: rr2(0.8, 1.15), r: rng() * 6.28, lean: rr2(-0.1, 0.1) });
+      for (let z = z0 + 5 + step; z < z1 - 4 - step / 2; z += step) for (const xx of [x0 + 4, x1 - 4]) trees.palm.push({ x: xx, z, y, s: rr2(0.8, 1.15), r: rng() * 6.28, lean: rr2(-0.1, 0.1) });
+      for (const sx of [-1, 1]) trees.palm.push({ x: hx + sx * (pl.w / 2 + 3), z: pz, y, s: rr2(0.85, 1.05), r: rng() * 6.28, lean: rr2(-0.12, 0.12) });
+      if (!four) for (let n = 0; n < 4; n++) trees.round.push({ x: cx + rr2(-Lw * 0.4, Lw * 0.4), z: cz + face * rr2(Ld * 0.22, Ld * 0.36), y, s: rr2(0.6, 0.9), r: rng() * 6.28, lean: 0 });
+      if (rng() < (palace ? 1 : kind === 'mansion' ? 0.75 : 0.4)) estateCars.push({ x: hx + W / 2 + 4, z: hz + face * (D / 2 + 3.5), ang: face > 0 ? 0 : Math.PI, kind: pick(['super', 'gt', 'muscle']), color: pick([0xffffff, 0x111111, 0xd01020, 0x1a8cff, 0xffd400, 0x22cc66, 0x8a8f98]) });
+    }
   }
 }
 export const towers = [];
@@ -596,6 +639,7 @@ export async function buildMap(progress) {
   grid(ZONES.jampore, 8, 1, 'street', 0.12);
   grid(ZONES.industry, 11, 1, 'street', 0.05);
   grid(ZONES.dabhel, 8, 1, 'street', 0.15);
+  grid(ZONES.villa, 9, 1, 'street', 0);
   await progress('Laying roads', 0.2);
   const majorChains = [];
   for (const m of MAJ) majorChains.push(...buildMajor(m));
@@ -613,7 +657,7 @@ export async function buildMap(progress) {
   }
   for (const c of coastChains) connectChain(c, 95, 9);
   await progress('Connecting villages', 0.4);
-  const vs = [[1900, 600], [2900, 1400], [1800, 3600], [3900, 3000], [-300, 3700], [2600, 4400], [4300, 1900], [-600, -3400], [300, 300], [4200, -3300], [-1100, 3300], [-200, 4500], [4400, 4300], [2400, 2600],
+  const vs = [[1900, 600], [2900, 1400], [1800, 3600], [3900, 3000], [-300, 3700], [2600, 4400], [4300, 1900], [-600, -3400], [300, 300], [4200, -3300], [-1300, 4950], [-200, 4500], [4400, 4300], [2400, 2600],
     [-2300, -7900], [-1200, -6800], [600, -7600], [2200, -6600], [3300, -8200], [-1500, -8900], [-1800, 6900], [-400, 7600], [1300, 6800], [2600, 7900], [-1000, 8700], [3600, 6600], [-2600, 7600], [4100, -5200]];
   for (const [x, z] of vs) village(x + rr(-60, 60), z + rr(-60, 60));
   // forts
@@ -642,6 +686,7 @@ export async function buildMap(progress) {
   occMark(PLAT.lx - PLAT.lr - 30, PLAT.lz - PLAT.lr - 30, PLAT.lx + PLAT.lr + 30, PLAT.lz + PLAT.lr + 30);
   occMark(L.falls.x - 80, PLAT.z - 40, PLAT.lx, PLAT.z + 40);
   placeTowers();
+  placeEstates();
   for (const e of edges) lotsAlong(e);
   await progress('Raising buildings', 0.65);
   fillZone(ZONES.nani, 5200, 'nani'); fillZone(ZONES.moti, 2800, 'moti'); fillZone(ZONES.devka, 1400, 'devka');
@@ -664,6 +709,7 @@ export async function buildMap(progress) {
     { x: -2255.4, z: -3560, ang: 0, kind: 'gt', color: 0x22cc66 }, { x: -2255.4, z: 600, ang: 0, kind: 'muscle', color: 0x111111 },
     { x: 1250, z: 2440, ang: Math.PI / 2, kind: 'muscle', color: 0xffffff },
   ];
+  spawns.cars.push(...estateCars.slice(0, 14));
   spawns.heli = [{ x: L.helipad.x, z: L.helipad.z }, { x: -2420, z: -3080 }];
   spawns.plane = [{ x: ap.runX0 + 40, z: ap.runZ, ang: Math.PI / 2 }];
   spawns.horses = [
