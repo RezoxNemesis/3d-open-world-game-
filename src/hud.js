@@ -1,9 +1,11 @@
 // DOM user interface: title, loading, HUD, minimap, big map (fast travel), menus, touch controls.
+import { requestRefresh } from './perf.js';
+import { UPSCALE_NAMES } from './upscale.js';
 import { touchApi, input } from './input.js';
 import { audio } from './audio.js';
 
 const $ = (tag, attrs = {}, parent) => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'text') e.textContent = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (parent) parent.appendChild(e); return e; };
-const TIPS = ['Make masala chai at a stall or in any home kitchen to heal fully.', 'Hold WEB in the air to swing between buildings and trees.', 'Climb any wall: run into it and keep pushing, or jump onto it.', 'Jump off the Daman Sky Tower and open your parachute with CHUTE.', 'Bosses are marked ☠ on the map — tap one on the map, or use Menu → Bosses → FIGHT.', 'Jampore Villa Colony is full of mansions you can walk into.', 'Kaala Naag sleeps beneath Naag Sarovar on the plateau…', 'Fighter jets wait at Daman Airport. Missiles lock on to big targets.', 'Horses graze on Jampore beach and at the Jungle Camp.', 'Monsoon brings storms; winter brings fog and mustard fields.'];
+const TIPS = ['Chai is how Vikas unwinds: make a cup at any stall or home kitchen to heal and stay relaxed for a while.', 'Hold WEB in the air to swing between buildings and trees.', 'Climb any wall: run into it and keep pushing, or jump onto it.', 'Jump off the Daman Sky Tower and open your parachute with CHUTE.', 'Bosses are marked ☠ on the map — tap one on the map, or use Menu → Bosses → FIGHT.', 'Jampore Villa Colony is full of mansions you can walk into.', 'Kaala Naag sleeps beneath Naag Sarovar on the plateau…', 'Fighter jets wait at Daman Airport. Missiles lock on to big targets.', 'Horses graze on Jampore beach and at the Jungle Camp.', 'Monsoon brings storms; winter brings fog and mustard fields.'];
 export class HUD {
   constructor(game) {
     this.game = game; this.root = $('div', { id: 'hud', class: 'ui' }, document.body); this.root.style.display = 'none';
@@ -66,7 +68,7 @@ export class HUD {
       ['atk', 'PUNCH', 'attack', 30, 40, 1], ['jump', 'JUMP', 'jump', 30, 140], ['kick', 'KICK', 'kick', 130, 30], ['sprint', 'SPRINT', 'sprint', 112, 118, 0, 1], ['web', 'WEB', 'web', 200, 70],
       ['aim', 'AIM', 'aim', 210, 160, 0, 1], ['roll', 'ROLL', 'roll', 285, 30], ['act', 'F', 'interact', 30, 225], ['gun', 'GUN', 'weapon', 200, 245],
       ['ctr', 'COUNTER', 'counter', 120, 250, 1], ['chute', 'CHUTE', 'chute', 290, 120], ['dive', 'DIVE ▼', 'down', 120, 40], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
-      ['hand', 'DRIFT', 'jump', 30, 140], ['nitro', 'NITRO', 'sprint', 112, 118], ['exit', 'EXIT', 'interact', 30, 225], ['horn', 'HORN', 'horn', 130, 30], ['gallop', 'GALLOP', 'sprint', 30, 40, 1], ['cam', 'CAM', 'camera', 200, 245],
+      ['gas', 'GAS', 'gas', 30, 40, 1], ['brk', 'BRAKE', 'brake', 138, 32, 1], ['hand', 'DRIFT', 'jump', 30, 150], ['nitro', 'NITRO', 'sprint', 122, 140], ['exit', 'EXIT', 'interact', 30, 235], ['horn', 'HORN', 'horn', 214, 150], ['gallop', 'GALLOP', 'sprint', 30, 40, 1], ['cam', 'CAM', 'camera', 200, 245],
     ];
     this.tb = {};
     for (const [id, label, act, r, b, big, toggle] of B) {
@@ -78,8 +80,8 @@ export class HUD {
     }
     this.modeSets = {
       foot: ['atk', 'jump', 'kick', 'sprint', 'web', 'aim', 'roll', 'gun'], air: ['atk', 'jump', 'web', 'chute', 'gun'], fly: ['up', 'down', 'atk', 'boost', 'gun'], glide: ['chute', 'web'], chute: ['down'],
-      swim: ['jump', 'sprint', 'dive'], dive: ['up', 'down', 'sprint'], car: ['hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
-      horse: ['gallop', 'jump', 'exit', 'cam'], boat: ['exit', 'horn', 'cam'], busy: [], climb: ['jump', 'web', 'sprint'],
+      swim: ['jump', 'sprint', 'dive'], dive: ['up', 'down', 'sprint'], car: ['gas', 'brk', 'hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
+      horse: ['gallop', 'jump', 'exit', 'cam'], boat: ['gas', 'brk', 'exit', 'horn', 'cam'], busy: [], climb: ['jump', 'web', 'sprint'],
     };
     this.curMode = '';
   }
@@ -213,12 +215,14 @@ export class HUD {
     sec('PERFORMANCE');
     const gv = g.gov;
     if (gv) {
-      set('Frame rate', [[30, '30'], [45, '45'], [60, '60'], [120, 'Max']], gv.cap, (k) => { gv.cap = k; try { localStorage.setItem('damanduo.fps', String(k)); } catch (e) {} });
+      set('Frame rate', [[30, '30'], [45, '45'], [60, '60'], [90, '90'], [120, 'Max']], gv.cap, (k) => { gv.cap = k; requestRefresh(k); try { localStorage.setItem('damanduo.fps', String(k)); } catch (e) {} });
       set('Auto resolution', [[true, 'On'], [false, 'Off']], gv.enabled, (k) => { gv.enabled = k; if (!k && gv.scale !== 1) { gv.scale = 1; gv.onScale(1); } try { localStorage.setItem('damanduo.drs', k ? '1' : '0'); } catch (e) {} });
     }
+    { const r = $('div', { class: 'setrow' }, b); $('span', { text: 'Stress test — measures real fps on this device (1 minute)' }, r); const go = $('button', { class: 'btn', text: 'RUN' }, r); go.onclick = () => g.startBenchmark(); }
     if (g.gpu && g.gpu.renderer) $('div', { class: 'lbl', text: `GPU: ${g.gpu.renderer}`, style: 'font-size:11px;opacity:.55;margin:4px 0;text-transform:none;letter-spacing:0' }, b);
     sec('GRAPHICS (restarts)');
     set('Preset', [['low', 'Low'], ['mobile', 'Mobile'], ['high', 'High'], ['ultra', 'Ultra']], g.presetKey, (k) => g.applyPreset(k));
+    set('Upscaling (FSR)', UPSCALE_NAMES.concat(g.q.desktop ? [['native', 'Native']] : []), g.upMode || 'off', (k) => g.applyUpscale(k));
     set('Crowd', [[50000, '50K'], [100000, '1 Lakh'], [200000, '2 Lakh'], [300000, '3 Lakh']], g.q.crowd, (k) => g.applyCrowd(k));
     sec('AUDIO & CONTROLS');
     set('Music', [[0, 'Off'], [0.3, 'Low'], [0.55, 'Med'], [0.9, 'High']], audio.musicVol, (k) => g.setMusic(k));

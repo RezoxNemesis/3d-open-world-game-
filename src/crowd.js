@@ -136,13 +136,15 @@ function bakeImpostorAtlas(renderer, hi, size) {
 function impostorMaterial(atlas) {
   return new THREE.ShaderMaterial({
     fog: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: null }, uGrid: { value: new THREE.Vector2(...GRID) }, uLight: { value: null }, uTime: { value: 0 }, uPanic: { value: null }, uSelCam: { value: null }, uNearR: { value: 0 } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: null }, uGrid: { value: new THREE.Vector2(...GRID) }, uLight: { value: null }, uTime: { value: 0 }, uPanic: { value: null }, uSelCam: { value: null }, uNearR: { value: 0 }, uFarR: { value: 300 } }]),
     vertexShader: BASE_GLSL + /* glsl */`
-      uniform vec2 uGrid; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin;
+      uniform vec2 uGrid; uniform float uFarR; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin; varying float vFar;
       #include <fog_pars_vertex>
       void main(){
         vec2 base; float y, yaw, ph, moving, runK; crowdBase(base, y, yaw, ph, moving, runK);
         float sc = aMove.z * aFlag.x * step(uNearR, distance(base, uSelCam.xz));
+        // people dissolve away over the last stretch of the crowd draw distance instead of vanishing a block at a time
+        float dcam = distance(base, cameraPosition.xz); vFar = 1.0 - smoothstep(uFarR*0.78, uFarR, dcam); sc *= step(dcam, uFarR);
         vec3 wp = vec3(base.x, y + abs(sin(ph))*0.035*moving, base.y);
         vec2 tc = normalize(cameraPosition.xz - wp.xz + vec2(1e-4));
         vec2 right = vec2(tc.y, -tc.x);
@@ -158,10 +160,11 @@ function impostorMaterial(atlas) {
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */`
-      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin;
+      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin; varying float vFar;
       #include <common>
       #include <fog_pars_fragment>
       void main(){
+        if (vFar < 0.996 && vFar <= fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
         vec4 t = texture2D(uAtlas, vUv);
         if (t.a < 0.5) discard;
         vec3 c = (vTop*t.r + vBot*t.g + vSkin*t.b)/t.a + vec3(0.025);
@@ -173,7 +176,7 @@ function impostorMaterial(atlas) {
   });
 }
 function linkImpostor(mat, atlas) {
-  const u = mat.uniforms; u.uAtlas.value = atlas; u.uLight = U.uCrowdLight; u.uTime = U.uTime; u.uPanic = { value: PANIC }; u.uSelCam = NEAR.uSelCam; u.uNearR = NEAR.uNearR;
+  const u = mat.uniforms; u.uAtlas.value = atlas; u.uLight = U.uCrowdLight; u.uTime = U.uTime; u.uPanic = { value: PANIC }; u.uSelCam = NEAR.uSelCam; u.uNearR = NEAR.uNearR; crowd.uFarR = u.uFarR;
 }
 
 // ---------------- generation ----------------
@@ -307,6 +310,7 @@ export function updateCrowd(cam, q, inside) {
     const d = Math.hypot(cam.x - cell.cx, cam.z - cell.cz) - CS * 0.7;
     cell.mesh.visible = vis0 && d < q.crowdFar;
   }
+  if (crowd.uFarR) crowd.uFarR.value = q.crowdFar;
   const P = crowd.pool; if (!P) return;
   P.mesh.visible = vis0;
   if (vis0 && (Math.abs(U.uTime.value - P.t) > 0.18 || P.at.distanceToSquared(cam) > 9)) selectNear(cam, q);

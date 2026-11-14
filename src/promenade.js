@@ -238,7 +238,7 @@ export function buildPromenade(scene, q, TX, H) {
       const m = new THREE.Mesh(g, faceMat); m.receiveShadow = true; grp.add(m); }
     const bag = (list, mat, shadow = true) => { if (!list.length) return; const g = mergeGeometries(list.map((o) => prep(o.g, o.col))); const m = new THREE.Mesh(g, mat); m.castShadow = shadow; m.receiveShadow = true; grp.add(m); };
     bag(c.stone, stoneMat); bag(c.curb, curbMat, false); bag(c.bed, bedMat, false);
-    scene.add(grp); H.regLod(grp, S.pts[0].x, c.z, far + CH);
+    scene.add(grp); H.fadeLod(grp, S.pts[0].x, c.z, far, CH);
   }
   // ---------- riprap shore ----------
   const rocks = [];
@@ -253,8 +253,8 @@ export function buildPromenade(scene, q, TX, H) {
     const big = [];
     for (const r of rocks) { r.s *= 1.15; r.sy = 0.75 + rnd() * 0.35; r.y -= 0.25 * r.s; r.t *= 0.6; }
     for (let z = S.z0 + 14; z < S.z1 - 10; z += 26 + rnd() * 14) { if (inStair(z, 6)) continue; const P = at(z, S.wall1 + 4.2 + rnd() * 2.5); big.push({ x: P.x, z: P.z, y: M.terrainH(P.x, P.z) - 0.45, s: 0.42 + rnd() * 0.25, r: P.ang + Math.PI / 2 + (rnd() - 0.5) * 0.6, t: 0 }); }
-    H.instTiles(scene, MD.boulder_01.geo, MD.boulder_01.mat, rocks, 300, q.desktop ? 650 : 300, put);
-    if (MD.coast_land_rocks_03) H.instTiles(scene, MD.coast_land_rocks_03.geo, MD.coast_land_rocks_03.mat, big, 400, q.desktop ? 1200 : 500, put);
+    H.instTiles(scene, MD.boulder_01.geo, MD.boulder_01.mat, rocks, 300, q.desktop ? 650 : 300, put, { lod: MD.boulder_01.lod ? { geo: MD.boulder_01.lod, d: q.desktop ? 95 : 42, tile: 75 } : null, tag: 'boulder' });
+    if (MD.coast_land_rocks_03) H.instTiles(scene, MD.coast_land_rocks_03.geo, MD.coast_land_rocks_03.mat, big, 400, q.desktop ? 1200 : 500, put, { lod: MD.coast_land_rocks_03.lod ? { geo: MD.coast_land_rocks_03.lod, d: q.desktop ? 130 : 60, tile: 100 } : null, tag: 'landrocks' });
   } else {
     const rk = [rockGeo(1), rockGeo(2), rockGeo(3)];
     rk.forEach((g, i) => H.instTiles(scene, g, rockMat, rocks.filter((_, j) => j % 3 === i), 400, q.desktop ? 900 : 380, put));

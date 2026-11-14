@@ -59,14 +59,21 @@ export class Governor {
     if (p50 > target * 1.18 || p90 > target * 1.7) {
       // falling behind: drop resolution in proportion to the overload
       const over = Math.min(1.6, p50 / target);
-      const ns = Math.max(this.min, this.scale / Math.sqrt(over) - 0.02);
+      // step down gently (a few percent per window) so the change is never seen as a jump; only a heavy overload moves faster
+      const ns = Math.max(this.min, this.scale * (over > 1.45 ? 0.86 : 0.93), this.scale / Math.sqrt(over) - 0.02);
       if (now - this.lastUp < 4000) this.upFails++;
       this.goodWindows = 0;
       if (ns < this.scale - 0.01) { this.scale = ns; this.onScale(this.scale); this.cool = 1; }
     } else if (p50 < target * 1.06 && p90 < target * 1.3) {
       if (++this.goodWindows >= 3 + this.upFails * 3 && this.scale < 1) {
-        this.scale = Math.min(1, this.scale + 0.06); this.onScale(this.scale); this.goodWindows = 0; this.lastUp = now; this.cool = 1;
+        this.scale = Math.min(1, this.scale + 0.04); this.onScale(this.scale); this.goodWindows = 0; this.lastUp = now; this.cool = 1;
       }
     } else this.goodWindows = 0;
   }
+}
+
+// Android shell: ask the panel for the refresh rate that fits the frame-rate setting (tools/patch_android.py adds DDNative).
+// 30 and 60 fps run on a 60 Hz mode, 45 and 90 on 90 Hz, "Max" on the fastest mode the screen has.
+export function requestRefresh(cap) {
+  try { if (window.DDNative && window.DDNative.refresh) window.DDNative.refresh(cap >= 120 ? 240 : cap === 45 || cap === 90 ? 90 : 60); } catch (e) {}
 }

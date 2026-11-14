@@ -1,11 +1,13 @@
 // Daman Duo — bootstrap: platform detection, graphics preset, title screen, main loop, test hooks.
 import * as THREE from 'three';
 import { PRESETS, detectPlatform, defaultPreset, FPS_CAPS } from './quality.js';
-import { Governor, gpuInfo, autoPreset } from './perf.js';
+import { Governor, gpuInfo, autoPreset, requestRefresh } from './perf.js';
+import { UPSCALE_MODES } from './upscale.js';
+import { Benchmark } from './bench.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
 import { initInput, input } from './input.js';
-import { initAudio, audio } from './audio.js';
+import { initAudio, audio, say } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
 import { loadAvatar, describe as describeAvatar } from './avatars.js';
@@ -40,13 +42,19 @@ async function start(opts) {
 \tcolor *= mix( vec3( 0.95, 1.0, 1.06 ), vec3( 1.045, 1.0, 0.94 ), smoothstep( 0.03, 0.55, gl ) );
 \tcolor = mix( color, color * color * ( 3.0 - 2.0 * color ), 0.22 );
 \treturn saturate( color );`);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !q.bloom && !q.ao && !TEST, powerPreference: 'high-performance', stencil: false });
+  // sun shadows melt away towards the edge of the shadow map instead of ending in a hard line that travels with the camera
+  THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment.replace('return mix( 1.0, shadow, shadowIntensity );',
+    '{ vec2 se = abs( shadowCoord.xy - 0.5 ) * 2.0; shadow = mix( shadow, 1.0, smoothstep( 0.78, 0.98, max( se.x, se.y ) ) ); }\n\t\treturn mix( 1.0, shadow, shadowIntensity );');
+  // upscaling: desktop presets reconstruct through the upscaler by default (native = same resolution, used when the
+  // dynamic resolution drops); phones keep the direct path unless the player turns it on
+  let upMode = qs.get('upscale') || ls('damanduo.upscale') || (q.desktop && !TEST ? 'native' : 'off'); if (!(upMode in UPSCALE_MODES)) upMode = 'off';
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !q.bloom && !q.ao && !TEST && upMode === 'off', powerPreference: 'high-performance', stencil: false });
   const basePR = TEST ? 1 : Math.min(devicePixelRatio || 1, q.pixelRatio);
   renderer.setPixelRatio(basePR); renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = q.desktop ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   hud.loading(true);
-  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M; window.__avatarInfo = async (n) => describeAvatar(await loadAvatar(n)); window.__RC = THREE.Raycaster; window.__press = (a) => { input.pressed.add(a); input.held.add(a); setTimeout(() => input.held.delete(a), 0); };
+  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; game.upModeWanted = upMode; window.__game = game; window.__M = M; window.__avatarInfo = async (n) => describeAvatar(await loadAvatar(n)); window.__RC = THREE.Raycaster; window.__press = (a) => { input.pressed.add(a); input.held.add(a); setTimeout(() => input.held.delete(a), 0); };
   if (opts.newGame) try { localStorage.removeItem('damanduo.save'); } catch (e) {}
   const t0 = performance.now();
   await game.init(async (msg, p) => { hud.progress(msg, p); await nextFrame(); });
@@ -57,18 +65,20 @@ async function start(opts) {
   hud.loading(false); hud.show();
   if (!TEST) {
     const cap = parseInt(ls('damanduo.fps') || '60', 10);
-    const gov = new Governor({ cap: FPS_CAPS.includes(cap) ? cap : 60, basePR, minScale: q.minScale, drs: ls('damanduo.drs') !== '0', onScale: () => { renderer.setPixelRatio(gov.pixelRatio); game.resize(); } });
-    game.gov = gov; game.gpu = gpu;
+    const gov = new Governor({ cap: FPS_CAPS.includes(cap) ? cap : 60, basePR, minScale: q.minScale, drs: ls('damanduo.drs') !== '0', onScale: () => { if (game.up) game.up.setDrs(gov.scale); else { renderer.setPixelRatio(gov.pixelRatio); game.resize(); } } });
+    game.gov = gov; game.gpu = gpu; requestRefresh(gov.cap);
     let last = performance.now(), fpsAcc = 0, fpsN = 0;
     const loop = (now) => {
       requestAnimationFrame(loop);
       if (!gov.tick(now)) return;
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const raw = now - last, dt = Math.min(0.05, raw / 1000); last = now;
       fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { game.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
+      if (game.benchmark) game.benchmark.frame(raw, dt);
       game.update(dt); game.render();
     };
     requestAnimationFrame(loop);
-    setTimeout(() => { if (!game.missions.done.size && !game.missions.cur) game.missions.start('chai'); }, 1500);
+    // no mission is forced on the player: Mira says hello and the work waits in the menu and on the map
+    setTimeout(() => { if (!game.missions.done.size && !game.missions.cur) { say('Mira', 'Vikas! Welcome back to Daman. The Kaala Naag gang is back at the docks, whenever you are ready.'); game.hud.toast('Missions are in the menu · chai is at any stall, whenever you want a break', 6, '#ffcc80'); } }, 1500);
     document.addEventListener('visibilitychange', () => { if (audio.ctx) document.hidden ? audio.ctx.suspend() : audio.ctx.resume(); });
   } else setupTests(game);
 }
@@ -78,7 +88,7 @@ function setupTests(game) {
   const undo = [];
   const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); updateWorldLOD(game.cam.position, 400); game.render(); };   // tests: dress every nearby tile before the shot
   const WRECKX = () => M.coastX(3320) - 300;
-  const at = (x, z, yaw) => { const p = game.player; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
+  const at = (x, z, yaw) => { const p = game.player; game.transit = null; p.busy = null; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
   const S = {
     spawn: () => { game.sky.hour = 17.2; step(8); },
     duo_closeup: () => { const p = game.player; at(p.pos.x, p.pos.z, 0.6); game.rig.pitch = 0.05; game.rig.zoom = 0.55; game.sky.hour = 16.4; step(10); game.rig.zoom = 1; },
@@ -125,6 +135,53 @@ function setupTests(game) {
     },
     farm_b: () => S.farm('farm', 16.8, 3),
     ranch: () => S.farm('ranch', 10.2),
+    mira_closeup: (dist = 3.4, hgt = 1.2, hour = 16.2) => {
+      const p = game.player; at(M.coastX(-3900) + 90, -3900, 1.2); const c = game.companion; game.sky.hour = hour;
+      c.pos.set(p.pos.x + Math.sin(p.yaw) * 2.5, p.pos.y, p.pos.z + Math.cos(p.yaw) * 2.5); c.yaw = p.yaw + Math.PI;
+      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), r = new THREE.Vector3(Math.cos(c.yaw), 0, -Math.sin(c.yaw));
+        return { pos: c.pos.clone().addScaledVector(f, dist).addScaledVector(r, dist * 0.25).add(new THREE.Vector3(0, hgt, 0)), look: c.pos.clone().add(new THREE.Vector3(0, hgt * 0.85, 0)) }; };
+      step(8);
+    },
+    mira_face: () => S.mira_closeup(1.2, 1.55),
+    // locomotion check: the hero walks / runs / sprints with the stick held, filmed from the side (mocap blend by speed)
+    run_cam: (mag = 1, sprint = false, hour = 16.4) => {
+      const p = game.player; at(M.coastX(-3900) + 96, -3960, 0); game.sky.hour = hour; game.rig.yaw = Math.PI;
+      input.tx = 0; input.ty = mag; if (sprint) input.held.add('sprint');
+      for (let i = 0; i < 50; i++) game.update(1 / 30);
+      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)), r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
+        return { pos: p.pos.clone().addScaledVector(r, -3.4).addScaledVector(f, 0.9).add(new THREE.Vector3(0, 1.05, 0)), look: p.pos.clone().addScaledVector(f, 0.3).add(new THREE.Vector3(0, 0.95, 0)) }; };
+      step(3);
+      undo.push(() => { input.tx = 0; input.ty = 0; input.held.delete('sprint'); });
+    },
+    walk_cam: () => S.run_cam(0.2),
+    jog_cam: () => S.run_cam(0.5),
+    sprint_cam: () => S.run_cam(1, true),
+    // get-in / get-out checks: start the animation and grab a frame part way (k = seconds into it)
+    enter_test: (what = 'bison', k = 1.2, hour = 16.4) => {
+      const p = game.player; let v = null, a = null;
+      if (what === 'horse') { a = game.animals.find((x) => x.rideable); at(a.pos.x - 3, a.pos.z - 2, 0); a.yaw = 0.3; a.speed = 0; a.want = 0; }
+      else { v = game.vehicles.find((x) => x.key === what); at(v.pos.x + Math.cos(v.yaw) * -4, v.pos.z - Math.sin(v.yaw) * -4 - 1.5, v.yaw); v.vel.set(0, 0, 0); v.speed = 0; }
+      game.sky.hour = hour; step(2);
+      if (a) game.beginMount(a); else game.beginEnter(v);
+      const tgt = a || v;
+      for (let i = 0; i < Math.round(k * 30); i++) game.update(1 / 30);
+      game.camOverride = () => { const yw = tgt.yaw, f = new THREE.Vector3(Math.sin(yw), 0, Math.cos(yw)), r = new THREE.Vector3(Math.cos(yw), 0, -Math.sin(yw));
+        return { pos: tgt.pos.clone().addScaledVector(r, -4.4).addScaledVector(f, 2.6).add(new THREE.Vector3(0, 1.5, 0)), look: tgt.pos.clone().addScaledVector(r, -0.6).add(new THREE.Vector3(0, 0.9, 0)) }; };
+      game.render();
+    },
+    seat_check: (key = 'bison', hour = 15.5) => {
+      const v = game.vehicles.find((x) => x.key === key); at(v.pos.x - 5, v.pos.z, v.yaw); game.sky.hour = hour; game.enterVehicle(v); step(4);
+      game.camOverride = () => { const yw = v.yaw, f = new THREE.Vector3(Math.sin(yw), 0, Math.cos(yw)), r = new THREE.Vector3(Math.cos(yw), 0, -Math.sin(yw));
+        const seat = v.obj.localToWorld(v.seat.clone()); return { pos: seat.clone().addScaledVector(r, -2.3).addScaledVector(f, 0.9).add(new THREE.Vector3(0, 0.95, 0)), look: seat.clone().add(new THREE.Vector3(0, 0.7, 0)) }; };
+      game.render();
+    },
+    seat_shera: () => S.seat_check('shera'),
+    seat_gajraj: () => S.seat_check('gajraj'),
+    enter_car_mid: () => S.enter_test('bison', 1.1),
+    enter_car_done: () => S.enter_test('bison', 3.0),
+    enter_bike_mid: () => S.enter_test('thunder', 0.9),
+    enter_horse_mid: () => S.enter_test('horse', 1.25),
+    enter_horse_done: () => S.enter_test('horse', 3.0),
     hero_cars_bison: () => S.hero_cars(16.6, 'bison'),
     hero_cars_shera: () => S.hero_cars(16.6, 'shera'),
     hero_cars_gajraj: () => S.hero_cars(16.6, 'gajraj'),
@@ -184,8 +241,22 @@ function setupTests(game) {
     photo_mode: () => { at(-2238, -770, Math.PI); game.sky.hour = 18.1; step(2); game.startPhoto(); input.my = 0; game.photo.pitch = -0.05; game.photo.pos.y += 6; for (let i = 0; i < 4; i++) { game.update(1 / 30); game.render(); } game.stopPhoto(); },
     hero_side: () => { const p = game.player; at(M.coastX(-3900) + 90, -3900, 1.2); input.tx = 0; input.ty = 1; for (let i = 0; i < 12; i++) game.update(1 / 30); game.sky.hour = 16.6;
       game.camOverride = () => { const r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)); return { pos: p.pos.clone().add(new THREE.Vector3(0, 1.1, 0)).addScaledVector(r, 3.2), look: p.pos.clone().add(new THREE.Vector3(0, 0.95, 0)) }; }; step(1); input.ty = 0; },
-    aim_pistol: () => { const p = game.player; at(-2238, -770, Math.PI); game.setTool(p, 'pistol'); game.sky.hour = 15; input.held.add('aim'); for (let i = 0; i < 20; i++) game.update(1 / 30); input.held.delete('aim'); game.update(1 / 30);
-      game.camOverride = () => { const r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)), f = p.forward(); return { pos: p.pos.clone().add(new THREE.Vector3(0, 1.5, 0)).addScaledVector(r, -2.2).addScaledVector(f, 1.2), look: p.pos.clone().add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(f, 0.6) }; }; step(1); },
+    // weapon handling (aimrig.js): shouldered rifle, low-ready carry, two-handed pistol; side-on camera on the shooter
+    gun_test: (tool = 'rifle', aim = true, cam = [-2.0, 0.5, 1.45], move = 0) => {
+      const p = game.player; at(M.coastX(-3900) + 82, -3960, 0); game.sky.hour = 16.4; game.weather.rain = 0; game.weather.targetRain = 0; game.rig.yaw = Math.PI; game.rig.pitch = 0.05; game.setTool(p, tool);
+      if (aim) input.held.add('aim'); input.ty = move;
+      for (let i = 0; i < 50; i++) game.update(1 / 30);
+      undo.push(() => { input.held.delete('aim'); input.ty = 0; game.setTool(p, 'fists'); });
+      game.camOverride = () => { const r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw)), f = p.forward(); return { pos: p.pos.clone().add(new THREE.Vector3(0, cam[2], 0)).addScaledVector(r, cam[0]).addScaledVector(f, cam[1]), look: p.pos.clone().add(new THREE.Vector3(0, 1.32, 0)).addScaledVector(f, 0.3) }; };
+      step(1);
+    },
+    aim_rifle: () => S.gun_test('rifle', true),
+    aim_rifle_close: () => S.gun_test('rifle', true, [-0.75, 0.6, 1.5]),
+    rifle_ready: () => S.gun_test('rifle', false, [-1.6, 1.7, 1.4]),
+    rifle_run: () => S.gun_test('rifle', false, [-2.6, 1.0, 1.4], 1),
+    aim_pistol: () => S.gun_test('pistol', true),
+    // the built-in stress test, a short pass through all six stages (bench.js)
+    stress_test: () => { const b = new Benchmark(game, { dur: 0.6, warm: 0.2 }); let guard = 0; while (!b.done && guard++ < 400) { b.frame(33, 0.1); if (b.done) break; for (let k = 0; k < 3; k++) game.update(1 / 30); game.render(); } game.paused = false; step(2); return b.results.length; },
     // Devka Sea Face promenade at different times of day (wet = just after rain)
     prom_aerial: () => { const z = -3880, F = M.seaFrame(z); at(F.x - 13, z, -0.6); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = 10.5;
       game.camOverride = () => ({ pos: new THREE.Vector3(F.x + 30, F.y + 34, z - 52), look: new THREE.Vector3(F.x - 30, F.y, z + 30) }); step(6); },
@@ -223,8 +294,43 @@ function setupTests(game) {
     monsoon_night: () => { at(-2238, -1170, Math.PI); game.weather.setSeason('monsoon'); game.weather.targetRain = 1; game.weather.rain = 1; U.uWet.value = 1; game.sky.hour = 21.5; step(10); game.weather.targetRain = 0; game.weather.rain = 0; U.uWet.value = 0; game.weather.setSeason('postmonsoon'); },
     city_aerial: () => { at(-2400, -1500, Math.PI); game.player.pos.y += 180; game.player.state = 'chute'; game.rig.zoom = 2; game.rig.pitch = 0.6; game.sky.hour = 18.0; step(4); game.rig.zoom = 1; },
   };
+  // ---- video capture: a scripted plan per clip; tick() advances one 30 fps frame and renders it ----
+  let vhook = null, vt = 0;
+  const side = (o, back = 3.6, fw = 1.2, h = 1.15) => () => { const f = new THREE.Vector3(Math.sin(o.yaw), 0, Math.cos(o.yaw)), r = new THREE.Vector3(Math.cos(o.yaw), 0, -Math.sin(o.yaw));
+    return { pos: o.pos.clone().addScaledVector(r, -back).addScaledVector(f, fw).add(new THREE.Vector3(0, h, 0)), look: o.pos.clone().addScaledVector(f, 0.5).add(new THREE.Vector3(0, 0.95, 0)) }; };
+  const VID = {
+    run: () => { const p = game.player; at(M.coastX(-3900) + 96, -4010, 0); game.sky.hour = 16.4; game.rig.yaw = Math.PI; game.camOverride = side(p);
+      vhook = (t) => { input.tx = 0; input.ty = t < 0.8 ? 0 : t < 2.6 ? 0.22 : t < 4.2 ? 0.5 : 1; if (t > 5.6) input.held.add('sprint'); }; },
+    car: () => { const v = game.vehicles.find((x) => x.key === 'bison'); at(v.pos.x - Math.cos(v.yaw) * 4.5 - Math.sin(v.yaw) * 3, v.pos.z + Math.sin(v.yaw) * 4.5 - Math.cos(v.yaw) * 3, v.yaw); game.sky.hour = 16.4;
+      const yw = v.yaw, f = new THREE.Vector3(Math.sin(yw), 0, Math.cos(yw)), r = new THREE.Vector3(Math.cos(yw), 0, -Math.sin(yw)), c0 = v.pos.clone().addScaledVector(r, -5.2).addScaledVector(f, 2.8).add(new THREE.Vector3(0, 1.5, 0)), l0 = v.pos.clone().addScaledVector(r, -0.8).add(new THREE.Vector3(0, 0.8, 0));
+      game.camOverride = () => ({ pos: c0, look: l0 });
+      vhook = (t) => { if (t > 0.3 && !game.transit && !game.player.vehicle && !vt0) { vt0 = 1; game.beginEnter(v); }
+        if (game.player.vehicle) { game.camOverride = null; input.ty = t > 4.2 ? 1 : 0; input.tx = t > 6.4 && t < 8.2 ? -0.75 : 0; } }; },
+    horse: () => { const a = game.animals.find((x) => x.rideable && x.parts.saddle.visible); at(a.pos.x - 3.2, a.pos.z - 2.6, 0.6); a.yaw = 0.2; a.speed = 0; a.want = 0; a.hold = 9; game.sky.hour = 9.8;
+      const f = new THREE.Vector3(Math.sin(a.yaw), 0, Math.cos(a.yaw)), r = new THREE.Vector3(Math.cos(a.yaw), 0, -Math.sin(a.yaw)), c0 = a.pos.clone().addScaledVector(r, -4.6).addScaledVector(f, 3.0).add(new THREE.Vector3(0, 1.7, 0)), l0 = a.pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+      game.camOverride = () => ({ pos: c0, look: l0 });
+      vhook = (t) => { if (t > 0.3 && !game.transit && !game.player.mount && !vt0) { vt0 = 1; game.beginMount(a); }
+        if (game.player.mount) { game.camOverride = null; input.tx = 0; input.ty = t > 3.6 ? 1 : 0; if (t > 6.2 && !vt1) { vt1 = 1; input.pressed.add('sprint'); input.held.add('sprint'); } } }; },
+    shoot: () => { const p = game.player; at(M.coastX(-3900) + 96, -3960, 0); game.sky.hour = 16.8; game.rig.yaw = Math.PI; game.setTool(p, 'rifle'); game.rig.pitch = 0.08;
+      const front = () => { const f = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)), r = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
+        return { pos: p.pos.clone().addScaledVector(r, -2.3).addScaledVector(f, 2.1).add(new THREE.Vector3(0, 1.45, 0)), look: p.pos.clone().addScaledVector(f, 0.35).add(new THREE.Vector3(0, 1.3, 0)) }; };
+      vhook = (t) => { const mv = t > 2.4 && t < 4.2; input.tx = mv ? 0.6 : 0; input.ty = mv ? 0.4 : 0; if (t > 0.5) input.held.add('aim');
+        if (t > 4.4 && !vt0) { vt0 = 1; game.camOverride = front; } if (t > 7.2 && !vt1) { vt1 = 1; game.setTool(p, 'pistol'); }
+        const fire = t > 1.0 && (t % 1.1) < (t > 7.2 ? 0.75 : 0.5) && !(t > 6.9 && t < 7.7); for (const k of ['attack', 'lmb']) { if (fire) { if (!input.held.has(k)) input.pressed.add(k); input.held.add(k); } else input.held.delete(k); } }; },
+  };
+  let vt0 = 0, vt1 = 0;
   window.__TEST = {
     ready: true, scenarios: Object.keys(S),
+    // headless stress test: every stage of the in-game benchmark at a coarse time step; returns per-stage load and memory
+    bench: (dur = 2, dt = 0.2) => { game.camOverride = null; while (undo.length) undo.pop()(); const b = new Benchmark(game, { dur, warm: dt * 1.5 }); let ms = 16, guard = 0;
+      while (!b.done && guard++ < 4000) { const a = performance.now(); b.frame(ms, dt); if (b.done) break; for (let k = 0; k < Math.max(1, Math.round(dt * 30)); k++) game.update(1 / 30); game.render(); ms = performance.now() - a; }
+      const mem = game.renderer.info.memory; return { results: b.results, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0, geos: mem.geometries, texs: mem.textures, programs: game.renderer.info.programs.length }; },
+    // one frame of a benchmark stage (i = stage, k = 0..1 along its camera path) for screenshots
+    benchShot: (i, k = 0.5, frames = 12) => { game.camOverride = null; while (undo.length) undo.pop()(); const b = new Benchmark(game, { dur: 1e6, warm: 1e9 }); b.i = i - 1; b.next(); b.t = k * 1e6;
+      for (let f = 0; f < frames; f++) { b.frame(16, 0); game.update(1 / 30); } game.render(); const cam = game.cam.position.toArray().map(Math.round); b.i = 1e9; b.finish(); game.paused = false; return { stage: b.stages[i].name, cam }; },
+    vid: (n) => { game.camOverride = null; while (undo.length) undo.pop()(); input.tx = 0; input.ty = 0; for (const k of ['sprint', 'aim', 'attack', 'lmb']) input.held.delete(k); game.setTool(game.player, 'fists'); vt = 0; vt0 = 0; vt1 = 0; VID[n](); return true; },
+    hook: (f) => { vhook = f; }, input,
+    tick: (k = 1) => { for (let i = 0; i < k; i++) { if (vhook) vhook(vt); game.update(1 / 30); vt += 1 / 30; } game.render(); return +vt.toFixed(2); },
     run: async (n) => { game.camOverride = null; while (undo.length) undo.pop()(); const t0 = performance.now(); S[n](); await nextFrame(); return { ms: Math.round(performance.now() - t0), state: game.player.state, hp: Math.round(game.player.hp), pos: game.playerPos().toArray().map(Math.round) }; },
     stats: () => ({ ...world.stats, people: crowd.n, traffic: game.traffic.cars.length, animals: game.animals.length, vehicles: game.vehicles.length, programs: game.renderer.info.programs.length, tris: game.renderer.info.render.triangles, calls: game.renderer.info.render.calls }),
   };

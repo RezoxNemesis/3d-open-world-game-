@@ -1,5 +1,6 @@
 // Drivable vehicles: cars, helicopter, private jet, fighter jet, speedboat.
 import * as THREE from 'three';
+import { lodBand, fadeable } from './fade.js';
 import * as M from './mapdata.js';
 import { CARS, vehicleGeometry, heliGeometry, jetGeometry, boatGeometry } from './vehicle_models.js';
 import { STATIC_MODELS } from './carmodels.js';
@@ -10,9 +11,23 @@ import { sfx, engineLoop, updateEngine, stopLoop } from './audio.js';
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 // shared material for vehicle "statics" (vertex coloured, paint tinted)
-export function vehicleMaterial(instanced) {
-  // player/parked cars get a clear-coated paint (MeshPhysical); traffic uses the cheaper standard material
-  const m = instanced ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45 }) : new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.05 });
+const GLASS = new THREE.MeshPhysicalMaterial({ color: 0x10161c, roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.42, depthWrite: false, envMapIntensity: 1.4 });
+// split a car body into opaque parts and its glass (aEmit == 5), cached on the geometry set
+function splitGlass(vg) {
+  if (vg.split) return vg.split;
+  const src = vg.body, E = src.attributes.aEmit;
+  if (!E) return (vg.split = { opaque: src, glass: null });
+  const isG = (i) => Math.abs(E.getX(i) - 5) < 0.5;
+  const tri = src.index ? src.index.array : null, n = tri ? tri.length : src.attributes.position.count;
+  const keepO = [], keepG = [];
+  for (let t = 0; t < n; t += 3) { const a = tri ? tri[t] : t, b = tri ? tri[t + 1] : t + 1, c = tri ? tri[t + 2] : t + 2; (isG(a) && isG(b) && isG(c) ? keepG : keepO).push(a, b, c); }
+  if (!keepG.length) return (vg.split = { opaque: src, glass: null });
+  const mk = (ids) => { const g = new THREE.BufferGeometry(); for (const k in src.attributes) g.setAttribute(k, src.attributes[k]); g.setIndex(ids); g.computeBoundingSphere(); return g; };
+  return (vg.split = { opaque: mk(keepO), glass: mk(keepG) });
+}
+export function vehicleMaterial(instanced, lite = false) {
+  // player/parked cars get a clear-coated paint (MeshPhysical) on PC; traffic and phones use the cheaper standard material
+  const m = instanced || lite ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45 }) : new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.05 });
   patch(m, (s) => {
     s.uniforms.uNight = U.uNight; s.uniforms.uTint = { value: new THREE.Color(1, 1, 1) }; m.userData.uTint = s.uniforms.uTint; s.uniforms.uBrake = { value: 0 }; m.userData.uBrake = s.uniforms.uBrake;
     s.uniforms.uTime = U.uTime;
@@ -33,7 +48,7 @@ export function vehicleMaterial(instanced) {
       if (vEmit > 1.5 && vEmit < 2.5) totalEmissiveRadiance += vec3(1.,0.05,0.03)*(0.1 + uNight*2. + uBrake*3.);
       if (vEmit > 2.5 && vEmit < 3.5) totalEmissiveRadiance += vec3(1.,0.1,0.1)*step(0.5, fract(uTime*2.5))*4.;
       if (vEmit > 3.5 && vEmit < 4.5) totalEmissiveRadiance += vec3(0.1,0.3,1.)*step(0.5, fract(uTime*2.5+0.5))*4.;`);
-  }, instanced ? 'inst' : 'single');
+  }, instanced ? 'inst' : lite ? 'lite' : 'single');
   return m;
 }
 export class Vehicle {
@@ -42,7 +57,7 @@ export class Vehicle {
     this.obj = new THREE.Group(); this.pos = new THREE.Vector3(x, 0, z); this.vel = new THREE.Vector3();
     this.yaw = ang || 0; this.pitch = 0; this.roll = 0; this.q = new THREE.Quaternion();
     this.speed = 0; this.steer = 0; this.hp = 100; this.dead = false; this.driver = null; this.throttle = 0; this.rotor = 0; this.airborne = false; this.vy = 0;
-    this.wheels = []; this.mat = vehicleMaterial(false); this.mat.color = new THREE.Color(1, 1, 1);
+    this.wheels = []; this.mat = vehicleMaterial(false, !game.q.desktop); this.mat.color = new THREE.Color(1, 1, 1);
     this.tint = new THREE.Color(color);
     const g = this.mat;
     if (kind === 'car' || kind === 'boat') {
@@ -50,13 +65,30 @@ export class Vehicle {
       this.spec = spec;
       if (kind === 'boat') { const m = new THREE.Mesh(boatGeometry(), g); m.castShadow = true; this.obj.add(m); this.len = 6; this.wid = 2.2; }
       else {
-        const vg = vehicleGeometry(key); const body = new THREE.Mesh(vg.body, g); body.castShadow = true; body.receiveShadow = true; this.obj.add(body);
+        const vg = vehicleGeometry(key), sg = splitGlass(vg);
+        const body = new THREE.Mesh(sg.opaque, g); body.castShadow = true; body.receiveShadow = true; this.obj.add(body);
+        // see-through tinted glass so the driver and the interior show (one extra draw for the cars you can drive)
+        if (sg.glass) { const gm = new THREE.Mesh(sg.glass, GLASS); gm.renderOrder = 2; this.obj.add(gm); this.glassM = gm; }
         for (const [wx, r, wz] of vg.wheels) { const w = new THREE.Mesh(vg.wheel, g); w.position.set(wx, r, wz); if (vg.mirrorLeft && wx < 0) w.scale.x = -1; w.castShadow = true; this.obj.add(w); this.wheels.push({ m: w, front: wz > 0, r }); }
         this.len = vg.len; this.wid = vg.wid; this.wheelBase = Math.max(1.2, Math.abs(vg.wheels[0][2] - vg.wheels[vg.wheels.length - 1][2]));
+        // parked-car LODs: full detail near the camera, one merged mesh at mid range (the model phones drive anyway) and a
+        // light one far out. Neighbouring levels cross-dissolve over a band, and the car dissolves away before its draw distance.
+        const mk = (lg, sh) => { const m = new THREE.Mesh(lg, g); m.visible = false; m.castShadow = sh; this.obj.add(m); return m; };
+        if (vg.all || vg.low) {
+          const B = game.q.desktop ? { a: 70, w: 12, b: 250, w2: 30, gone: 1200 } : { a: 38, w: 8, b: 130, w2: 16, gone: 600 }; this.lodB = B;
+          const mid = vg.all || vg.low, farG = vg.all && vg.low ? vg.low : null;
+          const band = (geo, ...v) => { if (geo && !geo.attributes.aLodBand) geo.setAttribute('aLodBand', lodBand(...v)); };
+          band(sg.opaque, 0, 0, B.a - B.w, B.a + B.w); band(sg.glass, 0, 0, B.a - B.w, B.a + B.w); band(vg.wheel, 0, 0, B.a - B.w, B.a + B.w);
+          if (farG) { band(mid, B.a - B.w, B.a + B.w, B.b - B.w2, B.b + B.w2); band(farG, B.b - B.w2, B.b + B.w2, B.gone * 0.8, B.gone); }
+          else band(mid, B.a - B.w, B.a + B.w, B.gone * 0.8, B.gone);
+          fadeable(GLASS);
+          this.lodM = mk(mid, true); this.lodF = farG ? mk(farG, !!game.q.desktop) : null;
+          this.detail = [body, ...(this.glassM ? [this.glassM] : []), ...this.wheels.map((w) => w.m)]; this.detailOn = true;
+        }
       }
       const P = this.spec.P;
       if (kind === 'boat') this.seat = new THREE.Vector3(-0.4, 0.75, 0);
-      else if (P) this.seat = new THREE.Vector3(-0.38, P.roofY - 1.1, (P.rf + P.rr) / 2 - 0.22);
+      else if (P) this.seat = P.seat ? new THREE.Vector3(...P.seat) : new THREE.Vector3(-0.38, P.roofY - 1.1, (P.rf + P.rr) / 2 - 0.22);
       else if (spec.bike) this.seat = new THREE.Vector3(0, key === 'vayurr' ? 0.66 : 0.6, key === 'vayurr' ? -0.16 : -0.28);
       else this.seat = new THREE.Vector3(0, key === 'scooter' ? 0.62 : 0.55, key === 'scooter' ? -0.25 : 0.4);
       if (key === 'bus') this.seat.set(-0.8, 1.15, 4.2); if (key === 'truck') this.seat.set(-0.55, 1.2, 3.0);
@@ -128,26 +160,51 @@ export class Vehicle {
   updCar(dt, c) {
     const S = this.spec, f = this.forward.clone(), right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     let vf = this.vel.dot(f), vr = this.vel.dot(right);
-    const thr = c && !this.dead ? Math.max(0, c.my) : 0, brk = c && !this.dead ? Math.max(0, -c.my) : 0, hb = c ? c.hand : false, nitro = c && c.nitro && S.nitro;
+    const live = c && !this.dead;
+    // pedals: separate gas / brake when given (touch pedals, triggers), otherwise the stick / W-S axis
+    const gasIn = live ? (c.gas ?? Math.max(0, c.my)) : 0, brkIn = live ? (c.brake ?? Math.max(0, -c.my)) : 0;
+    const hb = live && c.hand, nitro = live && c.nitro && S.nitro;
+    // W/S semantics: brake while rolling forward, reverse once (almost) stopped; gas while reversing brakes first
+    let thr = 0, brk = 0, rev = 0;
+    if (vf > 0.6) { thr = gasIn; brk = brkIn; } else if (vf < -0.6) { rev = brkIn; brk = gasIn; } else { thr = gasIn; rev = gasIn > 0 ? 0 : brkIn; }
+    const bike = !!S.bike, mass = S.mass || 1.3;
     if (!this.airborne) {
       const top = S.top * (nitro ? 1.22 : 1), acc = S.acc * (nitro ? 1.7 : 1);
-      if (thr > 0) vf += acc * thr * Math.max(0.05, 1 - Math.pow(Math.max(0, vf) / top, 2)) * dt;
-      if (brk > 0) { if (vf > 0.5) vf -= 28 * brk * dt; else vf = Math.max(-14, vf - S.acc * 0.6 * brk * dt); }
-      if (!thr && !brk) vf -= Math.sign(vf) * Math.min(Math.abs(vf), (2.2 + Math.abs(vf) * 0.012) * dt);
-      if (hb) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 9 * dt);
-      const maxSteer = lerp(0.62, 0.11, clamp(Math.abs(vf) / 70, 0, 1));
-      this.steer = damp(this.steer, (c ? -c.mx : 0) * maxSteer, 7, dt);
-      let yawRate = (vf * Math.tan(this.steer)) / (S.bike ? 2.1 : this.wheelBase || 2.6);
-      if (hb) yawRate *= 1.35;
-      this.yaw += yawRate * dt;
-      const grip = (hb ? 1.1 : 9) * S.grip;
+      // engine: strong pull at low speed tapering to the top speed; traction-limited launch
+      if (thr > 0) vf += Math.min(acc * 1.25, acc * (1.15 - Math.pow(Math.max(0, vf) / top, 1.8))) * thr * dt;
+      if (rev > 0) vf = Math.max(-Math.min(14, top * 0.25), vf - acc * 0.55 * rev * dt);
+      // brakes ~1 g (bikes a little less), handbrake locks the rear
+      const bd = (bike ? 9.5 : 11.5) * brk + (hb ? 6.5 : 0);
+      if (bd > 0) vf -= Math.sign(vf) * Math.min(Math.abs(vf), bd * dt);
+      // rolling resistance + air drag + engine braking off-throttle
+      const drag = 0.25 + 0.00045 * vf * vf * (bike ? 1.2 : 1) / mass + (thr || rev ? 0 : 1.1);
+      vf -= Math.sign(vf) * Math.min(Math.abs(vf), drag * dt);
+      // slopes pull the car downhill (handbrake / brake held at rest keeps it parked)
+      if (!(Math.abs(vf) < 0.4 && (brk || hb || (!thr && !rev)))) vf -= 9.8 * Math.sin(-(this.slope || 0)) * dt * 0.85;
+      // steering: speed-sensitive lock, rate-limited, quicker to self-centre; analogue input tracks directly
+      const sIn = live ? -c.mx : 0, analog = live && c.analog;
+      const lock = bike ? lerp(0.72, 0.07, clamp(Math.abs(vf) / 38, 0, 1)) : lerp(0.6, 0.085, clamp(Math.abs(vf) / 42, 0, 1) ** 0.85);
+      const target = sIn * lock, centring = Math.abs(target) < Math.abs(this.steer) || Math.sign(target) !== Math.sign(this.steer);
+      const rate = analog ? 5.5 : centring ? 4.2 : lerp(2.6, 1.4, clamp(Math.abs(vf) / 40, 0, 1));
+      this.steer += clamp(target - this.steer, -rate * dt, rate * dt);
+      // yaw from the steering geometry, capped by tyre grip (understeer instead of snapping at speed)
+      const wb = bike ? 1.45 : this.wheelBase || 2.6;
+      let yawRate = (vf * Math.tan(this.steer)) / wb;
+      const aLat = 9.8 * S.grip * (bike ? 1.1 : 1.05) * (hb ? 1.6 : 1);
+      const cap = aLat / Math.max(2, Math.abs(vf));
+      yawRate = clamp(yawRate, -cap, cap) * (hb && Math.abs(vf) > 6 ? 1.3 : 1);
+      this.yawRate = damp(this.yawRate || 0, yawRate, bike ? 10 : 14, dt);
+      this.yaw += this.yawRate * dt;
+      // sideways slip dies away fast with grip; the handbrake lets the tail slide (drift)
+      const grip = (hb ? 1.2 : bike ? 11 : 10) * S.grip;
       vr *= Math.exp(-grip * dt);
+      if (hb && Math.abs(vf) > 8) vr += this.yawRate * Math.abs(vf) * 0.06 * dt * 10;
       if (Math.abs(vr) > 5 && Math.random() < 0.5) burst('dust', this.pos.x - f.x * this.len * 0.4, this.pos.y + 0.2, this.pos.z - f.z * this.len * 0.4, 1, 0.8);
       const nf = this.forward.clone(), nr = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
       this.vel.x = nf.x * vf + nr.x * vr; this.vel.z = nf.z * vf + nr.z * vr;
       if (nitro && thr > 0) burst('fire', this.pos.x - nf.x * this.len * 0.5, this.pos.y + 0.45, this.pos.z - nf.z * this.len * 0.5, 1, 0.25);
     } else this.yaw += this.steer * 0.3 * dt;
-    if (this.uBrake) this.uBrake.value = brk > 0 && vf > 0.5 ? 1 : 0;
+    if (this.uBrake) this.uBrake.value = (brk > 0 && Math.abs(vf) > 0.5) || rev > 0 ? 1 : 0;
     this.speed = vf;
     // integrate
     this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
@@ -164,7 +221,7 @@ export class Vehicle {
       const L = (this.len || 4) * 0.4, W = (this.wid || 1.8) * 0.4;
       const hf = M.groundAt(this.pos.x + f.x * L, this.pos.z + f.z * L, this.pos.y + 1.2, 1.2), hr = M.groundAt(this.pos.x - f.x * L, this.pos.z - f.z * L, this.pos.y + 1.2, 1.2);
       const hl = M.groundAt(this.pos.x - right.x * W, this.pos.z - right.z * W, this.pos.y + 1.2, 1.2), hrr = M.groundAt(this.pos.x + right.x * W, this.pos.z + right.z * W, this.pos.y + 1.2, 1.2);
-      this.pitch = damp(this.pitch, -Math.atan2(hf - hr, 2 * L) - clamp(thr * 0.03 - brk * 0.04, -0.05, 0.05), 10, dt);
+      this.slope = -Math.atan2(hf - hr, 2 * L); this.pitch = damp(this.pitch, this.slope - clamp(thr * 0.025 - brk * 0.035, -0.04, 0.04), 10, dt);
       this.roll = damp(this.roll, Math.atan2(hrr - hl, 2 * W) + clamp(vr * 0.004 + this.steer * vf * 0.003, -0.08, 0.08), 8, dt);
       // motorbikes lean into the turn (and rest on the side stand when parked)
       if (S.bike) { const yr = (vf * Math.tan(this.steer)) / 2.1; this.roll = damp(this.roll, this.driver ? clamp(-Math.atan(vf * yr / 9.8), -0.85, 0.85) : Math.abs(vf) < 0.5 ? 0.17 : 0, this.driver ? 6 : 3, dt); if (this.driver && thr > 0 && nitro && vf < 25) this.pitch = damp(this.pitch, -0.22, 6, dt); }
@@ -261,5 +318,14 @@ export class Vehicle {
     const e2 = new THREE.Euler().setFromQuaternion(this.q, 'YXZ'); this.yaw = e2.y; this.pitch = e2.x; this.roll = e2.z;
   }
   onRunway() { const ap = M.L.airport; return this.pos.x > ap.runX0 - 30 && this.pos.x < ap.runX1 + 30 && Math.abs(this.pos.z - ap.runZ) < 70; }
+  // which LOD meshes are switched on: each one covers its own range plus the cross-dissolve bands (the shader does the hand-over)
+  lodUpdate(cam) {
+    if (!this.lodM) return;
+    const B = this.lodB, d = Math.hypot(cam.x - this.pos.x, cam.z - this.pos.z), m = 4;
+    const det = d < B.a + B.w + m, mid = d > B.a - B.w - m && (!this.lodF || d < B.b + B.w2 + m), far = !!this.lodF && d > B.b - B.w2 - m;
+    this.obj.visible = d < B.gone + m;
+    if (det !== this.detailOn) { this.detailOn = det; for (const o of this.detail) o.visible = det; }
+    this.lodM.visible = mid; if (this.lodF) this.lodF.visible = far;
+  }
   remove() { this.stopEngine(); this.game.scene.remove(this.obj); }
 }

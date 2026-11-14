@@ -1,0 +1,74 @@
+{
+ "m_idle": {
+  "dur": 2.7333,
+  "speed": 0,
+  "plant": 0.4,
+  "kb": 337
+ },
+ "m_walk": {
+  "dur": 1.2,
+  "speed": 1.012,
+  "plant": 0.85,
+  "kb": 93
+ },
+ "m_walk_fast": {
+  "dur": 1.0667,
+  "speed": 1.495,
+  "plant": 0.883,
+  "kb": 95
+ },
+ "m_run_slow": {
+  "dur": 0.7667,
+  "speed": 2.411,
+  "plant": 0.883,
+  "kb": 118
+ },
+ "m_run": {
+  "dur": 0.7333,
+  "speed": 2.88,
+  "plant": 0.933,
+  "kb": 109
+ },
+ "m_run_fast": {
+  "dur": 0.6,
+  "speed": 5.839,
+  "plant": 0.85,
+  "kb": 93
+ },
+ "f_idle": {
+  "dur": 2.6667,
+  "speed": 0,
+  "plant": 0.633,
+  "kb": 174
+ },
+ "f_walk": {
+  "dur": 1.2,
+  "speed": 1.214,
+  "plant": 0.4,
+  "kb": 106
+ },
+ "f_walk_fast": {
+  "dur": 1.0333,
+  "speed": 1.53,
+  "plant": 0.4,
+  "kb": 92
+ },
+ "f_run_slow": {
+  "dur": 0.8333,
+  "speed": 2.269,
+  "plant": 0.333,
+  "kb": 70
+ },
+ "f_run": {
+  "dur": 0.7667,
+  "speed": 2.765,
+  "plant": 0.367,
+  "kb": 121
+ },
+ "f_run_fast": {
+  "dur": 0.7,
+  "speed": 5.379,
+  "plant": 0.367,
+  "kb": 62
+ }
+}

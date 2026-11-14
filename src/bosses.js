@@ -263,7 +263,8 @@ export class Rakshasa extends BossBase {
   boneW(n) { return this.h.bones[n].getWorldPosition(new THREE.Vector3()); }
   update(dt) {
     // asleep: kneeling statue that wakes when the duo walks up to it
-    if (!this.active) { if (!this.defeated && this.game.playerPos().distanceTo(this.pos) < 70) this.awaken(); return; }
+    // asleep bosses are dozens of small parts: only drawn within sight of their lair
+    if (!this.active) { const d = this.game.playerPos().distanceTo(this.pos); this.obj.visible = !this.defeated && d < 1500; if (!this.defeated && d < 70) this.awaken(); return; }
     this.t += dt; const P = this.game.playerPos(), pl = this.game.player, S = this.S;
     this.checkPhase();
     const toP = Math.atan2(P.x - this.pos.x, P.z - this.pos.z), dP = Math.hypot(P.x - this.pos.x, P.z - this.pos.z);

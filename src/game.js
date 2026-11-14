@@ -5,14 +5,17 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GUNS } from './aimrig.js';
+import { Upscaler, UPSCALE_MODES } from './upscale.js';
+import { Benchmark, showBenchResults } from './bench.js';
 import * as M from './mapdata.js';
 import { buildWorld, world, updateWorld, updateTrees, updateWorldLOD } from './world.js';
 import { loadCarModels } from './carmodels.js';
 import { updateTerrain, updateGrass, T as TR } from './terrain.js';
 import { SkySystem } from './sky.js';
 import { U } from './shaders.js';
-import { Character, CameraRig, WEAPONS, ATK } from './player.js';
-import { Pose } from './human.js';
+import { Character, CameraRig, WEAPONS, ATK, refreshGuns } from './player.js';
+import { Pose, blendPose } from './human.js';
 import { Vehicle } from './vehicles.js';
 import { CARS } from './vehicle_models.js';
 import { Traffic } from './traffic.js';
@@ -22,7 +25,7 @@ import { Serpent } from './serpent.js';
 import { Makara, Rakshasa } from './bosses.js';
 import { Underwater, REEF, WRECK } from './underwater.js';
 import { Police } from './police.js';
-import { loadAvatar, Avatar } from './avatars.js';
+import { loadAvatar, Avatar , loadClips } from './avatars.js';
 import { NPCs } from './npc.js';
 import { Interiors } from './interiors.js';
 import { Weather, SEASONS } from './weather.js';
@@ -30,7 +33,7 @@ import { Missions } from './missions.js';
 import { initFx, updateFx, burst, explosion, tracer, setWeb, fx, initRain, updateRain } from './fx.js';
 import { audio, initAudio, sfx, setMood, say, updateAmbience, setVolumes } from './audio.js';
 import { input, pollInput, endFrame } from './input.js';
-import { clamp, lerp, damp, angDiff, nextFrame } from './util.js';
+import { clamp, lerp, damp, dampAngle, angDiff, nextFrame } from './util.js';
 
 const V3 = THREE.Vector3;
 // weapons + powers the player cycles with Tab (powers appear once unlocked by defeating a boss)
@@ -41,6 +44,13 @@ export const TOOLS = [
   { id: 'fly', name: 'Flight', power: 'flight', unlockLine: 'The Rakshasa crown... we can fly!' },
 ];
 const BLACK = new THREE.Color(0);
+function angDiffG(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+// three.js (r170) refreshes a skeleton once per "frame", but its shadow pass already counts as the next frame. A skinned mesh
+// that casts shadows was therefore DRAWN with the bone matrices of the previous render: one frame late on PC, and on phones
+// (sun shadows refresh every second frame) only every second frame - the heroes and animals moved at half the frame rate and
+// trembled against the camera. Bring every skeleton up to date right before its first colour draw of each render.
+let renderNo = 0;
+THREE.SkinnedMesh.prototype.onBeforeRender = function () { const sk = this.skeleton; if (sk && sk.ddRenderNo !== renderNo) { sk.ddRenderNo = renderNo; sk.update(); } };
 export class Game {
   constructor(renderer, q, presetKey, hud) {
     this.renderer = renderer; this.q = q; this.presetKey = presetKey; this.hud = hud; hud.game = this;
@@ -56,7 +66,7 @@ export class Game {
     await progress('Populating Daman with people', 0.95);
     crowd.renderer = this.renderer; this.crowdN = buildCrowd(S, q);
     await progress('Starting traffic', 0.96);
-    await Promise.all([loadCarModels(q), loadHorseModel()]);
+    await Promise.all([loadCarModels(q), loadHorseModel(q)]); refreshGuns();
     this.traffic = new Traffic(this, q);
     await progress('Waking the wildlife', 0.97);
     this.animals = spawnAnimals(this, q); this.birds = buildBirds(S);
@@ -93,15 +103,32 @@ export class Game {
     this.addVehicle('jet', 'fighter', 0xb0bec5, M.spawns.jet[0].x + 40, M.spawns.jet[0].z + 10, Math.PI / 2);
     for (const b of M.spawns.boats) this.addVehicle('boat', 'boat', 0xffffff, b.x, b.z, 0);
     this.load();
-    this.setupPost();
+    this.setupPost(); this.setupUpscale(this.upModeWanted);
     await progress('Lighting the sky', 0.99);
     this.sky.waterMats = [TR.sea, TR.lake].filter(Boolean).map((m) => m.material);
     await this.sky.loadPhotoSky(q);
     this.sky.bakeEnv(this.sky.photo ? this.sky.photo.keys.map((k) => k.h) : q.desktop ? [0, 5.8, 6.6, 8, 10.5, 13, 15.5, 17.3, 18.3, 19.2, 21.5] : [0, 6.2, 9, 13, 17.4, 18.6, 21.5]);
     this.sky.updateEnv(this.sky.hour);
+    await progress('Warming up the graphics', 0.995);
+    await this.precompile();
     this.renderer.shadowMap.autoUpdate = false; this.frameNo = 0;
     this.rig.yaw = this.player.yaw + Math.PI;
     this.hud.stars(0);
+  }
+  // Build every shader program the world needs while the loading screen is still up. Without this each material is
+  // compiled the first time it comes into view, which shows up as a stutter in the first minutes of play (and the
+  // frame-rate governor mistakes those stutters for an overloaded GPU and lowers the resolution).
+  async precompile() {
+    const r = this.renderer;
+    try {
+      // a program depends on where the scene is drawn (tone mapping and output encoding), so compile against the real target
+      const target = this.up && this.up.scene ? this.up.scene : this.composer ? this.composer.renderTarget1 : null;
+      const prev = r.getRenderTarget();
+      r.setRenderTarget(target);
+      // drivers with parallel compilation build in the background and report back (with a ceiling so loading can never hang); the others finish inside compile()
+      let ready = null; try { if (r.extensions.has('KHR_parallel_shader_compile')) ready = r.compileAsync(this.scene, this.cam); else r.compile(this.scene, this.cam); } finally { r.setRenderTarget(prev); }
+      if (ready) await Promise.race([ready, new Promise((ok) => setTimeout(ok, 12000))]);
+    } catch (e) { console.warn('shader warm-up skipped', e); }
   }
   addVehicle(kind, key, color, x, z, ang) { const v = new Vehicle(this, kind, key, color, x, z, ang); this.vehicles.push(v); return v; }
   setupPost() {
@@ -118,9 +145,26 @@ export class Game {
     if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.45, 0.82); this.composer.addPass(this.bloom); }
     this.composer.addPass(new OutputPass());
   }
+  // spatial upscaling (upscale.js): render the 3D scene at a lower internal resolution and reconstruct it at screen resolution
+  setupUpscale(mode) {
+    this.upMode = mode;
+    if (!mode || mode === 'off' || !UPSCALE_MODES[mode]) { this.up = null; return; }
+    this.up = new Upscaler(this.renderer, { mode, samples: this.q.desktop ? 4 : 2, cheap: !this.q.desktop, sharp: mode === 'native' ? 0.45 : 0.8 });
+    if (this.composer) this.up.useComposer(this.composer);
+  }
+  // built-in stress test (bench.js)
+  startBenchmark() {
+    if (this.benchmark) return;
+    this.hud.closeMenu(); document.body.classList.add('photo');
+    const b = new Benchmark(this, { onDone: (b) => { document.body.classList.remove('photo'); if (b.aborted) { this.hud.toast('Stress test cancelled', 2); return; } this.paused = true; showBenchResults(b, this); } });
+    b.onStage = (s, i, n) => this.hud.toast(`STRESS TEST ${i + 1}/${n} · ${s.name}`, 3, '#ffd54f');
+    b.onStage(b.s, 0, b.stages.length);
+  }
+  applyUpscale(k) { try { localStorage.setItem('damanduo.upscale', k); } catch (e) {} this.save(); location.reload(); }
   resize() {
     const w = innerWidth, h = innerHeight; this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); this.renderer.setSize(w, h);
     if (this.composer) this.composer.setSize(w, h);
+    if (this.up) this.up.resize();
   }
   // ---------------- helpers ----------------
   playerPos() { const p = this.player; if (p.vehicle) return p.vehicle.pos; if (p.mount) return p.mount.pos; return p.pos; }
@@ -226,7 +270,9 @@ export class Game {
     return end;
   }
   shoot(sh, W, c) {
-    const hand = sh.h.bones.handR.getWorldPosition(new V3()).add(sh.forward().multiplyScalar(0.25));
+    // the shot leaves from the real muzzle of the gun in the shooter's hands
+    const gun = sh.h.held; if (gun) gun.updateWorldMatrix(true, false);
+    const hand = gun ? gun.localToWorld((sh.weapon === 2 ? GUNS.rifle : GUNS.pistol).muzzle.clone()) : sh.h.bones.handR.getWorldPosition(new V3()).add(sh.forward().multiplyScalar(0.25));
     let dir;
     if (sh === this.player) {
       if (c.aim) { const cf = this.rig.forward, cp = this.cam.position.clone(); const far = this.rayWorld(cp, cf, 300); const tgt = cp.addScaledVector(cf, Math.max(far, 4)); dir = tgt.sub(hand).normalize(); }
@@ -295,6 +341,106 @@ export class Game {
     setTimeout(() => b.awaken(), 900);
   }
   // ---------------- vehicles / mounts ----------------
+  // ---------------- getting in and out: walk to the door / stirrup, then a timed get-in / get-out animation ----------------
+  vehKind(v) { return v.kind === 'car' ? (v.spec && (v.spec.bike || v.key === 'scooter') ? 'bike' : v.key === 'auto' ? 'auto' : 'car') : v.kind; }
+  doorLocal(v) {
+    const k = this.vehKind(v), s = v.seat, sx = s.x < -0.05 ? -1 : s.x > 0.05 ? 1 : -1;
+    if (k === 'bike') return new V3(-0.62, 0, s.z + 0.05);
+    if (k === 'heli') return new V3(-1.9, 0, s.z + 0.2);
+    if (k === 'plane') return v.len > 19 ? new V3(-2.2, 0, 6.15) : new V3(-1.8, 0, s.z - 0.6);
+    if (k === 'jet') return new V3(-1.5, 0, s.z - 0.4);
+    if (k === 'boat') return new V3(-1.5, 0, s.z);
+    return new V3(sx * ((v.wid || 1.9) / 2 + 0.42), 0, s.z + 0.2);
+  }
+  seatWorld(v) { return v.obj.localToWorld(v.seat.clone()); }
+  startTransit(o) {
+    const p = this.player; p.vel.set(0, 0, 0);
+    const d = Math.hypot(o.door.x - p.pos.x, o.door.z - p.pos.z), walkT = Math.min(1.4, d / 2.2);
+    o.from = p.pos.clone(); o.yaw0 = p.yaw; o.walkT = d > 0.25 ? walkT : 0; o.t = 0;
+    this.transit = o;
+    p.busy = { t: 0, dur: o.walkT + o.inT, pose: (t) => this.transitPose(t), done: () => { const tr = this.transit; this.transit = null; tr.done(); }, transit: true };
+  }
+  transitPose(t) {
+    const o = this.transit, p = this.player; if (!o) return Pose.idle(0);
+    if (t < o.walkT) return Pose.locomotion(t * 7, 0.12);
+    const k = Math.min(1, (t - o.walkT) / o.inT), e = k * k * (3 - 2 * k), end = o.endPose();
+    if (o.type === 'in') {
+      if (o.kind === 'bike') return k < 0.55 ? blendPose(Pose.idle(0), Pose.legOver(), k / 0.55) : blendPose(Pose.legOver(), end, (k - 0.55) / 0.45);
+      if (o.kind === 'horse') return k < 0.35 ? blendPose(Pose.idle(0), Pose.stirrup(), k / 0.35) : k < 0.72 ? blendPose(Pose.stirrup(), Pose.swingOver(), (k - 0.35) / 0.37) : blendPose(Pose.swingOver(), end, (k - 0.72) / 0.28);
+      return k < 0.42 ? blendPose(Pose.idle(0), Pose.duck(), e / 0.42 > 1 ? 1 : k / 0.42) : blendPose(Pose.duck(), end, (k - 0.42) / 0.58);
+    }
+    // getting out: the reverse
+    if (o.kind === 'bike') return k < 0.45 ? blendPose(end, Pose.legOver(), k / 0.45) : blendPose(Pose.legOver(), Pose.idle(0), (k - 0.45) / 0.55);
+    if (o.kind === 'horse') return k < 0.3 ? blendPose(end, Pose.swingOver(), k / 0.3) : k < 0.65 ? blendPose(Pose.swingOver(), Pose.stirrup(), (k - 0.3) / 0.35) : blendPose(Pose.stirrup(), Pose.idle(0), (k - 0.65) / 0.35);
+    return k < 0.5 ? blendPose(end, Pose.duck(), k / 0.5) : blendPose(Pose.duck(), Pose.idle(0), (k - 0.5) / 0.5);
+  }
+  updateTransit() {
+    const o = this.transit, p = this.player; if (!o || !p.busy) return;
+    const t = p.busy.t;
+    if (t < o.walkT) {
+      // walk to the door / stirrup
+      const k = t / Math.max(o.walkT, 1e-3), door = o.doorW();
+      p.pos.lerpVectors(o.from, door, k); p.pos.y = M.groundAt(p.pos.x, p.pos.z, p.pos.y + 1);
+      const dx = door.x - o.from.x, dz = door.z - o.from.z; if (dx * dx + dz * dz > 0.01) p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, 1 / 60);
+      p.busy.walkSpeed = 2.2;
+      return;
+    }
+    p.busy.walkSpeed = 0;
+    const k = Math.min(1, (t - o.walkT) / o.inT), e = k * k * (3 - 2 * k);
+    const a = o.type === 'in' ? o.doorW() : o.seatW(), b = o.type === 'in' ? o.seatW() : o.doorW();
+    // path: sideways step + lift (bikes and horses go up and over)
+    const lift = o.kind === 'horse' ? Math.sin(Math.min(1, k * 1.4) * Math.PI / 2) : o.kind === 'bike' ? Math.sin(k * Math.PI) * 0.15 : 0;
+    const hk = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.2) / 0.55)) : 1 - Math.min(1, Math.max(0, (k - 0.25) / 0.6))) : e;
+    const sideK = o.kind === 'horse' ? (o.type === 'in' ? Math.min(1, Math.max(0, (k - 0.45) / 0.45)) : 1 - Math.min(1, Math.max(0, (k - 0.05) / 0.5))) : e;
+    const from = o.type === 'in' ? a : b, to = o.type === 'in' ? b : a;
+    p.pos.set(lerp(from.x, to.x, sideK), lerp(from.y, to.y, o.kind === 'horse' ? hk : e) + (o.kind === 'horse' ? 0 : lift), lerp(from.z, to.z, sideK));
+    // face across the vehicle at the door, forward once seated
+    // yaw: local +x of the vehicle is yaw + PI/2; a door on side s faces inwards at yaw - s * PI/2
+    const vy = o.vyaw(), s = o.doorSign || -1, inward = vy - s * Math.PI / 2;
+    const atDoor = o.kind === 'horse' ? vy - s * Math.PI * 0.3 : o.kind === 'bike' ? vy : vy + angDiffG(inward, vy) * 0.5;
+    const y0 = o.type === 'in' ? atDoor : vy, y1 = o.type === 'in' ? vy : o.kind === 'car' || o.kind === 'auto' ? vy + s * Math.PI / 2 * 0.7 : vy;
+    p.yaw = y0 + angDiffG(y1, y0) * e;
+  }
+  beginEnter(v) {
+    const p = this.player; if (p.busy || this.transit) return;
+    const kind = this.vehKind(v), fast = Math.abs(v.speed || 0) > 3 || p.state !== 'ground';
+    if (fast || kind === 'boat' && p.state === 'swim') { this.enterVehicle(v); return; }
+    const dl = this.doorLocal(v), drive = () => (kind === 'bike' ? Pose.bike(v.key === 'vayurr', 0) : kind === 'car' || kind === 'auto' ? Pose.drive(v.kind === 'car' && v.spec.P && v.spec.P.roofY < 1.35) : Pose.drive(false));
+    sfx('door', 0.5);
+    this.startTransit({ type: 'in', kind, inT: kind === 'bike' ? 0.75 : kind === 'car' ? 0.95 : 1.0, doorSign: Math.sign(dl.x) || -1,
+      door: v.obj.localToWorld(dl.clone()), doorW: () => { const w = v.obj.localToWorld(dl.clone()); w.y = M.groundAt(w.x, w.z, v.pos.y + 1.5); return w; }, seatW: () => this.seatWorld(v), vyaw: () => v.yaw,
+      endPose: drive, done: () => this.enterVehicle(v) });
+  }
+  beginExit() {
+    const p = this.player, v = p.vehicle; if (!v || this.transit) return;
+    const kind = this.vehKind(v), g = M.groundAt(v.pos.x, v.pos.z, v.pos.y + 3);
+    if (Math.abs(v.speed || 0) > 4 || (v.kind === 'heli' || v.kind === 'plane' || v.kind === 'jet') && v.pos.y - g > 3 || kind === 'boat') { this.exitVehicle(); return; }
+    const dl = this.doorLocal(v), seat = this.seatWorld(v), endPose = p.seatPose ? p.seatPose.bind(null, p.t) : () => Pose.drive(false), vy = v.yaw;
+    this.exitVehicle(false, true);
+    p.pos.copy(seat); p.yaw = vy; sfx('door', 0.5);
+    const doorW = () => { const w = v.obj.localToWorld(dl.clone()); w.y = M.groundAt(w.x, w.z, v.pos.y + 1.5); return w; };
+    this.startTransit({ type: 'out', kind, inT: kind === 'bike' ? 0.7 : 0.85, doorSign: Math.sign(dl.x) || -1, door: seat.clone(), doorW, seatW: () => seat, vyaw: () => vy, endPose, done: () => { p.pos.copy(doorW()); p.state = 'ground'; } });
+    this.transit.walkT = 0; p.busy.dur = this.transit.inT;
+  }
+  beginMount(a) {
+    const p = this.player; if (p.busy || this.transit) return;
+    if (p.state !== 'ground') { this.mountHorse(a); return; }
+    a.hold = 3; a.want = 0;
+    const doorW = () => { const o = new V3(-0.78, 0, 0.12), c = Math.cos(a.yaw), s2 = Math.sin(a.yaw); const w = new V3(a.pos.x + o.x * c + o.z * s2, 0, a.pos.z - o.x * s2 + o.z * c); w.y = M.groundAt(w.x, w.z, a.pos.y + 1.5); return w; };
+    const seatW = () => a.seatPos(new V3());
+    sfx('neigh', 0.5);
+    this.startTransit({ type: 'in', kind: 'horse', inT: 1.15, doorSign: -1, door: doorW(), doorW, seatW, vyaw: () => a.yaw, endPose: () => Pose.ride(a.ph), done: () => { a.hold = 0; this.mountHorse(a); } });
+  }
+  beginDismount() {
+    const p = this.player, a = p.mount; if (!a || this.transit) return;
+    if (a.speed > 2.5) { this.dismountHorse(); return; }
+    const seat = a.seatPos(new V3()), yaw = a.yaw;
+    a.rider = null; a.want = 0; a.hold = 2; p.mount = null; p.seatPose = null; p.state = 'ground';
+    const doorW = () => { const o = new V3(-0.8, 0, 0.1), c = Math.cos(yaw), s2 = Math.sin(yaw); const w = new V3(a.pos.x + o.x * c + o.z * s2, 0, a.pos.z - o.x * s2 + o.z * c); w.y = M.groundAt(w.x, w.z, a.pos.y + 1.5); return w; };
+    p.pos.copy(seat); p.yaw = yaw;
+    this.startTransit({ type: 'out', kind: 'horse', inT: 1.0, doorSign: -1, door: seat.clone(), doorW, seatW: () => seat, vyaw: () => yaw, endPose: () => Pose.ride(0), done: () => { p.pos.copy(doorW()); p.state = 'ground'; } });
+    this.transit.walkT = 0; p.busy.dur = this.transit.inT;
+  }
   enterVehicle(v) {
     const p = this.player; p.vehicle = v; v.driver = p; p.state = 'seated'; p.vel.set(0, 0, 0); p.anchor = null; setWeb(null);
     v.obj.add(p.obj); p.obj.position.copy(v.seat); p.obj.rotation.set(0, 0, 0); p.seatPose = () => Pose.drive(v.kind === 'car' && v.spec.P && v.spec.P.roofY < 1.35);
@@ -305,7 +451,7 @@ export class Game {
     v.startEngine(); sfx('door', 0.8);
     if (v.kind === 'car') say(p.name, ['Nice ride.', 'Hold on, Mira!', 'Let us see what this beauty can do.'][Math.floor(Math.random() * 3)]);
   }
-  exitVehicle(eject = false) {
+  exitVehicle(eject = false, anim = false) {
     const p = this.player, v = p.vehicle; if (!v) return;
     v.obj.remove(p.obj); this.scene.add(p.obj); v.driver = null; p.vehicle = null;
     const side = new V3(Math.cos(v.yaw), 0, -Math.sin(v.yaw));
@@ -314,7 +460,7 @@ export class Game {
     if ((v.kind === 'jet' || v.kind === 'plane' || v.kind === 'heli') && v.pos.y - g > 20) { p.pos.copy(v.pos).add(new V3(0, 4, 0)); p.state = 'glide'; p.vel.copy(v.vel).multiplyScalar(0.5); p.vel.y = 6; p.t = 0; say(p.name, 'Ejecting!'); }
     else if (v.kind === 'boat' || M.waterLevelAt(p.pos.x, p.pos.z) > g + 1.2) { p.state = 'swim'; p.pos.y = M.waterLevelAt(p.pos.x, p.pos.z) - 1.2; }
     else { p.pos.y = g; p.state = 'ground'; }
-    p.seatPose = null; v.stopEngine();
+    p.seatPose = null; v.stopEngine(); v.speed = 0; if (anim) v.vel.set(0, 0, 0);
     const c = this.companion;
     if (c.vehicle === v) { v.obj.remove(c.obj); this.scene.add(c.obj); c.vehicle = null; c.setVisible(true); c.pos.copy(p.pos).addScaledVector(side, -((v.wid || 2) + 1.5)); c.state = p.state === 'glide' ? 'glide' : 'ground'; c.vel.copy(p.vel); c.t = 0; c.pos.y = p.state === 'glide' ? p.pos.y : M.groundAt(c.pos.x, c.pos.z, c.pos.y + 3); c.seatPose = null; }
     this.rig.yaw = v.yaw + Math.PI; sfx('door', 0.6);
@@ -379,7 +525,7 @@ export class Game {
   enterInterior(pos) { this.inside = true; this.player.pos.copy(pos); this.player.state = 'ground'; this.player.vel.set(0, 0, 0); const c = this.companion; if (c.alive) { c.pos.copy(pos).add(new V3(0.8, 0, 0.4)); c.state = 'ground'; } if (this.arjun.alive) { this.arjun.pos.copy(pos).add(new V3(-0.8, 0, 0.5)); this.arjun.state = 'ground'; } for (const o of this.worldObjs) o.visible = false; this.rig.target.copy(pos); sfx('door'); }
   leaveInterior() { const out = this.interior.exit(); this.inside = false; for (const o of this.worldObjs) o.visible = true; if (out) { this.player.pos.copy(out); this.player.state = 'ground'; const c = this.companion; if (c.alive) { c.pos.copy(out).add(new V3(1, 0, 0)); c.state = 'ground'; } if (this.arjun.alive) { this.arjun.pos.copy(out).add(new V3(-1, 0, 0.5)); this.arjun.state = 'ground'; } this.rig.target.copy(out); } sfx('door'); }
   makeChai(at) {
-    const p = this.player; p.weapon = 0; p.busy = { t: 0, dur: 7, pose: (t) => (t < 4.5 ? Pose.chai(t) : Pose.sip(t)), done: () => { for (const h of this.heroes) { if (h.alive) { h.hp = h.maxHp; } } this.hud.toast('☕ Masala chai · Health restored', 2.5, '#ffcc80'); this.missions.event('chai'); } };
+    const p = this.player; p.weapon = 0; p.busy = { t: 0, dur: 7, pose: (t) => (t < 4.5 ? Pose.chai(t) : Pose.sip(t)), done: () => { for (const h of this.heroes) { if (h.alive) { h.hp = h.maxHp; } } this.relaxT = 180; this.chaiBreaks = (this.chaiBreaks || 0) + 1; this.hud.toast(`☕ Masala chai · relaxed for 3 minutes (slow healing) · break no. ${this.chaiBreaks}`, 3.5, '#ffcc80'); } };
     sfx('pour', 0.8); const t0 = this.time; this.chaiSteam = { at: at.clone(), until: this.time + 7 };
     say(p.name, ['Adrak, elaichi, thoda zyada patti... perfect.', 'One cutting chai coming up.', 'Nothing a good chai cannot fix.'][Math.floor(Math.random() * 3)]);
   }
@@ -407,8 +553,8 @@ export class Game {
   doAction(a) {
     const p = this.player;
     switch (a.id) {
-      case 'exitv': this.exitVehicle(); break; case 'dismount': this.dismountHorse(); break;
-      case 'enterv': this.enterVehicle(a.v); break; case 'hijack': this.hijack(a.c); break; case 'mount': this.mountHorse(a.a); break;
+      case 'exitv': this.beginExit(); break; case 'dismount': this.beginDismount(); break;
+      case 'enterv': this.beginEnter(a.v); break; case 'hijack': this.hijack(a.c); break; case 'mount': this.beginMount(a.a); break;
       case 'chai': this.makeChai(a.at); break;
       case 'elevator': { const t = world.skyTop; p.pos.set(t.x + 12, t.y, t.z); p.state = 'ground'; this.hud.toast('Daman Sky Tower · 224 m', 2, '#fff'); this.missions.event('top'); say(this.player.name, 'What a view! The whole coast of Daman.'); break; }
       case 'elevdown': { const b = world.skyBase; p.pos.set(b.x, M.groundAt(b.x, b.z), b.z); p.state = 'ground'; break; }
@@ -427,7 +573,7 @@ export class Game {
     if (this.q.avatars === false) return;
     const list = [[this.vikas, 'vikas', 1.79], [this.mira, 'mira', 1.67], [this.arjun, 'arjun', 1.8]];
     await Promise.all(list.map(async ([c, n, h]) => {
-      try { const fbx = await loadAvatar(n); const av = new Avatar(n, fbx, c.h, h); if (!av.ok) return; av.calibrate(); c.avatar = av; c.sync(); }
+      try { const fbx = await loadAvatar(n); const av = new Avatar(n, fbx, c.h, h); if (!av.ok) return; av.calibrate(); av.attachMocap(await loadClips(n === 'mira' ? 'f' : 'm')); c.avatar = av; c.sync(); }
       catch (e) { console.warn('avatar ' + n + ' unavailable, using the procedural body', e && e.message); }
     }));
   }
@@ -510,7 +656,7 @@ export class Game {
     const useHeld = desk ? aiming && held('lmb') : held('attack');            // held (auto-fire / keep swinging)
     const shiftKick = desk && click && held('sprint') && !gun && tool.id === 'fists';
     // player control
-    const ctl = { move, sprint: held('sprint'), jump: pr('jump'), up: held('jump'), aim: aiming, down: held('down'), camYaw, aimDir: cf, pitch: this.rig.pitch * 0.6, turn: I.mx,
+    const ctl = { move, walk: held('walk'), sprint: held('sprint'), jump: pr('jump'), up: held('jump'), aim: aiming, down: held('down'), camYaw, aimDir: cf, pitch: this.rig.pitch * 0.6, turn: I.mx,
       attack: (tool.id === 'fists' && use && !shiftKick) || (gun && use), fire: gun && (useHeld || use),
       kick: pr('kick') || shiftKick, roll: pr('roll'), counter: tool.id === 'fists' && (pr('counter') || pr('aim')),
       web: held('web') || (tool.id === 'web' && useHeld) || (tool.id === 'web' && desk && held('lmb')), webPress: pr('web') || (tool.id === 'web' && use),
@@ -520,6 +666,7 @@ export class Game {
     if (desk && !I.freeLook && I.mouseMoved > 0 && move.lengthSq() < 0.01 && p.state === 'ground' && !p.vehicle && !p.mount) { ctl.face = true; ctl.faceYaw = camYaw; }
     if (p.state === 'glide' || p.state === 'chute') { ctl.move = move; ctl.dive = Math.max(0, I.my); }
     if (p.state === 'chute' && held('down')) ctl.down = true;
+    if (this.transit) this.updateTransit();
     if (p.vehicle) {
       const v = p.vehicle;
       const air = v.kind === 'plane' || v.kind === 'jet';
@@ -530,6 +677,13 @@ export class Game {
         if (v.kind === 'car' && click) sfx('horn', 0.8);
       }
       if (v.kind === 'heli') vc.yawFollow = I.touch;
+      if (v.kind === 'car' || v.kind === 'boat') {
+        // precise driving: pedals (touch buttons / pad triggers) separate from steering; finer steering near the centre
+        if (I.touch || I.usingPad) { vc.analog = true; vc.mx = Math.sign(I.mx) * Math.pow(Math.abs(I.mx), 1.45); }
+        if (held('gas') || held('brake')) { vc.gas = held('gas') ? 1 : 0; vc.brake = held('brake') ? 1 : 0; }
+        else if (I.usingPad && (I.padGas > 0.05 || I.padBrake > 0.05)) { vc.gas = I.padGas; vc.brake = I.padBrake; }
+        if (v.kind === 'boat' && vc.gas !== undefined) vc.my = vc.gas - vc.brake;
+      }
       v.update(dt, vc);
       p.update(dt, {});
     } else if (p.mount) {
@@ -543,6 +697,9 @@ export class Game {
     // other vehicles (parked / unmanned) still need physics when moving
     this.police.update(dt);
     for (const v of this.vehicles) if (v !== p.vehicle && !v.ai && (v.speed !== 0 || v.burn > 0 || v.kind === 'heli' && v.rotor > 0.01 || v.airborne)) v.update(dt, null);
+    for (const v of this.vehicles) if (v.lodUpdate) v.lodUpdate(this.cam.position);
+    // chai is Vikas's way to unwind (a hobby, never a task): the calm lingers for a few minutes as slow healing
+    if (this.relaxT > 0) { this.relaxT -= dt; for (const h of this.heroes) if (h.alive && h.hp < h.maxHp) h.hp = Math.min(h.maxHp, h.hp + dt * 2.5); }
     // vehicle vs pedestrians / traffic
     if (p.vehicle && p.vehicle.kind === 'car' && Math.abs(p.vehicle.speed) > 3) {
       const v = p.vehicle, f = v.forward.clone();
@@ -595,11 +752,11 @@ export class Game {
     let mode = 'foot', focus = p.pos.clone(), opts = {};
     if (v) {
       focus = v.pos.clone();
-      if (v.kind === 'car') { mode = 'car'; opts = { followYaw: Math.abs(v.speed) > 2 ? v.yaw + (v.speed < -1 ? Math.PI : 0) : undefined, followK: 3, followPitch: 0.16, len: v.len, speedFov: clamp(Math.abs(v.speed) / 4, 0, 18) }; }
-      else if (v.kind === 'boat') { mode = 'boat'; opts = { followYaw: v.yaw, followPitch: 0.2 }; }
+      if (v.kind === 'car') { mode = 'car'; opts = { followYaw: Math.abs(v.speed) > 1.5 ? v.yaw + (v.speed < -1 ? Math.PI : 0) : undefined, followK: clamp(2.5 + Math.abs(v.speed) * 0.08, 2.5, 5), followDelay: 0.45, followPitch: 0.16, len: v.len, speedFov: clamp(Math.abs(v.speed) / 4, 0, 18) }; }
+      else if (v.kind === 'boat') { mode = 'boat'; opts = { followYaw: v.yaw, followPitch: 0.2, followDelay: 0.5, followK: 2.5 }; }
       else if (v.kind === 'heli') { mode = 'heli'; opts = { followYaw: Math.hypot(v.vel.x, v.vel.z) > 6 ? Math.atan2(v.vel.x, v.vel.z) : undefined, followK: 1, followPitch: 0.25 }; }
       else { mode = 'plane'; const f = new V3(0, 0, 1).applyQuaternion(v.q); opts = { followYaw: Math.atan2(f.x, f.z), followK: 5, followPitch: clamp(-Math.asin(f.y) + 0.15, -1, 1.2), len: v.len, speedFov: clamp(v.speed / 15, 0, 15), noCollide: v.pos.y - M.groundAt(v.pos.x, v.pos.z) > 40 }; if (this.rig.idle > 0.5) this.rig.idle = 2; }
-    } else if (p.mount) { mode = 'horse'; focus = p.mount.pos.clone(); focus.y += 0.6; opts = { followYaw: p.mount.speed > 2 ? p.mount.yaw : undefined, followK: 1.5 }; }
+    } else if (p.mount) { mode = 'horse'; focus = p.mount.pos.clone(); focus.y += 0.6; opts = { followYaw: p.mount.speed > 1.5 ? p.mount.yaw : undefined, followK: 2.2, followDelay: 0.5 }; }
     else if (this.inside) mode = 'interior';
     else if (p.state === 'climb' || p.state === 'mantle') opts = { followYaw: p.yaw, followK: 3 };
     else if (I.held.has('aim') && p.weapon > 0) mode = 'aim';
@@ -635,9 +792,10 @@ export class Game {
     setMood(mood);
   }
   render() {
+    renderNo++;
     const sm = this.renderer.shadowMap, every = this.q.shadowEvery || 1;
     sm.needsUpdate = !this.inside && (this.frameNo++ % every === 0);
-    if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam);
+    if (this.up) this.up.render(this.scene, this.cam); else if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam);
   }
   // ---------------- save / load ----------------
   save() {

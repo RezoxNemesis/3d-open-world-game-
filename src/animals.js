@@ -122,9 +122,9 @@ function loftG(rings, seg = 12, caps = true) {
 }
 // ---- Blender horse (tools/blender/horse.py): one smooth skinned body weighted to the same joints as the procedural one ----
 const HORSE = { geo: null, layout: null, mask: null, ao: null, fixed: null };
-export async function loadHorseModel() {
+export async function loadHorseModel(q) {
   try {
-    const [gltf, layout] = await Promise.all([new Promise((ok, no) => new GLTFLoader().load(assetURL('assets/models/horse/horse.glb'), ok, undefined, no)), fetch(assetURL('assets/models/horse/horse.json')).then((r) => r.json())]);
+    const [gltf, layout] = await Promise.all([new Promise((ok, no) => new GLTFLoader().load(assetURL(`assets/models/horse/${q && !q.desktop ? 'horse_lod' : 'horse'}.glb`), ok, undefined, no)), fetch(assetURL('assets/models/horse/horse.json')).then((r) => r.json())]);
     let sm = null; gltf.scene.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
     if (!sm) return false;
     const order = Object.keys(layout), names = sm.skeleton.bones.map((b) => b.name), src = sm.geometry, n = src.attributes.position.count;
@@ -250,6 +250,7 @@ export class Animal {
     if (this.dead) { this.parts.body && (this.parts.body.rotation.z = damp(this.parts.body.rotation.z, 1.5, 3, dt)); return; }
     this.t -= dt;
     if (this.rider) this.ridden(dt);
+    else if (this.hold > 0) { this.hold -= dt; this.want = 0; }
     else this.think(dt, P, d);
     // move
     if (!this.rider || true) {
@@ -322,7 +323,7 @@ export class Animal {
       const s = Math.sin(this.ph + off);
       l.hip.rotation.x = -s * A; l.knee.rotation.x = (l.front ? -1 : 1) * Math.max(0, Math.cos(this.ph + off)) * A * 1.2;
     });
-    const grazing = this.state === 'graze' && !this.rider;
+    const grazing = this.state === 'graze' && !this.rider && !(this.hold > 0);
     P.neck.rotation.x = damp(P.neck.rotation.x, grazing && this.type !== 'dog' && this.type !== 'tiger' ? (P.grazeAng ?? 0.5) : (P.neckBase ?? -this.S.neck[1]) + Math.sin(this.ph) * 0.06 * A, 3, dt);
     P.tail.rotation.z = Math.sin(performance.now() * 0.003 + this.home.x) * 0.3;
     P.body.position.y = this.S.back - this.S.bodyR[1] * 0.2 + Math.abs(Math.sin(this.ph)) * 0.05 * A * (this.S.len);

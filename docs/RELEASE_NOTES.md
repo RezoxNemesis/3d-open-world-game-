@@ -1,3 +1,33 @@
+## Daman Duo — v1.12 "Motion and stability" update
+
+**Movement**
+- **Characters move every frame.** A fault in how the engine refreshed skeletons meant the heroes, horses and other animals were drawn with the previous frame's pose: one frame late on PC, and on phones only every second frame, so they animated at half the frame rate and trembled against the camera while running. They are now drawn at their current pose in every frame.
+- **Motion-captured walking, jogging, running and sprinting** for Vikas, Mira and Arjun. The stride follows your real ground speed, so feet no longer slide, and the body leans into turns. Hold Caps Lock or Left Alt to walk; on touch and gamepad the stick goes smoothly from a stroll to a run.
+- **Getting in and out:** the character walks to the door, ducks in and sits; swings a leg over a bike; uses the stirrup to mount a horse. Car glass is now see-through, so you can see who is driving.
+- **Driving:** separate gas and brake (pedals on touch, triggers on a gamepad), steering that gets calmer with speed, tyres that run wide when you corner too fast, a handbrake that slides the tail, engine braking and slopes. The chase camera settles behind the car instead of snapping.
+
+**Shooting**
+- **New weapon handling.** The rifle sits in the shoulder and the pistol is held in both hands at eye level, with the barrel pointing exactly where you aim, up and down included. Both arms are placed on the gun, the fingers close on the grip, and each shot kicks. Without aiming the rifle is carried at low ready, also while running. Shots now leave from the muzzle. (Before, the gun was attached the wrong way round.)
+- **Two new guns built in Blender:** the Vajra carbine (rail, reflex sight, slotted handguard, curved magazine, folding-style stock) and the Naag pistol. Both are original designs.
+
+**A picture that stays put**
+- **Nothing pops in or out any more.** Street furniture, rocks, boats, buildings, roofs, road tiles, wires, people and trees dissolve in over the last stretch of their draw distance instead of appearing a block at a time.
+- **Detail changes are cross-dissolved:** 3D trees to their far versions, near palms to light palms, traffic and parked cars between their detail levels.
+- **Sea showing through the land is fixed.** The sea was one 90 km polygon; at some render resolutions it bled through the ground as a grey haze. That could happen whenever Auto resolution changed the resolution. The sea is now a graded grid that follows the camera.
+- Sun shadows fade out at the edge of their range instead of ending in a line, the meadow thins out further away instead of stopping, and Auto resolution now moves in small steps.
+
+**Performance**
+- **The phone preset is much lighter.** Measured in the same scenes: at the start point 774,000 → 615,000 triangles and 386 → 273 draw calls per frame (shadow pass 372,000 → 183,000 triangles); on the sea face 1,334,000 → 829,000 triangles.
+  How: light far versions of the heavy rocks and farm props, automatic light versions of street furniture, buildings and roofs split into a near and a far layer, far terrain drawn in blocks, sleeping bosses and distant boats no longer drawn, the Ferris wheel and the hero avatars drawn in far fewer calls.
+- **Shaders are built while the game loads.** Before, every material was compiled the first time it came into view, which caused small stutters in the first minutes of play, and Auto resolution could mistake those for an overloaded GPU and lower the resolution. In the test run 78 shader programs are now ready before the first frame and 12 are built later, instead of 74 during play.
+- **90 fps option**, and on Android the game now asks the screen for the matching refresh rate (60, 90 or 120 Hz).
+- **Upscaling (FSR-style)** in Menu → Graphics: Ultra Quality, Quality, Balanced or Performance render the 3D scene at a lower resolution and rebuild it sharp at screen resolution. It works on every GPU: NVIDIA, AMD, Intel and phones. (NVIDIA DLSS itself needs a native DirectX or Vulkan engine and cannot run in this one.)
+- **Stress test** in Menu → Performance: six heavy scenes played on rails for about a minute. It shows this device's average frame rate, 1% low, worst frame, draw calls and triangles, and suggests settings.
+
+**Also**
+- **Chai is a hobby, not a task.** The opening chai mission is gone. Making a cup at any stall or kitchen is simply how Vikas unwinds: it heals the team and leaves them relaxed (slow healing) for three minutes.
+- Mira wears her black tactical outfit.
+
 ## Daman Duo — v1.11 "Countryside" update
 
 **What's new in 1.11**

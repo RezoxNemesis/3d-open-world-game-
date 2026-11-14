@@ -1,5 +1,6 @@
 // Shared GLSL snippets + global uniforms
 import * as THREE from 'three';
+import { injectFade, markFadeable } from './fade.js';
 export const U = {
   uTime: { value: 0 }, uNight: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
   uSunColor: { value: new THREE.Color(1, 1, 1) }, uZenith: { value: new THREE.Color(0.3, 0.5, 0.9) },
@@ -18,7 +19,8 @@ float fbm2(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*vn(p); p*=2.03;
 `;
 // inject helper into a material
 function hashStr(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
-export function patch(mat, fn, key = '') { const k = hashStr(fn.toString()) + key + JSON.stringify(mat.defines || {}); mat.onBeforeCompile = (s) => { fn(s); }; mat.customProgramCacheKey = () => k; return mat; }
+// every patched material also understands the distance/time dissolve (fade.js)
+export function patch(mat, fn, key = '') { const k = hashStr(fn.toString()) + key + JSON.stringify(mat.defines || {}) + '|dd'; const dd = !mat.isMeshDepthMaterial && !mat.isMeshDistanceMaterial; mat.onBeforeCompile = (s) => { fn(s); if (dd) injectFade(s); }; mat.customProgramCacheKey = () => k; markFadeable(mat); return mat; }
 
 // boss beacons: a soft column of light with feathered edges that fades out toward the top and disappears when you are close
 export function beaconMaterial(color, opacity = 0.22, near = 260) {

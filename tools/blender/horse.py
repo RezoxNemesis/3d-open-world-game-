@@ -240,6 +240,15 @@ if __name__ == '__main__':
     me.materials.clear()
     weights(horse)
     rig = armature()
+    # phone version: same weights on a third of the triangles
+    lod = horse.copy(); lod.data = horse.data.copy(); link(lod)
+    dm = lod.modifiers.new('d', 'DECIMATE'); dm.ratio = 0.3; apply_all(lod)
+    lod.parent = rig; ml = lod.modifiers.new('arm', 'ARMATURE'); ml.object = rig
+    bpy.ops.object.select_all(action='DESELECT'); lod.select_set(True); rig.select_set(True); bpy.context.view_layer.objects.active = rig
+    bpy.ops.export_scene.gltf(filepath=f'{OUT}/horse_lod.glb', export_format='GLB', use_selection=True, export_yup=True, export_vertex_color='NAME', export_vertex_color_name='Col',
+                              export_texcoords=True, export_normals=True, export_materials='NONE', export_skins=True, export_animations=False, export_apply=False, export_def_bones=False)
+    print('HORSE LOD tris', sum(len(p.vertices) - 2 for p in lod.data.polygons), flush=True)
+    bpy.data.objects.remove(lod, do_unlink=True)
     horse.parent = rig; mod = horse.modifiers.new('arm', 'ARMATURE'); mod.object = rig
     bpy.ops.object.select_all(action='DESELECT'); horse.select_set(True); rig.select_set(True); bpy.context.view_layer.objects.active = rig
     bpy.ops.export_scene.gltf(filepath=f'{OUT}/horse.glb', export_format='GLB', use_selection=True, export_yup=True, export_vertex_color='NAME', export_vertex_color_name='Col',

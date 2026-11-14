@@ -287,6 +287,6 @@ export function buildEstates(scene, q, baseMats, TX, regLod, addCol) {
     const g = new THREE.Group(), B = new Bag();
     for (const e of list) estate(B, e);
     B.build(mats, g); scene.add(g);
-    regLod(g, (k % 1000) * size - M.HALF + size / 2, Math.floor(k / 1000) * size - M.HALF + size / 2, Math.min(q.bldFar || 3000, 2600));
+    regLod(g, (k % 1000) * size - M.HALF + size / 2, Math.floor(k / 1000) * size - M.HALF + size / 2, Math.min(q.bldFar || 3000, 2600), size * 0.72);
   }
 }
