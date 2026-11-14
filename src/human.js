@@ -456,6 +456,14 @@ export const Pose = {
       case 'kick': return { ...base, spine: [-0.35 * e, 0, 0], thighR: [-1.7 * e, 0, -0.05], shinR: [1.6 * (1 - e) + 0.05, 0, 0], footR: [0.4, 0, 0], armL: [-0.5, 0, 0.6], armR: [-0.4, 0, -0.6] };
       case 'round': return { ...base, hips: [0, 1.2 * e, 0.0], spine: [0, 0, -0.5 * e], thighR: [-1.2 * e, 0, -1.3 * e], shinR: [1.2 * (1 - e), 0, 0], armL: [-0.6, 0, 0.9], armR: [-0.2, 0, -0.9] };
       case 'flykick': return { ...base, spine: [-0.4 * e, 0, 0], thighR: [-1.6 * e, 0, 0], shinR: [0.2, 0, 0], thighL: [-1.2, 0, 0], shinL: [1.8, 0, 0], armL: [-0.8, 0, 1.1], armR: [-0.8, 0, -1.1], hipY: 0.1 };
+      case 'elbow': return { ...base, hips: [0, -0.45 * e, 0], chest: [0.15, -0.75 * e, 0], armR: [-1.35, -0.5 * e, -0.35 - 0.45 * e], foreR: [-2.5, 0, 0], thighR: [0.3 * e, 0, -0.1] };
+      case 'sweep': return { ...base, hips: [0.35 * e, 2.2 * k, 0], spine: [0.3 * e, 0, 0], thighL: [-1.3 * e, 0, 0.3], shinL: [1.9 * e, 0, 0], thighR: [-0.25, 0, -1.25 * e], shinR: [0.1, 0, 0], armL: [-0.4, 0, 1.0], armR: [-0.4, 0, -1.0], hipY: -0.55 * e };
+      case 'spinkick': return { ...base, hips: [0, Math.PI * 2 * Math.min(k * 1.15, 1), 0], spine: [-0.2 * e, 0, -0.45 * e], thighR: [-0.4 * e, 0, -1.45 * e], shinR: [0.15, 0, 0], footR: [0.3, 0, 0], thighL: [-0.2, 0, 0.1], shinL: [0.4 * e, 0, 0], armL: [-0.5, 0, 1.2 * e], armR: [-0.5, 0, -1.0 * e], hipY: 0.05 * e };
+      case 'slam': { const up = k < 0.5 ? k / 0.5 : Math.max(0, 1 - (k - 0.5) / 0.22), dn = k > 0.5 ? Math.min(1, (k - 0.5) / 0.15) : 0;
+        return { ...base, spine: [-0.25 * up + 0.7 * dn, 0, 0], neck: [-0.2 * dn, 0, 0], armL: [-0.9 - 2.0 * up + 0.4 * dn, 0, 0.12], foreL: [-0.4, 0, 0], armR: [-0.9 - 2.0 * up + 0.4 * dn, 0, -0.12], foreR: [-0.4, 0, 0], thighL: [-0.7 * dn, 0, 0.25], shinL: [1.1 * dn, 0, 0], thighR: [0.2 * dn, 0, -0.25], shinR: [0.9 * dn, 0, 0], hipY: 0.12 * up - 0.4 * dn }; }
+      case 'counter': return { ...base, chest: [0.1, -0.7 * e, 0], armL: [-1.55, 0, 0.1], foreL: [-0.6, 0, 0], armR: [-1.6, 0, -0.3 + 0.25 * e], foreR: [-1.9 + 1.9 * e, 0, 0], thighR: [0.45 * e, 0, -0.1], hips: [0, -0.35 * e, 0] };
+      case 'stomp': { const up = Math.sin(Math.min(k / 0.55, 1) * Math.PI * 0.5), dn = k > 0.55 ? Math.min(1, (k - 0.55) / 0.12) : 0;
+        return { ...base, spine: [0.25 + 0.2 * dn, 0, 0], thighR: [-1.4 * up * (1 - dn) - 0.3 * dn, 0, -0.1], shinR: [1.7 * up * (1 - dn) + 0.2 * dn, 0, 0], footR: [0.3, 0, 0], armL: [-0.4, 0, 0.8], armR: [-0.4, 0, -0.8], hipY: -0.08 - 0.1 * dn }; }
       case 'block': return { ...base, armL: [-1.9, 0, 0.1], foreL: [-2.2, 0, 0], armR: [-1.9, 0, -0.1], foreR: [-2.2, 0, 0], chest: [0.15, 0, 0] };
       default: return base;
     }

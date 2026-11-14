@@ -34,7 +34,7 @@ async function start(opts) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = q.desktop ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   hud.loading(true);
-  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M;
+  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M; window.__press = (a) => { input.pressed.add(a); input.held.add(a); setTimeout(() => input.held.delete(a), 0); };
   if (opts.newGame) try { localStorage.removeItem('damanduo.save'); } catch (e) {}
   const t0 = performance.now();
   await game.init(async (msg, p) => { hud.progress(msg, p); await nextFrame(); });
@@ -130,6 +130,8 @@ function setupTests(game) {
       game.camOverride = () => { const f = v.forward, r = new THREE.Vector3(-Math.cos(v.yaw), 0, Math.sin(v.yaw)); return { pos: v.pos.clone().addScaledVector(f, 2.2).addScaledVector(r, 2.6).add(new THREE.Vector3(0, 1.3, 0)), look: v.pos.clone().add(new THREE.Vector3(0, 0.9, 0)) }; }; step(2); },
     police_chase: () => { const v = game.vehicles.find((v) => v.key === 'agni'); at(v.pos.x + 2, v.pos.z, 0); game.enterVehicle(v); game.npcs.crime(3); input.tx = 0; input.ty = 0.6; for (let i = 0; i < 420; i++) game.update(1 / 20); input.ty = 0; game.sky.hour = 20.5;
       const u = game.police.units[0]; if (u) game.camOverride = () => ({ pos: u.v.pos.clone().add(new THREE.Vector3(6, 3.2, 8)), look: u.v.pos.clone().add(new THREE.Vector3(0, 0.8, 0)) }); step(2); game.npcs.wanted = 0; },
+    freeflow: () => { const p = game.player; at(-2238, -760, 0); game.sky.hour = 17.4; const foes = game.npcs.spawnGang(5, -2238, -752, false); for (const e of foes) { e.weapon = 0; e.pos.set(-2238 + (Math.random() - 0.5) * 7, p.pos.y, -755 + Math.random() * 5); }
+      for (let i = 0; i < 110; i++) { if (game.counterTarget(p)) window.__press('counter'); else if (i % 6 === 0) window.__press('click'); game.update(1 / 30); } game.rig.zoom = 1.3; game.rig.pitch = 0.18; step(1); },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

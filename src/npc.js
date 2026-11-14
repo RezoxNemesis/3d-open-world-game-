@@ -60,12 +60,14 @@ export class NPCs {
     const gangAlive = this.enemies.filter((e) => e.team === 'gang' && e.alive).length;
     if (gangAlive === 0) { this.gangRespawn -= dt; if (this.gangRespawn < 0 && g.playerPos().distanceTo(new THREE.Vector3(H.x, 0, H.z)) > 300) { this.spawnGang(8, H.x, H.z); this.gangRespawn = 120; } }
     // enemies
+    this.tokens = this.enemies.filter((e) => e.alive && e.ai && e.ai.wind > 0).length;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e.alive) { e.deadT = (e.deadT || 0) + dt; e.update(dt, {}); if (e.deadT > 25) { e.remove(); this.enemies.splice(i, 1); } continue; }
       const far = e.pos.distanceTo(g.playerPos());
       if (far > 400) { if (e.team === 'police' && this.wanted === 0) { e.remove(); this.enemies.splice(i, 1); } continue; }
       e.update(dt, this.think(e, dt));
+      this.marker(e);
     }
     for (let i = this.civs.length - 1; i >= 0; i--) {
       const c = this.civs[i]; c.life -= dt;
@@ -102,12 +104,28 @@ export class NPCs {
         if (Math.random() < dt * 0.6) ai.cd = 1 + Math.random() * 1.5;
       }
     } else {
-      if (d > 1.6) { ctl.move.copy(to); ctl.sprint = d > 6; }
-      else if (ai.cd < 0) { if (Math.random() < 0.65) ctl.attack = true; else ctl.kick = true; ai.cd = (ai.boss ? 0.5 : 0.8) + Math.random() * 0.8; }
+      // melee: wind up (telegraphed with a warning marker = counter window), then strike; foes without an
+      // attack token circle at a distance like a real street fight instead of mobbing all at once
+      if (ai.wind > 0) {
+        ai.wind -= dt; e.telegraph = ai.wind; if (d > 1.7) ctl.move.copy(to).multiplyScalar(0.6);
+        if (ai.wind <= 0) { e.telegraph = 0; if (ai.windKick) ctl.kick = true; else ctl.attack = true; ai.cd = (ai.boss ? 0.6 : 1.0) + Math.random() * 1.1; }
+      } else if (d > 3.2 || (d > 1.6 && this.tokens < 2)) { ctl.move.copy(to); ctl.sprint = d > 6; }
+      else if (this.tokens >= 2 && d < 3.6) { ctl.move.set(-to.z * ai.strafe * 0.5, 0, to.x * ai.strafe * 0.5); if (d < 2.4) ctl.move.addScaledVector(to, -0.5); if (Math.random() < dt * 0.4) ai.strafe *= -1; }
+      else if (ai.cd < 0 && d <= 1.9 && tgt.c.state !== 'down') { ai.wind = ai.boss ? 0.42 : 0.55 + Math.random() * 0.15; ai.windKick = Math.random() < 0.35; e.telegraph = ai.wind; this.tokens++; }
       if (d < 3 && Math.random() < 0.01) { ctl.aim = true; }
     }
     if (e.hp < e.maxHp * 0.2 && e.team === 'gang' && !ai.boss) { ctl.move.copy(to).multiplyScalar(-1); ctl.sprint = true; ctl.attack = false; ctl.fire = false; }
     return ctl;
+  }
+  // red warning ring over a foe that is about to strike (press COUNTER / right mouse while it shows)
+  marker(e) {
+    if (!(e.telegraph > 0) && !e.warn) return;
+    if (!e.warn) {
+      if (!NPCs.warnTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.strokeStyle = '#ff3d00'; x.lineWidth = 7; x.beginPath(); x.arc(32, 32, 24, 0, 7); x.stroke(); x.fillStyle = '#ffeb3b'; x.font = 'bold 34px sans-serif'; x.textAlign = 'center'; x.fillText('!', 32, 44); NPCs.warnTex = new THREE.CanvasTexture(c); }
+      e.warn = new THREE.Sprite(new THREE.SpriteMaterial({ map: NPCs.warnTex, depthTest: false, transparent: true })); e.warn.position.set(0, 2.3, 0); e.warn.renderOrder = 10; e.obj.add(e.warn);
+    }
+    const on = e.telegraph > 0 && e.alive; e.warn.visible = on;
+    if (on) { const k = 0.35 + 0.2 * Math.abs(Math.sin(this.game.time * 14)); e.warn.scale.set(k, k, k); }
   }
   clearAll() { for (const e of this.enemies) e.remove(); this.enemies.length = 0; for (const c of this.civs) this.despawnCiv(c); this.civs.length = 0; }
 }

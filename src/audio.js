@@ -262,7 +262,7 @@ export function updateAmbience(dt, s) {
 
 // ---------- voices (TTS) + subtitles ----------
 let speaking = false; const queue = [];
-const VOICE = { Vikas: { pitch: 0.92, rate: 1.02 }, Mira: { pitch: 1.18, rate: 1.04 }, Narrator: { pitch: 1, rate: 0.98 }, NPC: { pitch: 1.05, rate: 1.08 }, Gang: { pitch: 0.75, rate: 1.0 }, Naag: { pitch: 0.4, rate: 0.75 } };
+const VOICE = { Vikas: { pitch: 0.92, rate: 1.02 }, Mira: { pitch: 1.18, rate: 1.04 }, Arjun: { pitch: 0.8, rate: 0.98 }, Narrator: { pitch: 1, rate: 0.98 }, NPC: { pitch: 1.05, rate: 1.08 }, Gang: { pitch: 0.75, rate: 1.0 }, Naag: { pitch: 0.4, rate: 0.75 } };
 export function say(who, text, onDone) { queue.push({ who, text, onDone }); if (!speaking) nextLine(); }
 async function nextLine() {
   const l = queue.shift(); if (!l) { speaking = false; audio.subtitle = null; return; }

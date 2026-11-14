@@ -47,7 +47,13 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 - **Parkour:** climb walls, mantle, vault, roll, flip and swim.
 - **Web-swing** between towers, Spider-Man style.
 - **Skydive** and open a **parachute**, or glide.
-- **Fight** with jabs, crosses, hooks, uppercuts, kicks, roundhouses, flying kicks and blocks. Use a pistol or rifle. A wanted-star system brings the police after you.
+- **Fight with freeflow combat:**
+  - Vikas locks onto the enemy you push toward and lunges in for a five-hit chain: jab, cross, hook, elbow and uppercut. Kicks chain into sweeps.
+  - Every sixth hit becomes a slow-motion **finisher**: a spinning kick or a ground slam.
+  - Enemies flash a red **!** before they strike. Right-click, or tap COUNTER on the phone, to **counter**.
+  - Dodge through an attack for a **perfect dodge**, block, and take down enemies who are on the ground. A combo counter keeps score.
+  - You can also use a pistol or rifle. A wanted-star system brings the police after you.
+- **Friends:** Mira and **Arjun** follow you, fight beside you and ride with you.
 - **Make masala chai:** at a chai tapri or on the stove in any home kitchen. It heals you and your friend.
 - **Mythological bosses**, marked ☠ on the map and minimap. Start a fight from the map or from **Menu → Bosses → FIGHT**:
   - **Kaala Naag**, a 500 m cobra in Naag Sarovar. Its forehead gem is the weak point.
@@ -69,6 +75,7 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 | Turn | Move the mouse |
 | Look around freely | Hold the left button and drag |
 | Fight / fire / use | Left click (punch, shoot, web, or the selected power) |
+| Counter · block · dodge | Right click when a red **!** shows · hold right click · tap Shift |
 | Aim | Hold the right button. Left click fires the selected weapon or power; hold it to keep firing. |
 | Next weapon or power | Tab (Fists → Pistol → Rifle → Web Shooter → unlocked powers) |
 | Sprint · dodge roll · kick | Hold Shift · tap Shift · Shift + click |
