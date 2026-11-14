@@ -155,7 +155,8 @@ function buildRoads(scene, stoneMat, q) {
     if (nd.e.length < 3 || nd.elev) continue;
     let w = 0, side = 0; for (const ei of nd.e) { const E = M.edges[ei]; w = Math.max(w, E.w); if (['nani', 'moti', 'devka', 'jampore'].includes(E.zone) && E.type !== 'fort' && E.type !== 'village') side = 1; }
     w += side * 5.2;
-    const pts = [{ x: nd.x, z: nd.z - w / 2 - 1, y: M.terrainH(nd.x, nd.z) + 0.2, s: 0 }, { x: nd.x, z: nd.z + w / 2 + 1, y: M.terrainH(nd.x, nd.z) + 0.2, s: w + 2 }];
+    // follow the terrain every 2 m and sit 8 cm above the road ribbons, so the pad never z-fights with them
+    const pts = []; for (let k = 0, n = Math.max(2, Math.ceil((w + 2) / 2)); k <= n; k++) { const zz = nd.z - w / 2 - 1 + (w + 2) * k / n; pts.push({ x: nd.x, z: zz, y: M.terrainH(nd.x, zz) + 0.25, s: (w + 2) * k / n }); }
     cur = use(nd.x, nd.z);
     ribbon(pts, w + 2, -1, 9, w + 2, 0);
   }
@@ -181,7 +182,8 @@ function buildRoads(scene, stoneMat, q) {
         float across = (vRUV.x-0.5)*totalW, a = abs(across), v = vRUV.y;
         float camDr = length(vViewPosition), nearR = 1. - smoothstep(60., 110., camDr);
         float grain = vn(vWP.xz*0.4);
-        vec3 asph = tex2s(uAsphD, vWP.xz, 0.26).rgb*vec3(0.62,0.62,0.66);
+        // asphalt: keep the photo texture but tame the pixel-sized aggregate specks (they read as noise at game distances)
+        vec3 asph = tex2s(uAsphD, vWP.xz, 0.26).rgb; asph = mix(textureLod(uAsphD, vWP.xz*0.26, 7.0).rgb, asph, 0.45 + 0.4*(1.0 - smoothstep(2.0, 9.0, length(vViewPosition))))*vec3(0.62,0.62,0.66);
         rN = nearR > 0. ? unpackN(texture2D(uAsphN, vWP.xz*0.26), 0.8) : vec3(0.,0.,1.);
         if (tcode > 1.5 && tcode < 2.5) { asph = tex2s(uSoilD, vWP.xz, 0.3).rgb*1.05; rN = vec3(0.,0.,1.); }
         if (tcode > 2.5 && tcode < 3.5) { asph = texture2D(uCobD, vWP.xz*0.32).rgb*0.95; }
@@ -219,7 +221,7 @@ function buildRoads(scene, stoneMat, q) {
         if (lit > 0.5) { float dv = mod(v - 15., 38.) - 19.; pool = exp(-dv*dv/70.)*exp(-a*a/(w*w*0.4)); }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.,0.7,0.4)*pool*uNight*0.35;')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.88, 0.22, uWet);\ndiffuseColor.rgb *= mix(1.0, 0.55, uWet);')
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize((viewMatrix*vec4(nmapXZ(rN, vec3(0.,1.,0.)), 0.)).xyz);');
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nrN = normalize(mix(vec3(0.,0.,1.), rN, 1.0 - smoothstep(8., 45., length(vViewPosition))));\nnormal = normalize((viewMatrix*vec4(nmapXZ(rN, vec3(0.,1.,0.)), 0.)).xyz);\n// specular anti-aliasing: widen the highlight where the normal varies faster than a pixel (no sparkle on wet asphalt)\nfloat sv = length(fwidth(normal)); roughnessFactor = clamp(sqrt(roughnessFactor*roughnessFactor + sv*sv*4.0), 0.0, 1.0);');
   });
   for (const b of RB.values()) {
     if (!b.I.length) continue;

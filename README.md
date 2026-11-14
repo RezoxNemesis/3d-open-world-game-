@@ -1,6 +1,6 @@
 # Daman Duo
 
-An open-world 3D action game set in a 20 km × 20 km island version of **Daman, India**. You play as **Vikas**, with your friend Mira fighting and riding alongside you. The world is built in code with Three.js and WebGL2: terrain, buildings, people, cars, animals, bosses, sky, music and sound. Surfaces use CC0 photo-scanned textures from Poly Haven.
+An open-world 3D action game set in a 20 km × 20 km island version of **Daman, India**. You play as **Vikas**, with your friends Mira and Arjun fighting and riding alongside you. The world is built in code with Three.js and WebGL2: terrain, buildings, people, cars, animals, bosses, sky, music and sound. Surfaces use CC0 photo-scanned textures from Poly Haven. The three heroes are realistic scanned avatars from the Microsoft Rocketbox library (MIT).
 
 ## Download
 
@@ -114,7 +114,7 @@ python3 tools/render_test.py  # headless screenshot tests (needs playwright + Ch
 ## Notes
 
 - All vehicle brands (Vayu, Agni, Shera, Bison, Royal Amba, Sterling…) are fictional and inspired by real car classes.
-- The game aims for a realistic look on phone hardware. Models and animation are generated in code; ground, wall and roof surfaces use CC0 photo-scanned textures (see `assets/tex/CREDITS.md`).
+- The game aims for a realistic look on phone hardware. The world and its animation are generated in code. Ground, wall and roof surfaces use CC0 photo-scanned textures (`assets/tex/CREDITS.md`), and the heroes use Microsoft Rocketbox avatars under the MIT licence (`assets/avatars/CREDITS.md`).
 - The previous project in this repository, *Temple Realm* (Godot), is preserved on the `temple-realm-archive` branch.
 
 MIT License.

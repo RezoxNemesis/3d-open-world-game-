@@ -21,6 +21,7 @@ import { Serpent } from './serpent.js';
 import { Makara, Rakshasa } from './bosses.js';
 import { Underwater, REEF, WRECK } from './underwater.js';
 import { Police } from './police.js';
+import { loadAvatar, Avatar } from './avatars.js';
 import { NPCs } from './npc.js';
 import { Interiors } from './interiors.js';
 import { Weather, SEASONS } from './weather.js';
@@ -76,6 +77,8 @@ export class Game {
     this.mira = new Character(this, { female: true, skin: 0xd29b67, top: 0xb71c1c, bottom: 0x1c2733, shoes: 0xf0f0f0, sole: 0xffffff, hair: 0x120c08, hairStyle: 'pony', midriff: false, sleeves: 'short', jacket: null, eyes: 0x3b2314 }, { name: 'Mira', detail: 2, team: 'hero', x: sp.x + 1.5, z: sp.z - 1.5, yaw: sp.ang, hp: 190, runSpeed: 6.0, sprintSpeed: 10.2, jumpV: 7.8, climbSpeed: 4.6, powers: true, dmgMul: 1.0 });
     this.arjun = new Character(this, { skin: 0xa86b3c, top: 0x1f3a5f, bottom: 0x2b2b2b, shoes: 0x5d4037, sole: 0x2a221c, hair: 0x0a0806, hairStyle: 'short', beard: true, jacket: null, sleeves: 'short', eyes: 0x24160c, build: 1.08 }, { name: 'Arjun', detail: 2, team: 'hero', x: sp.x - 1.5, z: sp.z + 1.5, yaw: sp.ang, hp: 210, runSpeed: 5.8, sprintSpeed: 9.6, jumpV: 7.0, climbSpeed: 3.6, powers: false, dmgMul: 1.15 });
     this.heroes = [this.vikas, this.mira, this.arjun]; this.player = this.vikas; this.companion = this.mira; this.friends = [this.mira, this.arjun];
+    await progress('Dressing Vikas, Mira and Arjun', 0.985);
+    await this.loadAvatars();
     for (const h of this.heroes) h.weapon = 0;
     // parked vehicles
     for (const c of M.spawns.cars) this.addVehicle('car', c.key || (c.kind === 'super' ? 'rakshas' : c.kind === 'gt' ? 'agni' : 'bison'), c.color, c.x, c.z, c.ang);
@@ -414,6 +417,15 @@ export class Game {
       case 'chest': this.money += 15000; sfx('coin'); this.hud.toast('Treasure! + ₹15,000', 2.5, '#ffd54f'); this.interior.chest = null; break;
       case 'buy': if (this.money >= 500) { this.money -= 500; for (const h of this.heroes) h.armor = 100; for (const h of this.heroes) { h.ammo.pistol += 60; h.ammo.rifle += 120; } sfx('coin'); this.hud.toast('Armour + ammo', 2, '#4fc3f7'); } break;
     }
+  }
+  // realistic scanned bodies for the three heroes (procedural skeleton keeps driving them)
+  async loadAvatars() {
+    if (this.q.avatars === false) return;
+    const list = [[this.vikas, 'vikas', 1.79], [this.mira, 'mira', 1.67], [this.arjun, 'arjun', 1.8]];
+    await Promise.all(list.map(async ([c, n, h]) => {
+      try { const fbx = await loadAvatar(n); const av = new Avatar(n, fbx, c.h, h); if (!av.ok) return; av.calibrate(); c.avatar = av; c.sync(); }
+      catch (e) { console.warn('avatar ' + n + ' unavailable, using the procedural body', e && e.message); }
+    }));
   }
   // ---------------- photo mode: frozen world, free-flying camera, HUD hidden ----------------
   startPhoto() {

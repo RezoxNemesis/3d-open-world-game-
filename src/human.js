@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, lerp, damp } from './util.js';
-import { patch } from './shaders.js';
+import { patch, U } from './shaders.js';
 
 export const BONES = ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'shL', 'armL', 'foreL', 'handL', 'shR', 'armR', 'foreR', 'handR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR'];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i]));
@@ -323,18 +323,38 @@ export function humanMaterial() {
   if (!matCache.has('h')) {
     const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.0 });
     patch(m, (sh) => {
+      sh.uniforms.uSunC = U.uSunColor; sh.uniforms.uAmbC = U.uAmbient;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aHM; varying float vHM; varying vec3 vLP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHM = aHM; vLP = position;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vHM; varying vec3 vLP; float hm(float k){ return step(k-0.5, vHM)*step(vHM, k+0.5); }')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+        varying float vHM; varying vec3 vLP; uniform vec3 uSunC, uAmbC;
+        float hm(float k){ return step(k-0.5, vHM)*step(vHM, k+0.5); }
+        // derivative bump mapping from a procedural height field (cloth folds, denim twill, hair strands)
+        vec3 bumpN(vec3 n, float h, vec3 sp){ vec3 dx = dFdx(sp), dy = dFdy(sp); vec3 r1 = cross(dy, n), r2 = cross(n, dx); float det = dot(dx, r1); vec3 g = sign(det)*(dFdx(h)*r1 + dFdy(h)*r2); return normalize(abs(det)*n - g); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          // denim twill + subtle cloth weave break up flat colours
-          float tw = fract((vLP.x + vLP.y*0.7)*260.0); diffuseColor.rgb *= mix(1.0, 0.86 + 0.14*step(0.5, tw), hm(7.) + hm(0.)*0.4);
-          diffuseColor.rgb *= 1.0 + hm(1.)*0.03*sin(vLP.y*900.0);`)
+          float camD = length(vViewPosition), fadeHF = 1.0 - smoothstep(1.2, 5.0, camD);
+          // denim twill + cloth weave + fabric fold shading break up flat colours
+          float tw = fract((vLP.x + vLP.y*0.7)*260.0); diffuseColor.rgb *= mix(1.0, 0.86 + 0.14*step(0.5, tw), (hm(7.) + hm(0.)*0.4)*(0.35 + 0.65*fadeHF));
+          float fold = sin(vLP.y*44.0 + sin(vLP.x*31.0 + vLP.z*27.0)*1.8)*0.5 + 0.5;
+          diffuseColor.rgb *= 1.0 - (hm(0.) + hm(7.) + hm(3.)*0.7)*0.07*(1.0 - fold);
+          diffuseColor.rgb *= 1.0 + hm(1.)*0.03*sin(vLP.y*900.0);
+          diffuseColor.rgb *= 1.0 - hm(2.)*0.18*(sin(vLP.x*700.0 + sin(vLP.y*60.0)*4.0)*0.5 + 0.5)*fadeHF;`)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-          roughnessFactor = hm(0.)*0.85 + hm(1.)*0.55 + hm(2.)*0.7 + hm(3.)*0.48 + hm(4.)*0.06 + hm(5.)*0.92 + hm(6.)*0.3 + hm(7.)*0.9;`)
+          roughnessFactor = hm(0.)*0.85 + hm(1.)*0.52 + hm(2.)*0.55 + hm(3.)*0.42 + hm(4.)*0.06 + hm(5.)*0.92 + hm(6.)*0.3 + hm(7.)*0.9;`)
         .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = hm(6.);')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          float hgt = (hm(0.) + hm(7.)*0.8 + hm(3.)*0.7) * fold * 0.006
+            + hm(7.) * step(0.5, fract((vLP.x + vLP.y*0.7)*160.0)) * 0.0005 * fadeHF
+            + hm(2.) * sin(vLP.x*700.0 + sin(vLP.y*60.0)*4.0) * 0.0007 * fadeHF
+            + hm(3.) * sin(vLP.x*170.0 + vLP.y*230.0) * sin(vLP.z*190.0 - vLP.y*120.0) * 0.0012 * fadeHF;
+          if (hm(4.) + hm(6.) < 0.5) normal = bumpN(normal, hgt, -vViewPosition);`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          // cheap subsurface: skin picks up a little warm light even on the shadow side
-          totalEmissiveRadiance += diffuseColor.rgb*vec3(0.11,0.045,0.03)*hm(1.);`);
+          // skin: soft subsurface glow scaled by the ambient light (no glowing faces at night);
+          // cloth + skin: grazing-angle sheen; hair: a soft anisotropic band highlight
+          float lum = dot(uSunC, vec3(0.3, 0.59, 0.11)) + dot(uAmbC, vec3(0.3, 0.59, 0.11));
+          float rim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+          totalEmissiveRadiance += diffuseColor.rgb*vec3(0.15,0.055,0.035)*hm(1.)*(0.15 + 0.85*clamp(lum, 0.0, 1.2));
+          totalEmissiveRadiance += diffuseColor.rgb*uSunC*rim*(hm(0.)*0.22 + hm(7.)*0.15 + hm(1.)*0.18);
+          totalEmissiveRadiance += vec3(0.9,0.85,0.8)*uSunC*hm(2.)*pow(max(0.0, sin(vLP.y*38.0 + vLP.x*6.0)), 24.0)*0.05*(0.3 + rim);`);
     }, 'human2');
     matCache.set('h', m);
   }

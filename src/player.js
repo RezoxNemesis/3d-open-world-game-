@@ -434,6 +434,7 @@ export class Character {
     H.apply(P, dt, this.state === 'roll' || this.flipT >= 0 || this.atk ? 26 : this.state === 'dead' ? 8 : 13);
     // tilt body into swings / glide
     if (this.state === 'glide') this.obj.rotation.x = 0;
+    if (this.avatar) this.avatar.update();
   }
   remove() { this.game.scene.remove(this.obj); }
 }
