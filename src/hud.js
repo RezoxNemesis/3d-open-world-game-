@@ -172,7 +172,8 @@ export class HUD {
     const P = g.playerPos(); c.fillStyle = '#00e5ff'; c.beginPath(); c.arc(X(P.x), Z(P.z), 9, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke();
     for (const mk of g.markers()) {
       if (mk.boss) { c.fillStyle = mk.color; c.beginPath(); c.arc(X(mk.x), Z(mk.z), 16, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke(); c.fillStyle = '#fff'; c.font = 'bold 18px sans-serif'; c.fillText('☠', X(mk.x), Z(mk.z) + 6); c.font = 'bold 15px sans-serif'; c.fillStyle = '#000a'; c.fillText('BOSS: ' + mk.boss, X(mk.x) + 1, Z(mk.z) - 21); c.fillStyle = mk.color; c.fillText('BOSS: ' + mk.boss, X(mk.x), Z(mk.z) - 22); }
-      else { c.fillStyle = '#ffeb3b'; c.fillRect(X(mk.x) - 7, Z(mk.z) - 7, 14, 14); }
+      else if (mk.mission) { c.fillStyle = '#ffca28'; c.beginPath(); c.arc(X(mk.x), Z(mk.z), 11, 0, 7); c.fill(); c.strokeStyle = '#000'; c.lineWidth = 2; c.stroke(); c.fillStyle = '#000'; c.font = 'bold 13px sans-serif'; c.fillText('M', X(mk.x) - 5, Z(mk.z) + 5); c.font = 'bold 12px sans-serif'; c.fillStyle = '#000a'; c.fillText(mk.mission, X(mk.x) + 14, Z(mk.z) + 5); c.fillStyle = '#ffe082'; c.fillText(mk.mission, X(mk.x) + 13, Z(mk.z) + 4); }
+      else { c.fillStyle = mk.color || '#ffeb3b'; c.fillRect(X(mk.x) - 7, Z(mk.z) - 7, 14, 14); }
     }
     this.mapEl.style.display = 'flex';
   }

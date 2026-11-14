@@ -119,7 +119,7 @@ export class Game {
   playerPos() { const p = this.player; if (p.vehicle) return p.vehicle.pos; if (p.mount) return p.mount.pos; return p.pos; }
   camDist(p) { return this.cam.position.distanceTo(p); }
   shake(a) { fx.shake = Math.max(fx.shake, a); }
-  markers() { const m = this.missions.markers(); for (const b of this.bosses || []) if (!b.defeated && !b.active) { const h = b.home(); m.push({ x: h.x, z: h.z, color: b.color || '#d500f9', boss: b.name }); } return m; }
+  markers() { const m = this.missions.markers(); for (const st of this.missions.starts()) m.push({ x: st.x, z: st.z, color: '#ffd54f', mission: st.m.name }); for (const b of this.bosses || []) if (!b.defeated && !b.active) { const h = b.home(); m.push({ x: h.x, z: h.z, color: b.color || '#d500f9', boss: b.name }); } return m; }
   threatAt(pos) {
     for (const t of this.threats) if (this.time - t.t < 6 && t.p.distanceTo(pos) < t.r) return t.p;
     const P = this.player; if (!P.vehicle && P.pos.distanceTo(pos) < (P.state === 'web' ? 25 : 7)) return P.pos;
@@ -383,6 +383,7 @@ export class Game {
     if (p.mount) return { label: 'Dismount', id: 'dismount' };
     if (this.interior.active) return this.interior.action(p.pos);
     if ((p.state === 'dive' || p.state === 'swim') && this.uw) { const a = this.uw.action(p.pos); if (a) return a; }
+    if (p.state === 'ground') { const st = this.missions.nearStart(p.pos); if (st) return { label: 'Start mission: ' + st.m.name, id: 'mission', m: st.m }; }
     if (p.state !== 'ground' && p.state !== 'swim') return null;
     let bv = null, bd = 4.5; for (const v of this.vehicles) { if (v.dead || v.driver) continue; const d = v.pos.distanceTo(p.pos) - (v.len || 4) * 0.3; if (d < bd) { bd = d; bv = v; } }
     if (bv) return { label: (bv.kind === 'car' ? 'Drive ' : bv.kind === 'boat' ? 'Drive ' : 'Fly ') + bv.spec.name, id: 'enterv', v: bv };
@@ -409,6 +410,7 @@ export class Game {
       case 'exit': this.leaveInterior(); break;
       case 'shrine': { this.leaveInterior(); this.missions.event('shrine'); const s = this.serpent; p.pos.set(M.PLAT.lx - 330, 0, M.PLAT.lz - 120); p.pos.y = M.groundAt(p.pos.x, p.pos.z); if (!this.missions.cur) s.awaken(); this.hud.toast('NAAG SAROVAR', 2, '#e040fb'); break; }
       case 'seachest': this.uw.open(a.c); break;
+      case 'mission': this.missions.start(a.m.id); break;
       case 'chest': this.money += 15000; sfx('coin'); this.hud.toast('Treasure! + ₹15,000', 2.5, '#ffd54f'); this.interior.chest = null; break;
       case 'buy': if (this.money >= 500) { this.money -= 500; for (const h of this.heroes) h.armor = 100; for (const h of this.heroes) { h.ammo.pistol += 60; h.ammo.rifle += 120; } sfx('coin'); this.hud.toast('Armour + ammo', 2, '#4fc3f7'); } break;
     }
@@ -419,7 +421,7 @@ export class Game {
     if (!c.alive || c.state === 'seated') return ctl;
     c.setVisible(true);
     if (L.vehicle) { const vp = L.vehicle.pos; if (c.pos.distanceTo(vp) > 60) { c.pos.set(vp.x - 4, M.groundAt(vp.x - 4, vp.z - 4), vp.z - 4); c.state = 'ground'; c.vel.set(0, 0, 0); } return ctl; }
-    const foe = this.nearestFoe(c, 22);
+    const foe = c.holdBack ? null : this.nearestFoe(c, 22);
     if (foe && foe.ai && foe.ai.alert) {
       const to = new V3().subVectors(foe.pos, c.pos); to.y = 0; const d = to.length(); to.normalize();
       if (d > 1.5) { ctl.move.copy(to); ctl.sprint = d > 6; } else if ((c.cmpCd = (c.cmpCd || 0) - dt) < 0) { if (Math.random() < 0.6) ctl.attack = true; else ctl.kick = true; c.cmpCd = 0.5 + Math.random() * 0.5; }
