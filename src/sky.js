@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { U, NOISE } from './shaders.js';
+import { assetURL, EMBEDDED } from './textures.js';
 import { smooth, lerp, clamp } from './util.js';
 
 export class SkySystem {
@@ -122,13 +123,13 @@ export class SkySystem {
   // photo sky keyframes (assets/sky): each HDRI is placed at the hour where our sun has the same elevation
   async loadPhotoSky(q) {
     try {
-      const meta = await (await fetch('assets/sky/skies.json')).json(), res = q.desktop ? '4k' : '2k', loader = new THREE.TextureLoader();
+      const meta = await (await fetch(assetURL('assets/sky/skies.json'))).json(), res = q.desktop && !EMBEDDED() ? '4k' : '2k', loader = new THREE.TextureLoader();
       const elev = (h) => { const th = (h - 6) / 12 * Math.PI, x = Math.cos(th), y = Math.sin(th) * 0.93, z = 0.727; return Math.asin(y / Math.hypot(x, y, z)) * 180 / Math.PI; };
       const solve = (el, a, b) => { for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((elev(m) - el) * (elev(a) - el) <= 0) b = m; else a = m; } return (a + b) / 2; };
       const K = meta.keys, hours = { night: 21.2, dawn: 5.45, sunrise: solve(K.sunrise.sunEl, 5.5, 12), morning: solve(K.morning.sunEl, 5.5, 12), noon: 12.6,
         afternoon: solve(K.afternoon.sunEl, 12, 18.5), golden: solve(K.golden.sunEl, 12, 18.5), sunset: solve(K.sunset.sunEl, 12, 18.5) };
       hours.dusk = hours.sunset + 0.75; hours.bluehour = hours.dusk + 0.55;
-      const load = (k) => new Promise((ok, bad) => loader.load(`assets/sky/${res}/${k}.jpg`, (t) => { t.colorSpace = THREE.NoColorSpace; t.generateMipmaps = false; t.minFilter = t.magFilter = THREE.LinearFilter; t.wrapS = THREE.RepeatWrapping; ok(t); }, undefined, bad));
+      const load = (k) => new Promise((ok, bad) => loader.load(assetURL(`assets/sky/${res}/${k}.jpg`), (t) => { t.colorSpace = THREE.NoColorSpace; t.generateMipmaps = false; t.minFilter = t.magFilter = THREE.LinearFilter; t.wrapS = THREE.RepeatWrapping; ok(t); }, undefined, bad));
       const keys = [];
       for (const k of Object.keys(hours)) keys.push({ k, h: hours[k], tex: await load(k), ...K[k] });
       keys.sort((a, b) => a.h - b.h);

@@ -3,6 +3,9 @@
 import * as THREE from 'three';
 
 export const TEX = {};
+// asset path -> URL (the single-file web build embeds some assets as data URLs)
+export const assetURL = (p) => (window.__DD_ASSETS && window.__DD_ASSETS[p]) || p;
+export const EMBEDDED = () => !!window.__DD_ASSETS;
 const KEYS = { sand: 1, grass: 1, forest: 1, soil: 1, ground: 1, rock: 1, asphalt: 1, pavers: 1, cobble: 0, fortwall: 1, plaster: 1, stained: 1, cracked: 0, brick: 1, rooftile: 1, shutter: 0, tin: 0, wood: 0, bark: 0 };
 
 export async function loadTextures(renderer, q, progress) {
