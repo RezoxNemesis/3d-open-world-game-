@@ -225,8 +225,18 @@ export function updateEngine(L, rpm, load, vol) {
   L.g.gain.setTargetAtTime(vol, t, 0.05);
   if (L.type === 'heli') L.rate.setTargetAtTime(10 + rpm * 14, t, 0.1);
   else if (L.type === 'jet') { L.osc.frequency.setTargetAtTime(200 + rpm * 900, t, 0.1); L.bp.frequency.setTargetAtTime(500 + rpm * 2500, t, 0.1); }
-  else { const f = (L.type === 'auto' ? 70 : L.type === 'super' ? 55 : 40) + rpm * (L.type === 'super' ? 260 : 170); L.osc.frequency.setTargetAtTime(f, t, 0.04); L.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.04); L.lp.frequency.setTargetAtTime(500 + load * 2500 + rpm * 800, t, 0.05); }
+  else { const f = (L.type === 'auto' ? 70 : L.type === 'super' ? 55 : L.type === 'bike' ? 30 : 40) + rpm * (L.type === 'super' ? 260 : L.type === 'bike' ? 240 : 170); L.osc.frequency.setTargetAtTime(f, t, 0.04); L.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.04); L.lp.frequency.setTargetAtTime(500 + load * 2500 + rpm * 800, t, 0.05); }
 }
+// police siren: a wailing two-oscillator tone swept by a slow LFO (one shared voice for the whole pursuit)
+export function sirenLoop() {
+  if (!ctx) return null;
+  const L = new Loop('sfx'), o = ctx.createOscillator(), o2 = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), lg2 = ctx.createGain(), bp = ctx.createBiquadFilter(), mix = ctx.createGain();
+  o.type = 'sawtooth'; o2.type = 'triangle'; o.frequency.value = 760; o2.frequency.value = 765 * 1.5; lfo.frequency.value = 0.42; lg.gain.value = 330; lg2.gain.value = 495;
+  lfo.connect(lg); lg.connect(o.frequency); lfo.connect(lg2); lg2.connect(o2.frequency);
+  bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.8; mix.gain.value = 0.18; o.connect(bp); o2.connect(bp); bp.connect(mix); mix.connect(L.g);
+  o.start(); o2.start(); lfo.start(); L.nodes = [o, o2, lfo]; L.type = 'siren'; return L;
+}
+export function updateSiren(L, vol) { if (!L) return; L.g.gain.setTargetAtTime(vol, ctx.currentTime, 0.15); }
 export function stopLoop(L) { if (!L) return; L.g.gain.setTargetAtTime(0, ctx.currentTime, 0.1); setTimeout(() => { for (const n of L.nodes) try { n.stop(); } catch (e) {} L.g.disconnect(); }, 600); }
 const amb = {};
 function initAmbience() {

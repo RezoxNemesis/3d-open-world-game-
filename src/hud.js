@@ -65,7 +65,7 @@ export class HUD {
     const B = [
       ['atk', 'PUNCH', 'attack', 30, 40, 1], ['jump', 'JUMP', 'jump', 30, 140], ['kick', 'KICK', 'kick', 130, 30], ['sprint', 'SPRINT', 'sprint', 112, 118, 0, 1], ['web', 'WEB', 'web', 200, 70],
       ['aim', 'AIM', 'aim', 210, 160, 0, 1], ['roll', 'ROLL', 'roll', 285, 30], ['act', 'F', 'interact', 30, 225], ['gun', 'GUN', 'weapon', 200, 245],
-      ['chute', 'CHUTE', 'chute', 290, 120], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
+      ['chute', 'CHUTE', 'chute', 290, 120], ['dive', 'DIVE ▼', 'down', 120, 40], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
       ['hand', 'DRIFT', 'jump', 30, 140], ['nitro', 'NITRO', 'sprint', 112, 118], ['exit', 'EXIT', 'interact', 30, 225], ['horn', 'HORN', 'horn', 130, 30], ['gallop', 'GALLOP', 'sprint', 30, 40, 1], ['cam', 'CAM', 'camera', 200, 245],
     ];
     this.tb = {};
@@ -78,7 +78,7 @@ export class HUD {
     }
     this.modeSets = {
       foot: ['atk', 'jump', 'kick', 'sprint', 'web', 'aim', 'roll', 'gun'], air: ['atk', 'jump', 'web', 'chute', 'gun'], fly: ['up', 'down', 'atk', 'boost', 'gun'], glide: ['chute', 'web'], chute: ['down'],
-      swim: ['jump', 'sprint'], car: ['hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
+      swim: ['jump', 'sprint', 'dive'], dive: ['up', 'down', 'sprint'], car: ['hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
       horse: ['gallop', 'jump', 'exit', 'cam'], boat: ['exit', 'horn', 'cam'], busy: [], climb: ['jump', 'web', 'sprint'],
     };
     this.curMode = '';
@@ -221,7 +221,9 @@ export class HUD {
     <p><b>Cars:</b> <kbd>W</kbd>/<kbd>S</kbd> gas/brake · <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>Space</kbd> handbrake drift · <kbd>Shift</kbd> nitro · Left click horn · <kbd>Enter</kbd> exit.<br>
     <b>Helicopter:</b> <kbd>WASD</kbd> fly · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · Left mouse guns.<br>
     <b>Jets:</b> <kbd>W</kbd>/<kbd>S</kbd> pitch · <kbd>A</kbd>/<kbd>D</kbd> roll · <kbd>←</kbd>/<kbd>→</kbd> rudder · <kbd>↑</kbd>/<kbd>Space</kbd> throttle up · <kbd>↓</kbd> throttle down · <kbd>Shift</kbd> afterburner · Left mouse cannon · Right click missile · <kbd>Enter</kbd> eject (parachute!).<br>
-    <b>Horse:</b> <kbd>WASD</kbd> · <kbd>Shift</kbd> tap repeatedly to gallop · <kbd>Space</kbd> jump · <kbd>Enter</kbd> dismount.</p>
+    <b>Horse:</b> <kbd>WASD</kbd> · <kbd>Shift</kbd> tap repeatedly to gallop · <kbd>Space</kbd> jump · <kbd>Enter</kbd> dismount.<br>
+    <b>Motorbikes:</b> like cars — <kbd>W</kbd>/<kbd>S</kbd>, <kbd>A</kbd>/<kbd>D</kbd> to lean into turns, <kbd>Shift</kbd> nitro on the superbike.<br>
+    <b>Swimming &amp; diving:</b> look down with the mouse and swim forward to dive · steer with the mouse · <kbd>Shift</kbd> swim fast · <kbd>Space</kbd> swim up · watch your AIR · <kbd>Enter</kbd> opens sunken treasure chests (10 at Jampore Reef and the São Jerónimo wreck).</p>
     <p><b>Things to do:</b> story missions (menu), street fights, gang hideout at Kachigam Docks, enter any building, make chai, explore caves, climb the 260 m Sky Tower and skydive, ride horses along Jampore beach, fly a fighter jet over the Arabian Sea, find the serpent of Naag Sarovar.</p>
     <button class="btn" id="helpclose">GOT IT</button>`;
     p.querySelector('#helpclose').onclick = () => this.showHelp(false);

@@ -65,6 +65,7 @@ async function start(opts) {
 function setupTests(game) {
   const undo = [];
   const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); game.render(); };
+  const WRECKX = () => M.coastX(3320) - 300;
   const at = (x, z, yaw) => { const p = game.player; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
   const S = {
     spawn: () => { game.sky.hour = 17.2; step(8); },
@@ -116,6 +117,19 @@ function setupTests(game) {
     villa_night: () => { const e = M.estates.find((e) => e.kind === 'villa') || M.estates[0], H = e.house, hx = (H.x0 + H.x1) / 2; at(hx, e.pool.z0 + e.face * 10, 0); game.sky.hour = 21;
       game.camOverride = () => ({ pos: new THREE.Vector3(hx - 10, e.y + 5, (e.pool.z0 + e.pool.z1) / 2 + e.face * 16), look: new THREE.Vector3(hx, e.y + 3.5, (H.z0 + H.z1) / 2) }); step(6); },
     mansion_interior: () => { const i = M.buildings.findIndex((b) => b.style === 5 && M.estates[b.estate].kind === 'mansion'), b = M.buildings[i]; game.enterInterior(game.interior.enter(b, i, 'mansion')); game.rig.zoom = 1.6; game.rig.pitch = 0.25; step(10); },
+    dive_wreck: () => { const w = game.uw.chests[0], p = game.player; at(w.x + 3, w.z - 10, 0.3); p.pos.y = w.y + 3; p.state = 'dive'; p.breath = 40; game.sky.hour = 11.5; game.rig.yaw = p.yaw + Math.PI + 0.5; game.rig.pitch = 0.05;
+      input.tx = 0; input.ty = 0.6; for (let i = 0; i < 20; i++) game.update(1 / 30); input.ty = 0; step(3); },
+    reef_fish: () => { const sc = game.uw.schools[1], p = game.player; at(sc.cx + sc.r + 6, sc.cz, -Math.PI / 2); p.pos.y = sc.y; p.state = 'dive'; game.sky.hour = 13; game.rig.yaw = p.yaw + Math.PI; game.rig.pitch = 0.0; step(6); },
+    wreck_view: () => { const p = game.player; at(WRECKX() + 30, 3300, 0); p.pos.y = M.terrainH(p.pos.x, p.pos.z) + 4; p.state = 'dive'; game.sky.hour = 12;
+      game.camOverride = () => ({ pos: new THREE.Vector3(WRECKX() + 26, -5, 3300 + 18), look: new THREE.Vector3(WRECKX(), -9, 3320) }); step(4); },
+    sea_plunge: () => { const p = game.player, x = M.coastX(3100) - 140; at(x, 3100, -Math.PI / 2); p.pos.y = 40; p.state = 'air'; p.vel.set(0, -20, 0); game.sky.hour = 10; for (let i = 0; i < 30; i++) game.update(1 / 30); step(2); },
+    reef_above: () => { const x = M.coastX(3300) - 120; at(x + 60, 3300, -Math.PI / 2); game.sky.hour = 12.5; game.camOverride = () => ({ pos: new THREE.Vector3(x + 25, 14, 3330), look: new THREE.Vector3(x - 40, -4, 3300) }); step(4); },
+    bikes_parked: () => { at(-2238, -845, -Math.PI / 2); game.sky.hour = 16.8; game.camOverride = () => ({ pos: new THREE.Vector3(-2239.4, M.groundAt(-2240, -850) + 1.2, -846.5), look: new THREE.Vector3(-2244.6, M.groundAt(-2244, -850) + 0.55, -851) }); step(4); },
+    bike_ride: () => { const v = game.vehicles.find((v) => v.key === 'vayurr'); at(v.pos.x + 1.5, v.pos.z, 0); game.enterVehicle(v); input.tx = 0; input.ty = 1; for (let i = 0; i < 60; i++) game.update(1 / 30); input.tx = -0.8; for (let i = 0; i < 14; i++) game.update(1 / 30); game.sky.hour = 17.5; step(1); input.tx = 0; input.ty = 0; },
+    classic_bike: () => { const v = game.vehicles.find((v) => v.key === 'thunder'); at(v.pos.x + 1.5, v.pos.z, 0); game.enterVehicle(v); input.tx = 0; input.ty = 1; for (let i = 0; i < 40; i++) game.update(1 / 30); input.tx = 0; input.ty = 0; game.sky.hour = 9.5;
+      game.camOverride = () => { const f = v.forward, r = new THREE.Vector3(-Math.cos(v.yaw), 0, Math.sin(v.yaw)); return { pos: v.pos.clone().addScaledVector(f, 2.2).addScaledVector(r, 2.6).add(new THREE.Vector3(0, 1.3, 0)), look: v.pos.clone().add(new THREE.Vector3(0, 0.9, 0)) }; }; step(2); },
+    police_chase: () => { const v = game.vehicles.find((v) => v.key === 'agni'); at(v.pos.x + 2, v.pos.z, 0); game.enterVehicle(v); game.npcs.crime(3); input.tx = 0; input.ty = 0.6; for (let i = 0; i < 420; i++) game.update(1 / 20); input.ty = 0; game.sky.hour = 20.5;
+      const u = game.police.units[0]; if (u) game.camOverride = () => ({ pos: u.v.pos.clone().add(new THREE.Vector3(6, 3.2, 8)), look: u.v.pos.clone().add(new THREE.Vector3(0, 0.8, 0)) }); step(2); game.npcs.wanted = 0; },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

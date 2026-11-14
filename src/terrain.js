@@ -111,7 +111,7 @@ export function terrainMaterial(TX, splat, q) {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
   mat.defines = { HIGHQ: q.desktop ? 1 : 0, NEARD: (q.desktop ? 320 : 150).toFixed(1) };
   patch(mat, (s) => {
-    Object.assign(s.uniforms, { uSplat: { value: splat }, uSeason: U.uSeason, uWet: U.uWet, uTime: U.uTime,
+    Object.assign(s.uniforms, { uSplat: { value: splat }, uSeason: U.uSeason, uWet: U.uWet, uTime: U.uTime, uSunCaus: U.uSunDir, uSunCausC: U.uSunColor,
       uGrassD: { value: TX.grass.d }, uGrassN: { value: TX.grass.n }, uForestD: { value: TX.forest.d }, uForestN: { value: TX.forest.n },
       uSoilD: { value: TX.soil.d }, uSoilN: { value: TX.soil.n }, uGroundD: { value: TX.ground.d }, uGroundN: { value: TX.ground.n },
       uSandD: { value: TX.sand.d }, uSandN: { value: TX.sand.n }, uRockD: { value: TX.rock.d }, uRockN: { value: TX.rock.n } });
@@ -120,7 +120,7 @@ export function terrainMaterial(TX, splat, q) {
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP; varying vec3 vWN;
       uniform sampler2D uSplat, uGrassD, uGrassN, uForestD, uForestN, uSoilD, uSoilN, uGroundD, uGroundN, uSandD, uSandN, uRockD, uRockN;
-      uniform vec4 uSeason; uniform float uWet, uTime;
+      uniform vec4 uSeason; uniform float uWet, uTime; uniform vec3 uSunCaus, uSunCausC;
       ${NOISE}
       ${TEX_GLSL}
       float gNear; vec3 gWN; float gWet;
@@ -186,6 +186,14 @@ export function terrainMaterial(TX, splat, q) {
       gWN = normalize(mix(gWN, vWN, snow));
       diffuseColor.rgb = col;`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.32, gWet*0.85);')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (vWP.y < -0.35) {
+          vec2 cq = vWP.xz*0.55; float ct = uTime*0.9; float cc = 0.;
+          for (int i = 0; i < 3; i++) { cq = vec2(cq.x + sin(cq.y*1.6 + ct)*0.55, cq.y + cos(cq.x*1.8 - ct*1.1)*0.55); cc += 0.045/abs(sin(cq.x*2.1)*sin(cq.y*1.9) + 0.07); ct *= 1.27; cq *= 1.37; }
+          float ck = smoothstep(-0.35, -1.6, vWP.y) * exp(vWP.y*0.07) * clamp(uSunCaus.y*3., 0., 1.);
+          totalEmissiveRadiance += diffuseColor.rgb*uSunCausC*clamp(cc*0.22 - 0.12, 0., 1.6)*ck*1.4;
+          diffuseColor.rgb *= mix(vec3(1.), vec3(0.62,0.86,0.9), smoothstep(-0.3, -4., vWP.y));
+        }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         normal = normalize((viewMatrix*vec4(gWN, 0.)).xyz);`);
   });
@@ -253,7 +261,7 @@ export function updateTerrain(cam, q, force = false) {
 // ---------- water ----------
 export function waterMaterial(level, hTex) {
   return new THREE.ShaderMaterial({
-    transparent: true, uniforms: { ...U, uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level } },
+    transparent: true, side: THREE.DoubleSide, uniforms: { ...U, uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
     fragmentShader: `uniform float uTime,uNight,uFogDensity,uLevel,uRain; uniform vec3 uSunDir,uSunColor,uZenith,uHorizon,uFogColor,uAmbient; varying vec3 vW;
     ${NOISE}
@@ -269,12 +277,24 @@ export function waterMaterial(level, hTex) {
       g *= mix(1.0, 0.25, smoothstep(150., 3000., dist)) * mix(0.35, 1.0, smoothstep(0., 6., depth));
       vec3 n = normalize(vec3(-g.x, 1., -g.y));
       vec3 V = normalize(cameraPosition - vW);
+      if (cameraPosition.y < uLevel - 0.02) {
+        // seen from under water: bright Snell's window overhead, mirror-dark beyond the critical angle
+        float up = clamp(-V.y, 0., 1.), win = smoothstep(0.62, 0.8, up + dot(g, g)*0.4);
+        vec3 skyU = mix(uHorizon, uZenith, 0.6)*1.25 + uSunColor*pow(max(dot(-V, uSunDir), 0.), 40.)*2.5;
+        vec3 deepU = uFogColor*0.75;
+        vec3 cu = mix(deepU, skyU, win) + (vn(p*1.5 + uTime*0.6) - 0.5)*0.06*win;
+        float fu = 1. - exp(-uFogDensity*uFogDensity*length(cameraPosition - vW)*length(cameraPosition - vW));
+        gl_FragColor = vec4(mix(cu, uFogColor, fu*0.85), 1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        return;
+      }
       float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
       vec3 Rf = reflect(-V, n);
       vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
       vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y, 0.3));
       float murky = (uLevel > 1. || (p.x > -2900. && p.x < 6100.)) ? 1. : 0.;
-      vec3 deep = mix(vec3(0.01,0.08,0.12), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.05,0.32,0.31), vec3(0.2,0.24,0.14), murky);
+      vec3 deep = mix(vec3(0.01,0.09,0.14), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.06,0.42,0.42), vec3(0.2,0.24,0.14), murky);
       vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6 + vec3(0.05,0.07,0.12)*uNight*max(moonD.y, 0.3);
       vec3 col = mix(mix(shal, deep, smoothstep(0., 9., depth))*light, sky, fres*0.85);
       float sd = max(dot(Rf, uSunDir), 0.);
@@ -285,7 +305,7 @@ export function waterMaterial(level, hTex) {
       float foam = (1. - smoothstep(0., 1.5, depth))*smoothstep(0.6, 0.95, band*0.75 + vn(p*0.35+uTime*0.2)*0.35)*0.7;
       foam = max(foam, smoothstep(0.35, 0.0, depth)*0.6);
       col = mix(col, vec3(0.92)*light*1.1, foam);
-      float alpha = mix(0.45, 1., smoothstep(0., 2.5, depth));
+      float alpha = mix(0.3, 1., smoothstep(0., murky > 0.5 ? 2.5 : 11., depth)) * mix(1., 0.82, (1. - fres)*(1. - murky)*(1. - smoothstep(4., 16., depth)));
       float f = 1. - exp(-uFogDensity*uFogDensity*dist*dist);
       col = mix(col, uFogColor, f);
       gl_FragColor = vec4(col, max(alpha, f));

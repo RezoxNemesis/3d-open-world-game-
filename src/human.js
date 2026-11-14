@@ -423,6 +423,11 @@ export const Pose = {
       armL: [-1.05, 0, 0.18], foreL: [-0.55, 0, 0], armR: [-1.05, 0, -0.18], foreR: [-0.55, 0, 0], hipY: -0.86, hipZ: -0.05 };
   },
   passenger(low) { const d = Pose.drive(low); return { ...d, armL: [-0.2, 0, 0.1], foreL: [-1.3, 0, 0], armR: [-0.2, 0, -0.1], foreR: [-1.3, 0, 0], neck: [d.neck[0], 0.25, 0] }; },
+  bike(sport, t = 0) {
+    const l = sport ? 0.72 : 0.28, b = Math.sin(t * 9) * 0.01;
+    return { hips: [l * 0.35, 0, 0], spine: [l * 0.55 + b, 0, 0], neck: [-l * 0.75, 0, 0], head: [-l * 0.2, 0, 0], thighL: [-1.25 + l * 0.3, 0, 0.22], shinL: [1.55, 0, 0], footL: [-0.25, 0, 0], thighR: [-1.25 + l * 0.3, 0, -0.22], shinR: [1.55, 0, 0], footR: [-0.25, 0, 0],
+      armL: [-1.2 + l * 0.1, 0, 0.16], foreL: [-0.3 - l * 0.3, 0, 0], armR: [-1.2 + l * 0.1, 0, -0.16], foreR: [-0.3 - l * 0.3, 0, 0], hipY: -0.42, hipZ: -0.04 };
+  },
   ride(ph) {
     const b = S(ph) * 0.06;
     return { thighL: [-1.25, 0, 0.75], shinL: [1.4, 0, -0.2], thighR: [-1.25, 0, -0.75], shinR: [1.4, 0, 0.2], spine: [0.15 + b, 0, 0], armL: [-0.8, 0, 0.15], foreL: [-0.9, 0, 0], armR: [-0.8, 0, -0.15], foreR: [-0.9, 0, 0], hipY: -0.3 + b * 0.5 };

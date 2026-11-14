@@ -56,6 +56,7 @@ export class Vehicle {
       const P = this.spec.P;
       if (kind === 'boat') this.seat = new THREE.Vector3(-0.4, 0.75, 0);
       else if (P) this.seat = new THREE.Vector3(-0.38, P.roofY - 1.1, (P.rf + P.rr) / 2 - 0.22);
+      else if (spec.bike) this.seat = new THREE.Vector3(0, key === 'vayurr' ? 0.66 : 0.6, key === 'vayurr' ? -0.16 : -0.28);
       else this.seat = new THREE.Vector3(0, key === 'scooter' ? 0.62 : 0.55, key === 'scooter' ? -0.25 : 0.4);
       if (key === 'bus') this.seat.set(-0.8, 1.15, 4.2); if (key === 'truck') this.seat.set(-0.55, 1.2, 3.0);
     } else if (kind === 'heli') {
@@ -134,7 +135,7 @@ export class Vehicle {
       if (hb) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 9 * dt);
       const maxSteer = lerp(0.62, 0.11, clamp(Math.abs(vf) / 70, 0, 1));
       this.steer = damp(this.steer, (c ? -c.mx : 0) * maxSteer, 7, dt);
-      let yawRate = (vf * Math.tan(this.steer)) / (this.wheelBase || 2.6);
+      let yawRate = (vf * Math.tan(this.steer)) / (S.bike ? 2.1 : this.wheelBase || 2.6);
       if (hb) yawRate *= 1.35;
       this.yaw += yawRate * dt;
       const grip = (hb ? 1.1 : 9) * S.grip;
@@ -163,6 +164,8 @@ export class Vehicle {
       const hl = M.groundAt(this.pos.x - right.x * W, this.pos.z - right.z * W, this.pos.y + 1.2, 1.2), hrr = M.groundAt(this.pos.x + right.x * W, this.pos.z + right.z * W, this.pos.y + 1.2, 1.2);
       this.pitch = damp(this.pitch, -Math.atan2(hf - hr, 2 * L) - clamp(thr * 0.03 - brk * 0.04, -0.05, 0.05), 10, dt);
       this.roll = damp(this.roll, Math.atan2(hrr - hl, 2 * W) + clamp(vr * 0.004 + this.steer * vf * 0.003, -0.08, 0.08), 8, dt);
+      // motorbikes lean into the turn (and rest on the side stand when parked)
+      if (S.bike) { const yr = (vf * Math.tan(this.steer)) / 2.1; this.roll = damp(this.roll, this.driver ? clamp(-Math.atan(vf * yr / 9.8), -0.85, 0.85) : Math.abs(vf) < 0.5 ? 0.17 : 0, this.driver ? 6 : 3, dt); if (this.driver && thr > 0 && nitro && vf < 25) this.pitch = damp(this.pitch, -0.22, 6, dt); }
     }
     this.gPrev = this.pos.y;
     // collisions (two circles)

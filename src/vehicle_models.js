@@ -181,6 +181,70 @@ function scooter() {
   for (const sx of [-1, 1]) { parts.push(finish(tr(new THREE.CylinderGeometry(0.06, 0.06, 0.55, 6), sx * 0.13, 0.95, -0.1, 1.3), 0x263238)); parts.push(finish(tr(new THREE.CylinderGeometry(0.045, 0.045, 0.55, 6), sx * 0.2, 1.3, 0.12, -1.0, 0, sx * 0.3), 0x8d5524)); }
   return { parts, wheels: [[0, 0.24, 0.62], [0, 0.24, -0.62]], r: 0.24, rimCol: 0x999999, narrow: true };
 }
+
+// ---- motorbikes: classic thumper, street bike, superbike, police patrol bike ----
+// parts = the bike itself (player-ridden); rider = a traffic rider merged only into the traffic geometry
+function bikeRider(sport, helmetCol, shirtCol) {
+  const R = [], lean = sport ? 0.75 : 0.28, hy = sport ? 1.32 : 1.5, hz = sport ? 0.05 : -0.12;
+  R.push(finish(tr(new THREE.CylinderGeometry(0.15, 0.17, 0.62, 10), 0, hy - 0.42, hz - 0.28, lean), shirtCol, 1));
+  R.push(finish(tr(new THREE.SphereGeometry(0.155, 12, 10), 0, hy, hz), helmetCol));
+  R.push(finish(tr(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 0.6, 1), 0, hy - 0.02, hz + 0.05, -0.6), 0x1a2128, 0, 5));
+  for (const sx of [-1, 1]) {
+    R.push(finish(tr(new THREE.CylinderGeometry(0.05, 0.045, 0.5, 6), sx * 0.2, hy - 0.42, hz + 0.08, sport ? -1.15 : -0.95, 0, sx * 0.25), shirtCol, 1));
+    R.push(finish(tr(new THREE.CylinderGeometry(0.07, 0.06, 0.48, 6), sx * 0.15, 0.78, -0.12, sport ? 1.0 : 1.35, 0, 0), 0x263238));
+    R.push(finish(tr(new THREE.CylinderGeometry(0.055, 0.05, 0.45, 6), sx * 0.17, 0.5, 0.1, sport ? 0.35 : 0.1, 0, 0), 0x263238));
+    R.push(finish(tr(new THREE.BoxGeometry(0.1, 0.08, 0.24), sx * 0.17, 0.3, 0.16), 0x111111));
+  }
+  return R;
+}
+function bikeModel(type) {
+  const P = [], sport = type === 'vayurr', police = type === 'policebike', classic = type === 'thunder', r = sport ? 0.31 : 0.33, zf = sport ? 0.72 : 0.7, zr = sport ? -0.68 : -0.72;
+  const chrome = 0xd8dde3, black = 0x15171a;
+  // forks + headstock + bars + mirrors + headlight
+  for (const sx of [-1, 1]) P.push(finish(tr(new THREE.CylinderGeometry(0.028, 0.028, 0.86, 8), sx * 0.08, r + 0.4, zf - 0.13, -0.42), sport ? 0xd4a017 : chrome, 0, 6));
+  P.push(finish(tr(new THREE.CylinderGeometry(0.014, 0.014, sport ? 0.58 : 0.74, 6), 0, sport ? 0.98 : 1.12, zf - 0.33, 0, 0, Math.PI / 2), black));
+  for (const sx of [-1, 1]) { P.push(finish(tr(new THREE.CylinderGeometry(0.02, 0.02, 0.11, 8), sx * (sport ? 0.29 : 0.37), sport ? 0.98 : 1.12, zf - 0.33, 0, 0, Math.PI / 2), 0x222222)); if (!sport) { P.push(finish(tr(new THREE.CylinderGeometry(0.006, 0.006, 0.2, 4), sx * 0.27, 1.22, zf - 0.33, 0, 0, -sx * 0.35), black)); P.push(finish(tr(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12), sx * 0.31, 1.31, zf - 0.33, Math.PI / 2), black)); } }
+  if (sport) {
+    // fairing + windscreen + belly pan + raised tail: the superbike silhouette
+    P.push(finish(prism([[1.0, 0.64], [1.05, 0.84], [0.9, 1.04], [0.66, 1.12], [0.5, 0.98], [0.62, 0.66]], 0.34, 0.06), 0xffffff, 1));
+    P.push(finish(tr(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.9, 0.5, 1.2), 0, 1.13, 0.68, -0.85), 0x1a2128, 0, 5));
+    for (const sx of [-1, 1]) P.push(finish(tr(new THREE.BoxGeometry(0.07, 0.035, 0.03), sx * 0.08, 0.93, 1.03), 0xfff6e0, 0, 1));
+    P.push(finish(prism([[0.5, 0.32], [0.46, 0.6], [-0.1, 0.58], [-0.14, 0.34]], 0.26, 0.04), 0x222222));
+    for (const sx of [-1, 1]) P.push(finish(prism([[0.62, 0.66], [0.5, 0.92], [0.05, 0.86], [0.0, 0.62], [0.3, 0.46]], 0.03, 0.01), 0xffffff, 1).translate(sx * 0.15, 0, 0));
+    P.push(finish(prism([[0.4, 0.9], [0.44, 1.0], [0.12, 1.06], [-0.15, 0.95], [-0.1, 0.84]], 0.3, 0.06), 0xffffff, 1));
+    P.push(finish(prism([[-0.15, 0.86], [-0.3, 0.94], [-0.85, 1.12], [-0.88, 1.05], [-0.55, 0.86]], 0.22, 0.04), 0xffffff, 1));
+    P.push(finish(tr(new THREE.BoxGeometry(0.12, 0.04, 0.03), 0, 1.08, -0.9), 0xff2a1a, 0, 2));
+    P.push(finish(prism([[0.05, 0.95], [-0.45, 1.0], [-0.5, 0.93], [0.0, 0.88]], 0.22, 0.03), black));
+    P.push(finish(tr(new THREE.CylinderGeometry(0.055, 0.045, 0.45, 10), 0.14, 0.55, -0.62, -1.1), 0x3a3a3a, 0, 6));
+  } else {
+    // round headlamp, teardrop tank, sprung seat, side panels, upright engine with fins, long exhaust
+    P.push(finish(tr(new THREE.CylinderGeometry(0.11, 0.1, 0.12, 16), 0, 1.0, zf - 0.12, Math.PI / 2), chrome, 0, 6));
+    P.push(finish(tr(new THREE.CircleGeometry(0.09, 16), 0, 1.0, zf - 0.055), 0xfff6e0, 0, 1));
+    P.push(finish(tr(new THREE.SphereGeometry(0.2, 16, 10).scale(0.85, 0.62, 1.55), 0, 0.98, 0.12), 0xffffff, 1));
+    if (classic) P.push(finish(tr(new THREE.TorusGeometry(0.09, 0.012, 6, 16), 0.17, 0.99, 0.12, 0, Math.PI / 2), chrome, 0, 6));
+    P.push(finish(prism([[0.0, 0.82], [-0.05, 0.92], [-0.62, 0.9], [-0.66, 0.8]], 0.3, 0.05), classic ? 0x3b2a1e : black));
+    for (const sx of [-1, 1]) P.push(finish(tr(new THREE.BoxGeometry(0.03, 0.18, 0.24), sx * 0.13, 0.7, -0.18), 0xffffff, 1));
+    P.push(finish(tr(new THREE.BoxGeometry(0.22, 0.26, 0.3), 0, 0.44, 0.08), 0x8a8f96, 0, 6));
+    for (let k = 0; k < 6; k++) P.push(finish(tr(new THREE.BoxGeometry(0.26 - k * 0.01, 0.018, 0.2), 0, 0.6 + k * 0.035, 0.12, -0.25), 0x9aa0a6, 0, 6));
+    P.push(finish(tr(new THREE.CylinderGeometry(0.035, 0.035, 0.95, 10), 0.13, 0.3, -0.35, Math.PI / 2 + 0.06), chrome, 0, 6));
+    P.push(finish(tr(new THREE.CylinderGeometry(0.05, 0.035, 0.3, 10), 0.13, 0.33, -0.92, Math.PI / 2 + 0.06), chrome, 0, 6));
+    P.push(finish(tr(new THREE.CylinderGeometry(r + 0.03, r + 0.03, 0.14, 16, 1, true, -0.4, 2.4), 0, r, zf, 0, 0, Math.PI / 2), 0xffffff, 1));
+    P.push(finish(tr(new THREE.CylinderGeometry(r + 0.04, r + 0.04, 0.15, 16, 1, true, -1.6, 2.6), 0, r, zr, 0, 0, Math.PI / 2), 0xffffff, 1));
+    P.push(finish(tr(new THREE.BoxGeometry(0.1, 0.05, 0.03), 0, 0.78, -0.95), 0xff2a1a, 0, 2));
+    P.push(finish(tr(new THREE.BoxGeometry(0.17, 0.11, 0.01), 0, 0.68, -0.97), 0xf5f5f5));
+  }
+  // frame, swingarm, rear shocks, chain, pegs
+  P.push(finish(tr(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 6), 0, 0.62, 0.2, 1.0), black));
+  for (const sx of [-1, 1]) { P.push(finish(tr(new THREE.CylinderGeometry(0.022, 0.022, 0.6, 6), sx * 0.1, 0.36, -0.42, Math.PI / 2 - 0.1), black)); P.push(finish(tr(new THREE.CylinderGeometry(0.022, 0.03, 0.36, 8), sx * 0.11, 0.55, -0.55, 0.3), sport ? 0xd4a017 : chrome, 0, 6)); P.push(finish(tr(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), sx * 0.2, 0.36, -0.05, 0, 0, Math.PI / 2), 0x666666)); }
+  if (police) {
+    P.push(finish(tr(new THREE.BoxGeometry(0.34, 0.05, 0.06), 0, 1.33, -0.82), 0xff1a1a, 0, 3));
+    P.push(finish(tr(new THREE.BoxGeometry(0.34, 0.05, 0.06), 0, 1.33, -0.75), 0x1a5aff, 0, 4));
+    P.push(finish(tr(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 5), 0, 1.1, -0.79), black));
+    for (const sx of [-1, 1]) P.push(finish(tr(new THREE.BoxGeometry(0.2, 0.34, 0.42), sx * 0.22, 0.62, -0.62), 0xffffff, 1));
+    for (const sx of [-1, 1]) P.push(finish(tr(new THREE.BoxGeometry(0.205, 0.07, 0.425), sx * 0.22, 0.66, -0.62), 0x1a3d8f));
+  }
+  return { parts: P, rider: bikeRider(sport, sport ? 0xd32f2f : police ? 0xffffff : 0x222222, police ? 0xb39a6b : [0x1e88e5, 0x6d4c41, 0x2e7d32, 0x37474f][type.length % 4]), wheels: [[0, r, zf], [0, r, zr]], r, rimCol: sport ? 0x222222 : 0x888888, narrow: true, bike: true };
+}
 // ---- spec table ----
 export const CARS = {
   rakshas: { name: 'Vayu Rakshas', cls: 'Hypercar', top: 105, acc: 15, grip: 1.25, nitro: true, mass: 1.5, sound: 'super', paints: [0xff6a00, 0x9bff00, 0xffd400, 0xffffff],
@@ -211,6 +275,10 @@ const SPECIAL = {
   bus: { name: 'State Bus', cls: 'Bus', top: 24, acc: 2.5, grip: 0.8, mass: 6, sound: 'car', paints: [0xc62828, 0x1565c0, 0xef6c00], build: () => bus(0) },
   truck: { name: 'Goods Truck', cls: 'Truck', top: 26, acc: 2.5, grip: 0.8, mass: 7, sound: 'car', paints: [0xffffff], build: truck },
   scooter: { name: 'Chetak Scooter', cls: 'Scooter', top: 24, acc: 5, grip: 0.9, mass: 0.3, sound: 'auto', paints: [0x1e88e5, 0xfafafa, 0xd32f2f, 0x43a047, 0x212121], build: scooter },
+  thunder: { name: 'Amba Thunder 350', cls: 'Classic bike', top: 36, acc: 7, grip: 1.05, mass: 0.4, sound: 'bike', bike: true, paints: [0x111111, 0x6d1b1b, 0x1b3d2f, 0x0d2a4a, 0xbfa76a], build: () => bikeModel('thunder') },
+  shera220: { name: 'Shera 220', cls: 'Street bike', top: 40, acc: 8.5, grip: 1.05, mass: 0.35, sound: 'bike', bike: true, paints: [0x111111, 0xc62828, 0x1565c0, 0xf5f5f5, 0xff6f00], build: () => bikeModel('shera220') },
+  vayurr: { name: 'Vayu RR 1000', cls: 'Superbike', top: 82, acc: 15, grip: 1.15, mass: 0.45, sound: 'bike', bike: true, nitro: true, paints: [0x00c853, 0xd50000, 0x111111, 0x1565c0, 0xfafafa], build: () => bikeModel('vayurr') },
+  policebike: { name: 'Police Interceptor Bike', cls: 'Police bike', top: 46, acc: 9.5, grip: 1.1, mass: 0.4, sound: 'bike', bike: true, paints: [0xffffff], build: () => bikeModel('policebike') },
 };
 Object.assign(CARS, SPECIAL);
 const cache = new Map();
@@ -218,11 +286,11 @@ export function vehicleGeometry(key) {
   if (cache.has(key)) return cache.get(key);
   const spec = CARS[key], m = spec.build ? spec.build() : carModel(spec.P);
   const wg = wheelGeo(m.r, m.narrow ? 0.12 : 0.26, m.rimCol, 14, m.caliper);
-  const statics = [...m.parts];
+  const statics = [...m.parts, ...(m.rider || [])];
   for (const [x, r, z] of m.wheels) { const w = wg.clone(); w.translate(x, r, z); statics.push(w); }
   let lowAll = null;
   if (spec.P) { const ml = carModel(spec.P, true), wl = wheelGeo(ml.r, 0.26, ml.rimCol, 8, null, true), st = [...ml.parts]; for (const [x, r, z] of ml.wheels) { const w = wl.clone(); w.translate(x, r, z); st.push(w); } lowAll = mergeGeometries(st); }
-  const res = { low: lowAll, all: mergeGeometries(statics), body: mergeGeometries(m.parts), wheel: wheelGeo(m.r, m.narrow ? 0.12 : 0.26, m.rimCol, 22, m.caliper), wheels: m.wheels, r: m.r, len: spec.P ? spec.P.L : key === 'bus' ? 10.5 : key === 'truck' ? 7.8 : key === 'scooter' ? 1.8 : 2.6, wid: spec.P ? spec.P.W : key === 'scooter' ? 0.7 : key === 'auto' ? 1.4 : 2.5 };
+  const res = { low: lowAll, all: mergeGeometries(statics), body: mergeGeometries(m.parts), wheel: wheelGeo(m.r, m.narrow ? 0.12 : 0.26, m.rimCol, 22, m.caliper), wheels: m.wheels, r: m.r, len: spec.P ? spec.P.L : key === 'bus' ? 10.5 : key === 'truck' ? 7.8 : key === 'scooter' ? 1.8 : spec.bike ? 2.1 : 2.6, wid: spec.P ? spec.P.W : key === 'scooter' ? 0.7 : spec.bike ? 0.75 : key === 'auto' ? 1.4 : 2.5 };
   cache.set(key, res); return res;
 }
 

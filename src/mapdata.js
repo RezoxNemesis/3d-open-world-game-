@@ -710,6 +710,10 @@ export async function buildMap(progress) {
     { x: 1250, z: 2440, ang: Math.PI / 2, kind: 'muscle', color: 0xffffff },
   ];
   spawns.cars.push(...estateCars.slice(0, 14));
+  // parked motorbikes: by the start, at Devka and Jampore beaches, outside the villa colony
+  spawns.bikes = [{ key: 'thunder', x: -2244.6, z: -838, ang: Math.PI, paint: 0 }, { key: 'vayurr', x: -2244.6, z: -850, ang: Math.PI, paint: 0 }, { key: 'shera220', x: -2244.6, z: -862, ang: Math.PI, paint: 1 },
+    { key: 'thunder', x: coastRoadX(-3780) + 9, z: -3780, ang: 0, paint: 3 }, { key: 'vayurr', x: coastRoadX(-3800) + 9, z: -3800, ang: 0, paint: 1 },
+    { key: 'shera220', x: coastRoadX(3260) + 9, z: 3260, ang: 0, paint: 2 }, { key: 'thunder', x: ZONES.villa.x0 - 8, z: 3420, ang: Math.PI / 2, paint: 4 }, { key: 'vayurr', x: ZONES.villa.x0 - 8, z: 3435, ang: Math.PI / 2, paint: 3 }];
   spawns.heli = [{ x: L.helipad.x, z: L.helipad.z }, { x: -2420, z: -3080 }];
   spawns.plane = [{ x: ap.runX0 + 40, z: ap.runZ, ang: Math.PI / 2 }];
   spawns.horses = [

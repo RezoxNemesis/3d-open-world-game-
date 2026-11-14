@@ -33,6 +33,14 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
 
 ## What you can do
 
+- **Ride motorbikes:**
+  - Amba Thunder 350 classic, Shera 220 street bike, Vayu RR 1000 superbike and police bikes;
+  - bikes lean into turns, Mira rides pillion, and they appear in traffic too.
+- **Dive** under the sea:
+  - swim where you look, with a breath meter, light shafts, bubbles and caustics on the seabed;
+  - **Jampore Reef** has corals, sea fans, kelp, fish schools, sea turtles and a manta ray;
+  - the wreck of the Portuguese galleon **São Jerónimo** hides 10 treasure chests.
+- **Police pursuits:** when you're wanted, patrol bikes and police SUVs chase you along the roads with sirens. They box you in and constables jump out to arrest you.
 - **Drive** fictional supercars, hypercars, classics, premium sedans, SUVs, a 4x4, autos, buses, trucks and scooters. Includes nitro, drifting and jumps off ramps.
 - **Fly** a plane, a helicopter and a **fighter jet** with cannon and missiles. You can also take boats.
 - **Ride horses**, with walk, trot, canter, gallop and jumps.

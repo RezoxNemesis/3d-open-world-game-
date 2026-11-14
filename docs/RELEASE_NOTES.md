@@ -1,3 +1,28 @@
+## Daman Duo — v1.3 "Deep Blue & Sirens" update
+
+**What's new in 1.3**
+- **Diving and swimming:**
+  - In the sea, look down and swim forward to dive (on the phone, tap **DIVE**). Underwater you swim where you look; Space or UP takes you back to the surface.
+  - Watch the **AIR** meter: running out hurts.
+  - Jumping into deep water from a height plunges you under.
+- **Under the sea:**
+  - blue fog and tint, light shafts from the surface, bubbles, and a Snell's window when you look up;
+  - shimmering caustics on the seabed, which you can also see through clear shallow water from above.
+- **Jampore Reef:**
+  - corals (brain, staghorn, sea fans, sponges), swaying kelp and rocks;
+  - schools of fish that scatter when you swim through them;
+  - sea turtles and a manta ray.
+- **Wreck of the São Jerónimo:** a Portuguese galleon, broken in two, with masts, a torn sail and cannons. **10 treasure chests** are hidden at the wreck and on the reef: ₹5,000 each, plus a ₹50,000 bonus for all ten.
+- **Motorbikes:**
+  - **Amba Thunder 350**, a classic thumper;
+  - **Shera 220**, a street bike;
+  - **Vayu RR 1000**, a superbike with nitro wheelies;
+  - **Police Interceptor** bikes.
+  - Bikes lean into turns and rest on their side stands. Mira rides pillion.
+  - Bikes now make up a large share of city traffic, with parked bikes at the start, at both beaches and at the villa colony.
+- **Police pursuits:** each wanted star sends more units: patrol bikes first, then police SUVs. They route along the road network, slow for corners, cut you off, and box you in. Constables jump out to arrest you, all to a wailing siren. Steal a police car if you dare.
+- **Performance:** the far plane is pulled in while you're underwater, which roughly halves draw calls there on phones.
+
 ## Daman Duo — v1.2 "Gods & Mansions" update
 
 **Downloads:** same files as before: `DamanDuo-Android.apk` (installs over the old version), the Windows installer or portable `.exe`, the Linux AppImage, the macOS `.dmg`, and `DamanDuo-Web.html`.

@@ -53,7 +53,8 @@ export class Character {
   get alive() { return this.state !== 'dead'; }
   forward() { return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
   sync() {
-    this.obj.position.copy(this.pos); this.obj.rotation.set(0, this.yaw, 0);
+    this.obj.position.copy(this.pos);
+    if (this.state === 'dive') { const pt = this.divePitch || 0; this.obj.rotation.set(-pt * 0.85, this.yaw, 0, 'YXZ'); this.obj.position.y += 0.75 + 0.5 * Math.sin(Math.abs(pt)); } else this.obj.rotation.set(0, this.yaw, 0, 'YXZ');
     const want = this.weapon === 1 ? this.guns.pistol : this.weapon === 2 ? this.guns.rifle : null;
     if (this.h.held !== want) this.h.hold(want);
   }
@@ -104,6 +105,8 @@ export class Character {
     if (this.state === 'dead') { this.vel.multiplyScalar(Math.exp(-4 * dt)); this.pos.addScaledVector(this.vel, dt); this.pos.y = Math.max(g, this.pos.y + this.vel.y * dt); this.animate(dt, c); this.sync(); return; }
     if (this.busy) { this.busy.t += dt; if (this.busy.t > this.busy.dur) { const b = this.busy; this.busy = null; b.done && b.done(); } this.vel.set(0, 0, 0); this.animate(dt, c); this.sync(); return; }
     const canAct = this.stun <= 0 && this.state !== 'down';
+    if (this.state === 'dive') { this.breath = (this.breath ?? 45) - dt; if (this.breath < 0) { this.breath = 0; this.drownT = (this.drownT || 0) + dt; if (this.drownT > 0.5) { this.drownT = 0; this.damage(6, null); } } }
+    else this.breath = Math.min(45, (this.breath ?? 45) + dt * 9);
     // --- desired horizontal velocity ---
     const mv = c.move || new THREE.Vector3(), mag = Math.min(1, mv.length());
     let want = 0;
@@ -154,7 +157,7 @@ export class Character {
         if (canAct && (c.web || c.webPress) && this.powers && this.webCd <= 0 && this.startWeb(c)) break;
         const ng = this.groundY();
         if (canAct && c.chute && this.pos.y - ng > 18) { this.state = 'glide'; this.t = 0; sfx('whoosh', 0.8); break; }
-        if (this.pos.y < wl - 0.4 && wl > ng + 1.3) { this.toSwim(wl); burst('splash', this.pos.x, wl, this.pos.z, 20, 1.2); sfx('splash'); break; }
+        if (this.pos.y < wl - 0.4 && wl > ng + 1.3) { const fast = this.vel.y < -11 && wl > ng + 4.5; this.toSwim(wl); burst('splash', this.pos.x, wl, this.pos.z, fast ? 60 : 20, fast ? 2.5 : 1.2); sfx('splash'); if (fast) { this.state = 'dive'; this.pos.y = wl - 2; this.vel.set(this.vel.x * 0.3, -Math.min(9, 2 + Math.abs(this.vel.y) * 0.25), this.vel.z * 0.3); this.plunge = 1.2; } break; }
         if (this.pos.y <= ng) this.land(ng);
         break;
       }
@@ -178,7 +181,24 @@ export class Character {
         this.pos.y = damp(this.pos.y, wl2 - 1.25 + Math.sin(this.t * 2) * 0.05, 6, dt);
         if (ng > wl2 - 1.1 || ng > this.pos.y + 0.2) { this.state = 'ground'; this.pos.y = Math.max(ng, this.pos.y); }
         if (canAct && c.jump && ng > wl2 - 2.0) { this.state = 'air'; this.vel.y = 6; }
+        if (canAct && wl2 - ng > 3 && (c.down || (mag > 0.3 && c.aimDir && c.aimDir.y < -0.42 && (c.sprint || c.aimDir.y < -0.55)))) { this.state = 'dive'; this.vel.y = -2.2; this.t = 0; sfx('splash', 0.4); burst('splash', this.pos.x, wl2, this.pos.z, 8, 0.8); }
         if (Math.random() < dt * 3 * Math.min(1, Math.hypot(this.vel.x, this.vel.z))) burst('splash', this.pos.x, wl2, this.pos.z, 1, 0.4);
+        break;
+      }
+      case 'dive': {
+        // underwater: swim where the camera looks (forward input), Space rises, DOWN sinks, Shift swims fast
+        const wl2 = this.waterY(), ng = this.groundY(), speed = c.sprint ? 4.4 : 2.7;
+        const aim = c.aimDir || this.forward(), ah = new THREE.Vector3(aim.x, 0, aim.z); if (ah.lengthSq() > 1e-4) ah.normalize();
+        const fwd = mag > 0.05 ? dir.dot(ah) : 0;
+        const tv = new THREE.Vector3(dir.x * mag * speed, (mag > 0.05 ? aim.y * Math.max(0, fwd) * mag * speed * 1.1 : 0.18) + (c.up ? speed * 0.8 : 0) + (c.down ? -speed * 0.8 : 0), dir.z * mag * speed);
+        if (this.plunge > 0) { this.plunge -= dt; tv.y = Math.min(tv.y, this.vel.y * 0.9); }
+        this.vel.x = damp(this.vel.x, tv.x, 2.2, dt); this.vel.y = damp(this.vel.y, tv.y, 2.2, dt); this.vel.z = damp(this.vel.z, tv.z, 2.2, dt);
+        if (mag > 0.05) this.yaw = dampAngle(this.yaw, Math.atan2(dir.x, dir.z), 3, dt);
+        this.pos.addScaledVector(this.vel, dt); this.collide();
+        if (this.pos.y < ng + 0.35) { this.pos.y = ng + 0.35; this.vel.y = Math.max(this.vel.y, 0); }
+        this.divePitch = damp(this.divePitch || 0, Math.atan2(this.vel.y, Math.max(0.6, Math.hypot(this.vel.x, this.vel.z))), 4, dt);
+        if (this.pos.y > wl2 - 1.15 && this.vel.y > -0.2 && !(this.plunge > 0)) { this.state = 'swim'; this.divePitch = 0; this.pos.y = wl2 - 1.25; burst('splash', this.pos.x, wl2, this.pos.z, 10, 0.8); if (this.breath < 12) sfx('whoosh', 0.5); }
+        if (wl2 - ng < 1.3) { this.state = 'ground'; this.divePitch = 0; }
         break;
       }
       case 'glide': {
@@ -376,6 +396,7 @@ export class Character {
       case 'vault': P = Pose.vault(this.mt); break;
       case 'roll': P = Pose.roll(Math.min(1, (this.t2 || 0) / 0.62)); break;
       case 'swim': this.ph += dt * (sp > 0.3 ? 4 : 2); P = Pose.swim(this.ph, sp > 0.5); break;
+      case 'dive': { const v3 = this.vel.length(); this.ph += dt * (v3 > 0.4 ? 3.2 + v3 : 1.6); P = Pose.swim(this.ph, v3 > 0.5); break; }
       case 'glide': P = Pose.skydive(this.t); break;
       case 'chute': P = Pose.chute(this.t); break;
       case 'web': { const sw = clamp(this.vel.y / 15, -1, 1); P = Pose.web(this.t, sw); break; }
