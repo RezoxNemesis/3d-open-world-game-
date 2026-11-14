@@ -1,0 +1,98 @@
+{
+ "body": {
+  "pos": [
+   0,
+   1.416,
+   0.0
+  ],
+  "parent": null
+ },
+ "hip_fl": {
+  "pos": [
+   0.17,
+   1.13,
+   0.6
+  ],
+  "parent": "body"
+ },
+ "knee_fl": {
+  "pos": [
+   0.18,
+   0.5,
+   0.63
+  ],
+  "parent": "hip_fl"
+ },
+ "hip_fr": {
+  "pos": [
+   -0.17,
+   1.13,
+   0.6
+  ],
+  "parent": "body"
+ },
+ "knee_fr": {
+  "pos": [
+   -0.18,
+   0.5,
+   0.63
+  ],
+  "parent": "hip_fr"
+ },
+ "hip_hl": {
+  "pos": [
+   0.2,
+   1.2,
+   -0.6
+  ],
+  "parent": "body"
+ },
+ "knee_hl": {
+  "pos": [
+   0.19,
+   0.55,
+   -0.76
+  ],
+  "parent": "hip_hl"
+ },
+ "hip_hr": {
+  "pos": [
+   -0.2,
+   1.2,
+   -0.6
+  ],
+  "parent": "body"
+ },
+ "knee_hr": {
+  "pos": [
+   -0.19,
+   0.55,
+   -0.76
+  ],
+  "parent": "hip_hr"
+ },
+ "neck": {
+  "pos": [
+   0,
+   1.36,
+   0.74
+  ],
+  "parent": "body"
+ },
+ "head": {
+  "pos": [
+   0,
+   1.98,
+   1.08
+  ],
+  "parent": "neck"
+ },
+ "tail": {
+  "pos": [
+   0,
+   1.42,
+   -0.96
+  ],
+  "parent": "body"
+ }
+}

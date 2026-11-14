@@ -4,6 +4,7 @@ import * as M from './mapdata.js';
 import { buildEstates } from './estates.js';
 import { buildPromenade } from './promenade.js';
 import { buildCoast } from './coast.js';
+import { buildFarms } from './farm.js';
 import { loadModels } from './models.js';
 import { buildKitCity, KIT, updateKit } from './buildkit.js';
 import { addGlow, buildGlows } from './glow.js';
@@ -1316,6 +1317,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   world.kit = await buildKitCity(scene, q, { regLod });
   buildBoats(scene);
   world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated, models: world.models });
+  world.farms = await buildFarms(scene, q, { instTiles, addCol, labels: world.labels }, splat);
   await progress('Growing the jungle', 0.93);
   buildTrees(scene, q, renderer);
   buildStreetLights(scene, q);

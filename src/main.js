@@ -113,6 +113,18 @@ function setupTests(game) {
       step(6);
     },
     jet_golden: () => S.jet_closeup(17.3),
+    farm: (kind = 'farm', hour = 9.6, idx = 0) => {
+      const f = M.farms.filter((ff) => ff.kind === kind)[idx] || M.farms[0]; if (!f) return;
+      const fz = new THREE.Vector3(Math.sin(f.yaw), 0, Math.cos(f.yaw)), fx = new THREE.Vector3(Math.cos(f.yaw), 0, -Math.sin(f.yaw));
+      const d = kind === 'ranch' ? 44 : 30, side = kind === 'ranch' ? 18 : 14;
+      const cp = new THREE.Vector3(f.x, 0, f.z).addScaledVector(fz, d).addScaledVector(fx, side);
+      at(cp.x, cp.z, f.yaw + Math.PI); game.sky.hour = hour;
+      const gy = M.terrainH(f.x, f.z);
+      game.camOverride = () => ({ pos: new THREE.Vector3(cp.x, M.terrainH(cp.x, cp.z) + (kind === 'ranch' ? 7 : 5), cp.z), look: new THREE.Vector3(f.x, gy + 2.2, f.z).addScaledVector(fz, kind === 'ranch' ? 4 : 0) });
+      step(6);
+    },
+    farm_b: () => S.farm('farm', 16.8, 3),
+    ranch: () => S.farm('ranch', 10.2),
     hero_cars_bison: () => S.hero_cars(16.6, 'bison'),
     hero_cars_shera: () => S.hero_cars(16.6, 'shera'),
     hero_cars_gajraj: () => S.hero_cars(16.6, 'gajraj'),

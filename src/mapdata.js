@@ -516,6 +516,68 @@ function fillZone(Z, tries, zone) {
   }
 }
 // ---------- Jampore Villa Colony: walled estates (one grand mansion or four villas per block) ----------
+// ---------- farmsteads around villages + a horse ranch (Blender props, placed by farm.js) ----------
+export const farms = [];      // {x, z, y, yaw, kind: 'farm'|'ranch', parts: [{n, x, z, y, yaw, s}]}
+const FARM_PARTS = [['farmhouse', 0, 0, 0], ['cowshed', 13, -1, 0], ['watertank', -7.5, -4.5, 0], ['well', -8.5, 7.5, 0], ['haystack', -12.5, -6, 0], ['haystack', -15.5, 0, 1.3],
+  ['fodderstack', 14.5, -8.5, 0.1], ['tractor', 7, 9.5, 0.5]];
+const RANCH_PARTS = [['stable', 0, -13, 0], ['haybales', -14, -11, 0.2], ['watertank', 13.5, -13, 0], ['trough', 8, 4, 0.3], ['trough', -10, 18, 1.5], ['haystack', -20, -14, 0]];
+function rotXZ(x, z, a) { const c = Math.cos(a), s = Math.sin(a); return [x * c + z * s, -x * s + z * c]; }
+function siteOK(cx, cz, yaw, hx, hz0, hz1, rough = 2.4) {
+  let lo = 1e9, hi = -1e9, x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (const [lx, lz] of [[-hx, hz0], [hx, hz0], [-hx, hz1], [hx, hz1], [0, (hz0 + hz1) / 2], [-hx, (hz0 + hz1) / 2], [hx, (hz0 + hz1) / 2], [0, hz0], [0, hz1]]) {
+    const [dx, dz] = rotXZ(lx, lz, yaw), x = cx + dx, z = cz + dz, h = terrainH(x, z);
+    if (h < 2 || h > 90 || waterLevelAt(x, z) > 0 || zoneAt(x, z) !== 'rural' || isJungle(x, z) || excluded(x, z, 10)) return false;
+    lo = Math.min(lo, h); hi = Math.max(hi, h); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+  }
+  if (hi - lo > rough) return false;
+  return occFree(x0, z0, x1, z1) ? [x0, z0, x1, z1] : false;
+}
+function placeFarmstead(cx, cz, yaw, kind) {
+  const parts = [], list = kind === 'ranch' ? RANCH_PARTS : FARM_PARTS, rng = mulberry32(Math.floor(cx * 7 + cz * 13));
+  for (const [n, lx, lz, ry] of list) {
+    const [dx, dz] = rotXZ(lx, lz, yaw), x = cx + dx, z = cz + dz;
+    let name = n;
+    if (n === 'farmhouse' && rng() < 0.5) name = 'farmhouse_b';
+    if (n === 'tractor' && rng() < 0.45) name = 'bullockcart';
+    if ((n === 'well' || n === 'fodderstack') && rng() < 0.3) continue;
+    const big = name.startsWith('farmhouse') || name === 'stable' || name === 'cowshed';
+    let y = terrainH(x, z);
+    if (big) for (const [ox, oz] of [[-5, -4], [5, -4], [-5, 4], [5, 4]]) { const [ex, ez] = rotXZ(ox, oz, yaw); y = Math.min(y, terrainH(x + ex, z + ez)); }
+    parts.push({ n: name, x, z, y: y - 0.05, yaw: yaw + ry, s: n === 'haystack' ? 0.85 + rng() * 0.3 : 1 });
+  }
+  // fences: bamboo along the back and the left side of a farm; white paddock rails round the ranch
+  const seg = (n, ax, az, bx, bz, gap) => { const len = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.round(len / 3)); for (let i = 0; i < k; i++) { const t = (i + 0.5) / k, lx = ax + (bx - ax) * t, lz = az + (bz - az) * t; if (gap && gap(lx, lz)) continue; const [dx, dz] = rotXZ(lx, lz, yaw); parts.push({ n, x: cx + dx, z: cz + dz, y: terrainH(cx + dx, cz + dz) - 0.05, yaw: yaw + Math.atan2(bz - az, bx - ax) * -1, s: 1 }); } };
+  if (kind === 'ranch') { const g = (lx) => Math.abs(lx) < 3.2; seg('fence_paddock', -24, 27, 24, 27); seg('fence_paddock', -24, -4, -24, 27); seg('fence_paddock', 24, -4, 24, 27); seg('fence_paddock', -24, -4, 24, -4, (lx) => g(lx)); }
+  else { seg('fence_bamboo', -18, -10.5, 18, -10.5); seg('fence_bamboo', -18.5, -10, -18.5, 5); }
+  return parts;
+}
+function placeFarms() {
+  const rng = mulberry32(777);
+  // ranch: the first flat, free 52 x 46 m site near the eastern villages
+  for (const v of [...villages].sort((a, b) => Math.hypot(a.x - 3800, a.z - 2600) - Math.hypot(b.x - 3800, b.z - 2600))) {
+    let done = false;
+    for (let k = 0; k < 24 && !done; k++) {
+      const a = (k / 24) * Math.PI * 2, cx = v.x + Math.cos(a) * 240, cz = v.z + Math.sin(a) * 240, nr = nearestRoad(cx, cz);
+      if (!nr || nr.d > 120) continue;
+      const yaw = Math.atan2(nr.x - cx, nr.z - cz), box = siteOK(cx, cz, yaw, 27, -19, 29, 3.0);
+      if (!box) continue;
+      occMark(...box); farms.push({ x: cx, z: cz, y: terrainH(cx, cz), yaw, kind: 'ranch', parts: placeFarmstead(cx, cz, yaw, 'ranch') }); done = true;
+    }
+    if (done) break;
+  }
+  // two or three farmsteads round every village, front yards facing the nearest road
+  for (const v of villages) {
+    let n = 0; const want = 2 + (rng() < 0.5 ? 1 : 0);
+    for (let k = 0; k < 18 && n < want; k++) {
+      const a = rng() * Math.PI * 2, r = 165 + rng() * 80, cx = v.x + Math.cos(a) * r, cz = v.z + Math.sin(a) * r, nr = nearestRoad(cx, cz);
+      if (!nr || nr.d > 140 || nr.d < 22) continue;
+      const yaw = Math.atan2(nr.x - cx, nr.z - cz), box = siteOK(cx, cz, yaw, 19, -11, 12.5);
+      if (!box) continue;
+      occMark(...box); farms.push({ x: cx, z: cz, y: terrainH(cx, cz), yaw, kind: 'farm', parts: placeFarmstead(cx, cz, yaw, 'farm') }); n++;
+    }
+  }
+}
+
 export const estates = [];   // {x0,z0,x1,z1,cx,cz,y,kind,style,face,seed,house:{x0,z0,x1,z1,h,floors},pool:{...},color,trim}
 const estateCars = [];
 function placeEstates() {
@@ -749,6 +811,7 @@ export async function buildMap(progress) {
   fillZone(ZONES.jampore, 900, 'jampore'); fillZone(ZONES.industry, 300, 'industry'); fillZone(ZONES.dabhel, 300, 'dabhel');
   fillZone({ x0: mfr.x0 + 20, z0: mfr.z0 + 20, x1: mfr.x1 - 20, z1: mfr.z1 - 20 }, 400, 'fort');
   for (const v of villages) fillZone({ x0: v.x - 130, z0: v.z - 130, x1: v.x + 130, z1: v.z + 130 }, 70, 'village');
+  placeFarms();
   // ramps
   const ap = L.airport;
   addRamp(1350, 2520, Math.PI / 2, 10, 26, 6); addRamp(1500, 2560, Math.PI / 2, 12, 40, 11); addRamp(-150, 2560, -Math.PI / 2, 9, 20, 4);
@@ -780,7 +843,10 @@ export async function buildMap(progress) {
     { x: coastX(-3950) + 40, z: -3950 }, { x: coastX(-4000) + 42, z: -4000 },
   ];
   spawns.hospital = { x: L.hospital.x, z: L.hospital.z + 32 };
-  spawns.horses.push({ x: 5200, z: 3500 }, { x: 5230, z: 3530 }, { x: 5180, z: 3570 }, { x: 4900, z: -2600 }, { x: 4950, z: -2650 });
+  const ranch = farms.find((f) => f.kind === 'ranch');
+  if (ranch) { for (const [lx, lz] of [[-12, 8], [-4, 16], [6, 12], [14, 20], [0, 22], [-16, 21]]) { const [dx, dz] = rotXZ(lx, lz, ranch.yaw); spawns.horses.push({ x: ranch.x + dx, z: ranch.z + dz, ranch: true }); } L.ranch = { x: ranch.x, z: ranch.z }; }
+  else spawns.horses.push({ x: 5200, z: 3500 }, { x: 5230, z: 3530 }, { x: 5180, z: 3570 });
+  spawns.horses.push({ x: 4900, z: -2600 }, { x: 4950, z: -2650 });
   spawns.heli.push({ x: ISLAND.x + 60, z: ISLAND.z - 80 }, { x: PLAT.x - 200, z: PLAT.z - 300 });
   spawns.jet = [{ x: L.airport.runX0 + 140, z: L.airport.runZ + 70, ang: Math.PI / 2 }];
   spawns.boats = [{ x: L.jetty.x + 10, z: L.jetty.z + 80 }, { x: coastX(-3800) - 60, z: -3800 }];
