@@ -41,6 +41,11 @@ export async function buildFarms(scene, q, H, splat) {
     H.instTiles(scene, md.geo, md.mat, list, 500, q.desktop ? fd : fm, put, { shadow: !n.startsWith('fence') });
     count += list.length;
     const c = COL[n];
+    // fences: a chain of small posts-and-rails boxes along each 3 m segment (tight even on diagonal runs; gate gaps stay open)
+    if (n.startsWith('fence')) for (const o of list) {
+      const dx = Math.cos(o.yaw), dz = -Math.sin(o.yaw);
+      for (const t of [-1.0, 0, 1.0]) { const x = o.x + dx * t, z = o.z + dz * t; H.addCol(x - 0.55, z - 0.55, x + 0.55, z + 0.55, o.y, o.y + (n === 'fence_paddock' ? 1.5 : 1.6), { farm: true, fence: true }); }
+    }
     if (c) for (const o of list) {
       // rotated footprint -> axis-aligned collider (the long side stays the long side)
       const ca = Math.abs(Math.cos(o.yaw)), sa = Math.abs(Math.sin(o.yaw)), hx = (c[0] * ca + c[1] * sa) * o.s, hz = (c[0] * sa + c[1] * ca) * o.s;
