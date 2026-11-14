@@ -1,3 +1,18 @@
+## Daman Duo — v1.5 "Daman Stories" update
+
+**What's new in 1.5**
+- **Seven new story missions** featuring Vikas, Mira and Arjun:
+  - **Sunken Gold:** swim out to the São Jerónimo and dive for three treasure chests.
+  - **Bullet Run:** race a Thunder 350 down the coast road to Moti Daman Fort against the clock.
+  - **Hot Pursuit:** steal the corrupt inspector's police bike and shake off a three-star chase.
+  - **Street Kings of Devka:** three rounds of beach fight club. Your friends stay out of the ring, and the final round needs a 10-hit combo.
+  - **The Sagar Mahal Job:** fight through the palace guards and walk into the palace for the gang's ledger.
+  - **Makara Rising** and **Demon of the Ghats:** boss missions that take you straight to the Makara and the Rakshasa.
+- **Missions live in the world now**, as in GTA:
+  - Each one has a glowing yellow ring where you pick it up. Walk in and press Enter (or tap the action button).
+  - Every mission you haven't played shows on the full map as an **M** with its name, so there's always something to do.
+- Mission objectives show live progress: chests found, enemies left, best combo and wanted stars.
+
 ## Daman Duo — v1.4 "Freeflow" update
 
 **What's new in 1.4**

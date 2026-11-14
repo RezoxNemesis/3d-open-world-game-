@@ -25,7 +25,7 @@ export class Interiors {
   }
   // ----- building interiors -----
   enter(b, idx, kind) {
-    const lux = kind === 'mansion'; if (lux) kind = 'home';
+    const lux = kind === 'mansion'; if (lux) kind = 'home'; this.lux = lux;
     const w = clamp(b.x1 - b.x0, 7, lux ? 26 : 18), d = clamp(b.z1 - b.z0, 7, lux ? 20 : 16), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
     const ox = cx, oz = cz, H = lux ? 4.8 : 3.2, rng = mulberry32(idx * 7 + 3);
     this.exitPos = this.doorOutside(b);
