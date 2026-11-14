@@ -170,6 +170,8 @@ function setupTests(game) {
       game.camOverride = () => ({ pos: new THREE.Vector3(F.x - 19, F.y + 2.4, z - 20), look: new THREE.Vector3(c - 10, 0, z + 30) }); step(6); },
     ...Object.fromEntries([6.4, 9.5, 13, 16.6, 17.4, 17.9, 18.4, 22].map((h) => [`tod_${String(h).replace('.', '_')}`, () => { const z = -3925, F = M.seaFrame(z), x = F.x - 14; at(x, z, -0.7); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = h;
       game.camOverride = () => ({ pos: new THREE.Vector3(x + 4, F.y + 2.2, z - 18), look: new THREE.Vector3(x - 14, F.y + 3.5, z + 12) }); step(6); }])),
+    palm_grove: () => { const z = -3700, c = M.coastX(z), x = c + 150; at(x, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = 16.9;
+      game.camOverride = () => ({ pos: new THREE.Vector3(x + 6, M.terrainH(x + 6, z) + 1.8, z - 4), look: new THREE.Vector3(x - 40, M.terrainH(x, z) + 7, z + 18) }); step(8); },
     look_noon: () => { at(-2238, -1170, Math.PI * 0.85); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 11.5; game.rig.zoom = 1.6; game.rig.pitch = 0.02; step(6); game.rig.zoom = 1; },
     look_golden: () => { const z = -3900; at(M.coastX(z) + 150, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 17.9; game.rig.zoom = 1.7; game.rig.pitch = 0.0; step(6); game.rig.zoom = 1; },
     look_twilight: () => { const z = -3600; at(M.coastRoadX(z) - 6, z, -Math.PI / 2 - 0.5); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 18.75; game.rig.zoom = 1.8; game.rig.pitch = -0.05; step(6); game.rig.zoom = 1; },
