@@ -16,3 +16,4 @@ AO/roughness and surface detail baked onto the low-poly (2K for desktop, 1K for 
 | file | made by | used for |
 |---|---|---|
 | `palm_coconut.glb`, `palm_coconut_lod.glb` | `tools/blender/palm_atlas.py` (painted frond/bark atlas) + `tools/blender/palm_model.py` (curved ringed trunk, 26 V-folded fronds, dry fronds, coconuts; 2.4k tris, LOD 460 tris) | every coconut palm in the world |
+| `kit_facades.glb`, `kit_facades_lod.glb` | `tools/blender/kit_facades.py`: a modular facade kit (Portuguese-colonial arched windows with louvred shutters, iron balconies and arched doors; Indian town grilled windows, chajjas, shops with rolling shutters and sign bands; hotel glazing and balconies; cornices, parapets, string courses, plinths, pilasters) | dressing every town, colonial and hotel building near the camera |

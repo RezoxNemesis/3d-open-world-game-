@@ -5,6 +5,7 @@ import { buildEstates } from './estates.js';
 import { buildPromenade } from './promenade.js';
 import { buildCoast } from './coast.js';
 import { loadModels } from './models.js';
+import { buildKitCity, KIT } from './buildkit.js';
 import { addGlow, buildGlows } from './glow.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
@@ -54,8 +55,8 @@ function canvasTex(w, h, draw, srgb = true) {
 }
 // ---- tiled LOD registry: big instanced sets are split into map tiles so the camera frustum and a far distance can skip them
 const LOD = [];
-function regLod(obj, cx, cz, far) { LOD.push({ obj, cx, cz, far2: far * far }); }
-export function updateWorldLOD(cam) { for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; t.obj.visible = dx * dx + dz * dz < t.far2; } }
+function regLod(obj, cx, cz, far, near = 0) { LOD.push({ obj, cx, cz, far2: far * far, near2: near * near }); }
+export function updateWorldLOD(cam) { KIT.uCam.value.copy(cam); for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; const d2 = dx * dx + dz * dz; t.obj.visible = d2 < t.far2 && d2 >= t.near2; } }
 function bucket(items, size, xz) {
   const m = new Map();
   for (const it of items) { const [x, z] = xz(it); const k = Math.floor((x + M.HALF) / size) + Math.floor((z + M.HALF) / size) * 1000; if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
@@ -299,9 +300,14 @@ function buildBuildings(scene, q) {
   patch(mat, (s) => {
     s.uniforms.uNight = U.uNight; s.uniforms.uTime = U.uTime; s.uniforms.uWet = U.uWet; s.uniforms.uHorizon = U.uHorizon; s.uniforms.uZenith = U.uZenith; s.uniforms.uSunDir = U.uSunDir;
     Object.assign(s.uniforms, { uPlD: { value: TEX.plaster.d }, uPlN: { value: TEX.plaster.n }, uStD: { value: TEX.stained.d }, uStN: { value: TEX.stained.n }, uBrD: { value: TEX.brick.d }, uBrN: { value: TEX.brick.n }, uShD: { value: TEX.shutter.d }, uTinD: { value: TEX.tin.d }, uCrD: { value: TEX.cracked.d } });
-    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; varying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN;')
+    s.uniforms.uKitCam = KIT.uCam; s.uniforms.uKitR = KIT.uR;
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; uniform vec3 uKitCam; uniform float uKitR; varying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+        // near the camera the Blender facade kit dresses this building: shrink the box into a core that only shows its roof
+        vec2 kitTc = (floor((instanceMatrix[3].xz + 10000.0)/250.0) + 0.5)*250.0 - 10000.0;
+        float kitOn = step(distance(kitTc, uKitCam.xz), uKitR)*step(4.0, sc.x)*step(4.0, sc.z)*step(3.9, sc.y)*(1. - step(2.5, aInfo.y)*step(aInfo.y, 3.5))*step(aInfo.y, 4.5);
+        if (kitOn > 0.5) transformed.xz *= (sc.xz - 0.7)/sc.xz;
         if (abs(normal.x) > 0.5) vFac = vec3((position.z+0.5)*sc.z, position.y*sc.y, 0.);
         else if (abs(normal.z) > 0.5) vFac = vec3((position.x+0.5)*sc.x, position.y*sc.y, 0.);
         else vFac = vec3(position.x*sc.x, position.z*sc.z, 1.);
@@ -1307,6 +1313,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);
   buildBuildings(scene, q);
+  world.kit = await buildKitCity(scene, q, { regLod });
   buildBoats(scene);
   world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated, models: world.models });
   await progress('Growing the jungle', 0.93);
