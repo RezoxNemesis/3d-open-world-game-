@@ -6,7 +6,7 @@ Vikas, Mira and Arjun use avatars from the **Microsoft Rocketbox Avatar Library*
 
 | Hero  | Rocketbox avatar | Files |
 |-------|------------------|-------|
-| Vikas | Male_Adult_17    | `vikas/` |
+| Vikas | Male_Adult_11 body (clothing recoloured to the reference: black shirt, olive cargo trousers with side pockets, dark leather boots; skin tone matched) + Male_Adult_17 head texture | `vikas/` |
 | Mira  | Female_Adult_11  | `mira/` |
 | Arjun | Male_Adult_15    | `arjun/` |
 

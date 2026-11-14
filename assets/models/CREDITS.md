@@ -10,3 +10,10 @@ AO/roughness and surface detail baked onto the low-poly (2K for desktop, 1K for 
 | `coast_land_rocks_03.glb` | [Coast Land Rocks 03](https://polyhaven.com/a/coast_land_rocks_03) | rock clusters on the shore |
 | `coast_rocks_01.glb`, `coast_rocks_02.glb` | [Coast Rocks 01](https://polyhaven.com/a/coast_rocks_01), [02](https://polyhaven.com/a/coast_rocks_02) | rocky intertidal shelves |
 | `rock_07.glb` | [Rock 07](https://polyhaven.com/a/rock_07) | pebbles and small stones |
+
+## Built in Blender for Daman Duo
+
+| file | made by | used for |
+|---|---|---|
+| `palm_coconut.glb`, `palm_coconut_lod.glb` | `tools/blender/palm_atlas.py` (painted frond/bark atlas) + `tools/blender/palm_model.py` (curved ringed trunk, 26 V-folded fronds, dry fronds, coconuts; 2.4k tris, LOD 460 tris) | every coconut palm in the world |
+| `kit_facades.glb`, `kit_facades_lod.glb` | `tools/blender/kit_facades.py`: a modular facade kit (Portuguese-colonial arched windows with louvred shutters, iron balconies and arched doors; Indian town grilled windows, chajjas, shops with rolling shutters and sign bands; hotel glazing and balconies; cornices, parapets, string courses, plinths, pilasters) | dressing every town, colonial and hotel building near the camera |

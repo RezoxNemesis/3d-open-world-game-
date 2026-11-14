@@ -5,6 +5,7 @@ import { buildEstates } from './estates.js';
 import { buildPromenade } from './promenade.js';
 import { buildCoast } from './coast.js';
 import { loadModels } from './models.js';
+import { buildKitCity, KIT, updateKit } from './buildkit.js';
 import { addGlow, buildGlows } from './glow.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
@@ -54,8 +55,8 @@ function canvasTex(w, h, draw, srgb = true) {
 }
 // ---- tiled LOD registry: big instanced sets are split into map tiles so the camera frustum and a far distance can skip them
 const LOD = [];
-function regLod(obj, cx, cz, far) { LOD.push({ obj, cx, cz, far2: far * far }); }
-export function updateWorldLOD(cam) { for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; t.obj.visible = dx * dx + dz * dz < t.far2; } }
+function regLod(obj, cx, cz, far, near = 0) { LOD.push({ obj, cx, cz, far2: far * far, near2: near * near }); }
+export function updateWorldLOD(cam, kitBudget = 1) { KIT.uCam.value.copy(cam); updateKit(cam, kitBudget); for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; const d2 = dx * dx + dz * dz; t.obj.visible = d2 < t.far2 && d2 >= t.near2; } }
 function bucket(items, size, xz) {
   const m = new Map();
   for (const it of items) { const [x, z] = xz(it); const k = Math.floor((x + M.HALF) / size) + Math.floor((z + M.HALF) / size) * 1000; if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
@@ -299,9 +300,14 @@ function buildBuildings(scene, q) {
   patch(mat, (s) => {
     s.uniforms.uNight = U.uNight; s.uniforms.uTime = U.uTime; s.uniforms.uWet = U.uWet; s.uniforms.uHorizon = U.uHorizon; s.uniforms.uZenith = U.uZenith; s.uniforms.uSunDir = U.uSunDir;
     Object.assign(s.uniforms, { uPlD: { value: TEX.plaster.d }, uPlN: { value: TEX.plaster.n }, uStD: { value: TEX.stained.d }, uStN: { value: TEX.stained.n }, uBrD: { value: TEX.brick.d }, uBrN: { value: TEX.brick.n }, uShD: { value: TEX.shutter.d }, uTinD: { value: TEX.tin.d }, uCrD: { value: TEX.cracked.d } });
-    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; varying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN;')
+    s.uniforms.uKitCam = KIT.uCam; s.uniforms.uKitR = KIT.uR; s.uniforms.uKitTex = KIT.uTex;
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aInfo; uniform vec3 uKitCam; uniform float uKitR; uniform sampler2D uKitTex; varying vec3 vFac; varying vec2 vInfo; varying float vHt; varying vec3 vBW; varying vec3 vBN;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+        // near the camera the Blender facade kit dresses this building: shrink the box into a core that only shows its roof
+        vec2 kitTi = floor((instanceMatrix[3].xz + 10000.0)/250.0);
+        float kitOn = step(0.5, texture2D(uKitTex, (kitTi + 0.5)/80.0).r)*step(4.0, sc.x)*step(4.0, sc.z)*step(3.9, sc.y)*(1. - step(2.5, aInfo.y)*step(aInfo.y, 3.5))*step(aInfo.y, 4.5);
+        if (kitOn > 0.5) transformed.xz *= (sc.xz - 0.7)/sc.xz;
         if (abs(normal.x) > 0.5) vFac = vec3((position.z+0.5)*sc.z, position.y*sc.y, 0.);
         else if (abs(normal.z) > 0.5) vFac = vec3((position.x+0.5)*sc.x, position.y*sc.y, 0.);
         else vFac = vec3(position.x*sc.x, position.z*sc.z, 1.);
@@ -718,8 +724,15 @@ function buildTrees(scene, q, renderer) {
   const leafDepth = new THREE.MeshDepthMaterial({ map: leaves, alphaTest: 0.5, depthPacking: THREE.RGBADepthPacking });
   const depthMat = new THREE.MeshDepthMaterial({ map: atlas, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking });
   const geos = { palm: [palmGeo(false)], round: [roundTreeGeo()], cas: [casGeo()], teak: [teakGeo()], bamboo: [bambooGeo()], bush: [bushGeo()] };
+  // Blender-built coconut palm (tools/blender/palm_model.py): curved ringed trunk, 26 V-folded fronds, dry fronds, coconuts
+  const PM = world.models && world.models.palm_coconut;
+  if (PM) {
+    geos.palm = [PM.geo]; palmMat.map = PM.mat.map; depthMat.map = PM.mat.map; palmMat.alphaTest = depthMat.alphaTest = 0.5;
+    patch(palmMat, (s) => { swayPatch(s); s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); }, 'palmmodel');
+    TREE_BOX.palm = [13, 13.5];
+  }
   // bake impostors with plain (non-instanced, no sway) materials
-  const bakeMats = { palm: new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }) };
+  const bakeMats = { palm: new THREE.MeshStandardMaterial({ map: PM ? PM.mat.map : atlas, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }) };
   const bakeLeaf = new THREE.MeshStandardMaterial({ map: leaves, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
   patch(bakeLeaf, (s) => { s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal); nonPerturbedNormal = normal;'); }, 'leafbake');
   for (const k of TREE_SP) if (k !== 'palm') bakeMats[k] = bakeLeaf;
@@ -751,7 +764,14 @@ function buildTrees(scene, q, renderer) {
     near.count = 0; near.frustumCulled = false; near.castShadow = q.treeShadows; near.receiveShadow = false; near.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     near.customDepthMaterial = sp === 'palm' ? depthMat : leafDepth;
     scene.add(near);
-    world.treeSpecies[sp] = { list, mats, grid, near, cap };
+    // palms: full Blender model up close, the 460-triangle LOD out to the impostor ring
+    let nearLo = null, r1 = 0;
+    if (sp === 'palm' && PM && world.models.palm_coconut_lod) {
+      nearLo = new THREE.InstancedMesh(world.models.palm_coconut_lod.geo, palmMat, Math.max(1, cap)); nearLo.count = 0; nearLo.frustumCulled = false; nearLo.castShadow = q.treeShadows; nearLo.receiveShadow = false;
+      nearLo.instanceMatrix.setUsage(THREE.DynamicDrawUsage); nearLo.customDepthMaterial = depthMat; scene.add(nearLo);
+      r1 = q.desktop ? (q.treeDensity >= 1 ? 160 : 110) : 60;
+    }
+    world.treeSpecies[sp] = { list, mats, grid, near, cap, nearLo, r1 };
   }
   world.treeChunks = [];
   for (const [k, arr] of chunks) {
@@ -781,18 +801,20 @@ export function updateTrees(cam, q) {
 function selectTrees(cam, R) {
   for (const sp of TREE_SP) {
     const T = world.treeSpecies[sp], Rs = sp === 'bush' ? Math.min(R, 90) : R, out = T.near.instanceMatrix.array, r2 = (Rs + 4) * (Rs + 4);
-    let n = 0;
+    let n = 0, nl = 0; const lo = T.nearLo, outLo = lo ? lo.instanceMatrix.array : null, rr1 = T.r1 * T.r1;
     const g0x = Math.floor((cam.x - Rs - 4 + M.HALF) / 100), g1x = Math.floor((cam.x + Rs + 4 + M.HALF) / 100), g0z = Math.floor((cam.z - Rs - 4 + M.HALF) / 100), g1z = Math.floor((cam.z + Rs + 4 + M.HALF) / 100);
     for (let gz = g0z; gz <= g1z; gz++) for (let gx = g0x; gx <= g1x; gx++) {
       const cell = T.grid.get(gx + gz * 1000); if (!cell) continue;
       for (const i of cell) {
         const dx = T.mats[i * 16 + 12] - cam.x, dz = T.mats[i * 16 + 14] - cam.z;
         if (dx * dx + dz * dz > r2) continue;
+        if (lo && dx * dx + dz * dz > rr1) { if (nl < T.cap) { outLo.set(T.mats.subarray(i * 16, i * 16 + 16), nl * 16); nl++; } continue; }
         if (n >= T.cap) return false;
         out.set(T.mats.subarray(i * 16, i * 16 + 16), n * 16); n++;
       }
     }
     T.near.count = n; T.near.instanceMatrix.clearUpdateRanges(); T.near.instanceMatrix.addUpdateRange(0, n * 16); T.near.instanceMatrix.needsUpdate = true;
+    if (lo) { lo.count = nl; lo.instanceMatrix.clearUpdateRanges(); lo.instanceMatrix.addUpdateRange(0, nl * 16); lo.instanceMatrix.needsUpdate = true; }
   }
   return true;
 }
@@ -1283,7 +1305,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
   buildEstates(scene, q, mats, TX, regLod, addCol);
-  const MD = await loadModels(q, ['boulder_01', 'coast_land_rocks_03', 'rock_07', 'coast_rocks_01', 'coast_rocks_02']);
+  const MD = await loadModels(q, ['boulder_01', 'coast_land_rocks_03', 'rock_07', 'coast_rocks_01', 'coast_rocks_02', 'palm_coconut', 'palm_coconut_lod']);
   world.models = MD;
   world.promenade = buildPromenade(scene, q, TX, { regLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [], models: MD });
   buildPoles(scene, q);
@@ -1291,6 +1313,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);
   buildBuildings(scene, q);
+  world.kit = await buildKitCity(scene, q, { regLod });
   buildBoats(scene);
   world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated, models: world.models });
   await progress('Growing the jungle', 0.93);

@@ -9,7 +9,7 @@ import { initAudio, audio } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
 import { loadAvatar, describe as describeAvatar } from './avatars.js';
-import { world } from './world.js';
+import { world, updateWorldLOD } from './world.js';
 import { crowd } from './crowd.js';
 import { U } from './shaders.js';
 
@@ -76,7 +76,7 @@ async function start(opts) {
 // ---------------- test scenarios (headless render test) ----------------
 function setupTests(game) {
   const undo = [];
-  const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); game.render(); };
+  const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); updateWorldLOD(game.cam.position, 400); game.render(); };   // tests: dress every nearby tile before the shot
   const WRECKX = () => M.coastX(3320) - 300;
   const at = (x, z, yaw) => { const p = game.player; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
   const S = {
@@ -170,6 +170,12 @@ function setupTests(game) {
       game.camOverride = () => ({ pos: new THREE.Vector3(F.x - 19, F.y + 2.4, z - 20), look: new THREE.Vector3(c - 10, 0, z + 30) }); step(6); },
     ...Object.fromEntries([6.4, 9.5, 13, 16.6, 17.4, 17.9, 18.4, 22].map((h) => [`tod_${String(h).replace('.', '_')}`, () => { const z = -3925, F = M.seaFrame(z), x = F.x - 14; at(x, z, -0.7); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = h;
       game.camOverride = () => ({ pos: new THREE.Vector3(x + 4, F.y + 2.2, z - 18), look: new THREE.Vector3(x - 14, F.y + 3.5, z + 12) }); step(6); }])),
+    palm_grove: () => { const z = -3700, c = M.coastX(z), x = c + 150; at(x, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = 16.9;
+      game.camOverride = () => ({ pos: new THREE.Vector3(x + 6, M.terrainH(x + 6, z) + 1.8, z - 4), look: new THREE.Vector3(x - 40, M.terrainH(x, z) + 7, z + 18) }); step(8); },
+    ...Object.fromEntries([['kit_town', 'nani', 16.4], ['kit_colonial', 'moti', 9.8], ['kit_hotel', 'devka', 17.2], ['kit_night', 'nani', 20.6]].map(([name, zone, hour]) => [name, () => {
+      const es = M.edges.filter((e) => e.zone === zone && (e.type === 'street' || e.type === 'major') && e.len > 90 && !e.elev), e = es[Math.floor(es.length * 0.37)], A = M.nodes[e.a], B = M.nodes[e.b], dx = (B.x - A.x) / e.len, dz = (B.z - A.z) / e.len;
+      const px = A.x + dx * 8 - dz * 3, pz = A.z + dz * 8 + dx * 3; at(px, pz, Math.atan2(dx, dz)); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = hour;
+      game.camOverride = () => ({ pos: new THREE.Vector3(px, M.groundAt(px, pz) + 1.8, pz), look: new THREE.Vector3(A.x + dx * 50 - dz * 6, M.groundAt(px, pz) + 4.5, A.z + dz * 50 + dx * 6) }); step(6); }])),
     look_noon: () => { at(-2238, -1170, Math.PI * 0.85); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 11.5; game.rig.zoom = 1.6; game.rig.pitch = 0.02; step(6); game.rig.zoom = 1; },
     look_golden: () => { const z = -3900; at(M.coastX(z) + 150, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 17.9; game.rig.zoom = 1.7; game.rig.pitch = 0.0; step(6); game.rig.zoom = 1; },
     look_twilight: () => { const z = -3600; at(M.coastRoadX(z) - 6, z, -Math.PI / 2 - 0.5); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 18.75; game.rig.zoom = 1.8; game.rig.pitch = -0.05; step(6); game.rig.zoom = 1; },
