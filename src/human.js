@@ -428,6 +428,10 @@ export const Pose = {
     return { thighL: [-1.25, 0, 0.75], shinL: [1.4, 0, -0.2], thighR: [-1.25, 0, -0.75], shinR: [1.4, 0, 0.2], spine: [0.15 + b, 0, 0], armL: [-0.8, 0, 0.15], foreL: [-0.9, 0, 0], armR: [-0.8, 0, -0.15], foreR: [-0.9, 0, 0], hipY: -0.3 + b * 0.5 };
   },
   skydive(t) { return { hips: [1.4, 0, 0], neck: [-1.0, 0, 0], armL: [-0.4, 0, 1.4 + S(t * 4) * 0.08], foreL: [-0.6, 0, 0], armR: [-0.4, 0, -1.4 - S(t * 4) * 0.08], foreR: [-0.6, 0, 0], thighL: [0.15, 0, 0.3], shinL: [0.8, 0, 0], thighR: [0.15, 0, -0.3], shinR: [0.8, 0, 0] }; },
+  // superhero flight: body horizontal, one fist forward, legs trailing
+  fly(t, boost) { const b = S(t * 3) * 0.05; return { hips: [1.45, 0, 0], neck: [-1.15, 0, 0], head: [-0.15, 0, 0], armR: [-3.05 - b, 0, -0.08], foreR: [0, 0, 0], armL: boost ? [-3.0 + b, 0, 0.1] : [0.25, 0, 0.35], foreL: boost ? [0, 0, 0] : [-0.3, 0, 0], thighL: [0.12 + b, 0, 0.06], shinL: [0.25, 0, 0], thighR: [0.05 - b, 0, -0.06], shinR: [0.45, 0, 0] }; },
+  hover(t) { const b = S(t * 2) * 0.06; return { spine: [0.05, 0, 0], armL: [0.1, 0, 0.5 + b], foreL: [-0.4, 0, 0], armR: [0.1, 0, -0.5 - b], foreR: [-0.4, 0, 0], thighL: [-0.15 + b, 0, 0.05], shinL: [0.35, 0, 0], thighR: [0.1 - b, 0, -0.05], shinR: [0.2, 0, 0], hipY: 0 }; },
+  slam(t) { return { spine: [0.6, 0, 0], chest: [0.3, 0, 0], armL: [-2.8 + t * 2.5, 0, 0.3], foreL: [-0.3, 0, 0], armR: [-2.8 + t * 2.5, 0, -0.3], foreR: [-0.3, 0, 0], thighL: [-1.4, 0, 0.1], shinL: [1.8, 0, 0], thighR: [-1.2, 0, -0.1], shinR: [1.6, 0, 0], hipY: -0.3 }; },
   chute(t) { return { armL: [-2.6, 0, 0.35], foreL: [-0.6, 0, 0], armR: [-2.6, 0, -0.35], foreR: [-0.6, 0, 0], thighL: [-0.3 + S(t * 2) * 0.1, 0, 0.05], shinL: [0.3, 0, 0], thighR: [-0.2 - S(t * 2) * 0.1, 0, -0.05], shinR: [0.4, 0, 0] }; },
   web(t, swing) { return { armR: [-2.9, 0, -0.15], foreR: [-0.1, 0, 0], armL: [-0.6 + swing * 0.5, 0, 0.6], foreL: [-1.2, 0, 0], spine: [-0.2 + swing * 0.3, 0, 0], thighL: [-0.6 - swing * 0.6, 0, 0.1], shinL: [1.2, 0, 0], thighR: [-0.2 + swing * 0.4, 0, -0.1], shinR: [0.5, 0, 0], neck: [-0.3, 0, 0] }; },
   aim(pitch, rifle) {

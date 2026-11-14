@@ -108,6 +108,8 @@ export class Character {
     const mv = c.move || new THREE.Vector3(), mag = Math.min(1, mv.length());
     let want = 0;
     if (canAct && mag > 0.05) want = (c.sprint ? this.sprintSpeed : mag > 0.6 ? this.runSpeed : 2.0 + mag * 3) * (this.atk ? 0.15 : 1) * (c.aim ? 0.55 : 1);
+    // Flash Speed power: lightning-fast running with an afterimage trail
+    if (this.flash > 0) { this.flash -= dt; want *= 4.2; if (want > 1 && Math.random() < 0.8) burst('spark', this.pos.x, this.pos.y + 0.6 + Math.random() * 1.0, this.pos.z, 2, 0.6); if (this.flash <= 0) this.game.onPowerEnd && this.game.onPowerEnd(this, 'flash'); }
     const dir = mag > 0.05 ? mv.clone().normalize() : this.forward();
     switch (this.state) {
       case 'ground': {
@@ -128,6 +130,7 @@ export class Character {
           if (mag > 0.3) { this.vel.x += dir.x * 1.5; this.vel.z += dir.z * 1.5; }
         }
         if (canAct && c.sprint && wall && mag > 0.5 && this.powers && this.wallTop(wall) - this.pos.y > 2.0 && dir.x * -wall.nx + dir.z * -wall.nz > 0.6) this.startClimb(wall);
+        if (canAct && c.webPress && this.powers && this.webCd <= 0) { this.vel.y = this.jumpV * 1.35; this.state = 'air'; this.usedFlip = false; this.airT = 0; this.webAuto = 0.22; sfx('whoosh', 0.5); break; }
         if (canAct && c.roll && this.landT <= 0) { this.state = 'roll'; this.t = 0; this.inv = 0.5; this.vel.x = dir.x * 9; this.vel.z = dir.z * 9; this.yaw = Math.atan2(dir.x, dir.z); }
         this.landT = Math.max(0, this.landT - dt);
         const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -147,6 +150,7 @@ export class Character {
         else if (canAct && wall && (c.jump || (c.sprint && mag > 0.5)) && this.powers && this.wallTop(wall) - this.pos.y > 1.2 && this.airT > 0.1) { if (!this.tryMantle(wall)) this.startClimb(wall); break; }
         else if (canAct && wall && c.jump && this.tryMantle(wall)) break;
         if (canAct && c.attack && !this.atk && this.vel.y < 3) this.startAttack('flykick');
+        if (this.webAuto > 0) { this.webAuto -= dt; if (this.webAuto <= 0 && this.powers && this.startWeb({ ...c, web: true, webPress: true })) break; }
         if (canAct && (c.web || c.webPress) && this.powers && this.webCd <= 0 && this.startWeb(c)) break;
         const ng = this.groundY();
         if (canAct && c.chute && this.pos.y - ng > 18) { this.state = 'glide'; this.t = 0; sfx('whoosh', 0.8); break; }
@@ -205,6 +209,33 @@ export class Character {
         break;
       }
       case 'web': this.updWeb(dt, c, dir, mag); break;
+      case 'fly': {
+        // Flight power: fly where the camera points; Space climbs, Shift boosts, landing is automatic
+        const aim = c.aimDir || this.forward(), boost = c.sprint ? 1 : 0;
+        const tgt = new THREE.Vector3();
+        if (mag > 0.05) { tgt.copy(dir).multiplyScalar(mag); if (c.aimDir) tgt.y = c.aimDir.y * mag * 1.2; }
+        if (c.up) tgt.y += 0.8; if (c.down) tgt.y -= 0.8;
+        const speed = boost ? 62 : 22;
+        this.vel.x = damp(this.vel.x, tgt.x * speed, 2.2, dt); this.vel.y = damp(this.vel.y, tgt.y * speed + Math.sin(this.t * 2) * 0.3, 2.2, dt); this.vel.z = damp(this.vel.z, tgt.z * speed, 2.2, dt);
+        if (mag > 0.05) this.yaw = dampAngle(this.yaw, Math.atan2(dir.x, dir.z), 4, dt);
+        this.pos.addScaledVector(this.vel, dt); this.collide();
+        const ng = this.groundY();
+        if (this.pos.y < ng + 0.05) { this.pos.y = ng; if (this.vel.y < -1 && mag < 0.1) { this.state = 'ground'; this.landT = 0.25; } }
+        if (this.pos.y < wl - 0.6) this.pos.y = wl - 0.6;
+        if (boost && Math.hypot(this.vel.x, this.vel.z) > 30 && Math.random() < 0.6) burst('steam', this.pos.x - this.vel.x * 0.05, this.pos.y + 0.6, this.pos.z - this.vel.z * 0.05, 1, 0.5);
+        break;
+      }
+      case 'slam': {
+        // Thunder Slam: dive straight down, shockwave on impact
+        this.slamT = (this.slamT || 0) + dt;
+        if (this.slamT < 0.35 && this.slamUp) { this.vel.y = 16; } else { this.vel.y = Math.min(this.vel.y - 60 * dt, -38); }
+        this.vel.x *= Math.exp(-2 * dt); this.vel.z *= Math.exp(-2 * dt);
+        this.pos.addScaledVector(this.vel, dt); this.collide();
+        const ng = this.groundY();
+        if (this.pos.y <= ng) { this.pos.y = ng; this.state = 'ground'; this.landT = 0.45; this.vel.set(0, 0, 0); this.game.slamImpact && this.game.slamImpact(this); }
+        if (this.pos.y < wl - 0.4) { this.toSwim(wl); this.game.slamImpact && this.game.slamImpact(this); }
+        break;
+      }
       case 'down': {
         this.downT -= dt; this.vel.x *= Math.exp(-5 * dt); this.vel.z *= Math.exp(-5 * dt); this.vel.y -= 20 * dt;
         this.pos.addScaledVector(this.vel, dt); this.collide(); const ng = this.groundY(); if (this.pos.y < ng) { this.pos.y = ng; this.vel.y = 0; }
@@ -348,6 +379,8 @@ export class Character {
       case 'glide': P = Pose.skydive(this.t); break;
       case 'chute': P = Pose.chute(this.t); break;
       case 'web': { const sw = clamp(this.vel.y / 15, -1, 1); P = Pose.web(this.t, sw); break; }
+      case 'fly': P = sp > 4 ? Pose.fly(this.t, sp > 35) : Pose.hover(this.t); break;
+      case 'slam': P = Pose.slam(Math.min(1, (this.slamT || 0) / 0.5)); break;
       case 'down': P = Pose.down(Math.min(1, (1.6 - this.downT) * 4)); if (this.downT < 0.5) P = blendPose(P, Pose.idle(0), 1 - this.downT / 0.5); break;
       case 'dead': P = Pose.down(Math.min(1, this.t * 3)); break;
       default: P = Pose.idle(this.t);

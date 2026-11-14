@@ -3,12 +3,12 @@ import { touchApi, input } from './input.js';
 import { audio } from './audio.js';
 
 const $ = (tag, attrs = {}, parent) => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'text') e.textContent = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (parent) parent.appendChild(e); return e; };
-const TIPS = ['Make masala chai at a stall or in any home kitchen to heal fully.', 'Hold WEB in the air to swing between buildings and trees.', 'Climb any wall: run into it and keep pushing, or jump onto it.', 'Jump off the Daman Sky Tower and open your parachute with CHUTE.', 'Switch between Veer and Mira any time with ⇄.', 'Kaala Naag sleeps beneath Naag Sarovar on the plateau…', 'Fighter jets wait at Daman Airport. Missiles lock on to big targets.', 'Horses graze on Jampore beach and at the Jungle Camp.', 'Monsoon brings storms; winter brings fog and mustard fields.'];
+const TIPS = ['Make masala chai at a stall or in any home kitchen to heal fully.', 'Hold WEB in the air to swing between buildings and trees.', 'Climb any wall: run into it and keep pushing, or jump onto it.', 'Jump off the Daman Sky Tower and open your parachute with CHUTE.', 'Bosses are marked ☠ on the map — tap one on the map, or use Menu → Bosses → FIGHT.', 'Jampore Villa Colony is full of mansions you can walk into.', 'Kaala Naag sleeps beneath Naag Sarovar on the plateau…', 'Fighter jets wait at Daman Airport. Missiles lock on to big targets.', 'Horses graze on Jampore beach and at the Jungle Camp.', 'Monsoon brings storms; winter brings fog and mustard fields.'];
 export class HUD {
   constructor(game) {
     this.game = game; this.root = $('div', { id: 'hud', class: 'ui' }, document.body); this.root.style.display = 'none';
     const tl = $('div', { id: 'topl' }, this.root);
-    this.ports = ['Veer', 'Mira'].map((n, i) => { const p = $('div', { class: 'port' + (i === 0 ? ' on' : '') }, tl); $('b', { text: n.toUpperCase() }, p); const hp = $('div', { class: 'hp' }, p); const bar = $('div', {}, hp); const ar = $('div', { class: 'hp ar' }, p); const abar = $('div', { style: 'width:0%' }, ar); p.onclick = () => this.game.switchHero(); return { p, bar, abar }; });
+    this.ports = ['Vikas', 'Mira · friend'].map((n, i) => { const p = $('div', { class: 'port' + (i === 0 ? ' on' : ' friend') }, tl); $('b', { text: n.toUpperCase() }, p); const hp = $('div', { class: 'hp' }, p); const bar = $('div', {}, hp); const ar = $('div', { class: 'hp ar' }, p); const abar = $('div', { style: 'width:0%' }, ar); return { p, bar, abar }; });
     const tr = $('div', { id: 'topr' }, this.root);
     this.clock = $('div', { id: 'clock' }, tr); this.season = $('div', { id: 'season' }, tr); this.money = $('div', { id: 'money' }, tr); this.starsEl = $('div', { id: 'stars' }, tr); this.weapon = $('div', { id: 'weapon' }, tr);
     this.mm = $('div', { id: 'minimap' }, this.root); this.mmc = $('canvas', { width: 256, height: 256 }, this.mm); this.mmx = this.mmc.getContext('2d');
@@ -39,7 +39,7 @@ export class HUD {
     const r3 = $('div', { class: 'row', style: 'margin-top:12px' }, t);
     if (opts.hasSave) { const nb = $('button', { class: 'btn alt', text: 'NEW GAME' }, r3); nb.onclick = () => { opts.newGame = true; go(); }; }
     const hb = $('button', { class: 'btn alt', text: 'CONTROLS' }, r3); hb.onclick = () => this.showHelp(true);
-    $('div', { class: 'foot', text: `v${opts.version} · ${opts.platformLabel} · Built entirely in code · Desktop: WASD + mouse, F interact, Q switch hero, R web, G parachute, M map, Esc menu` }, t);
+    $('div', { class: 'foot', text: `v${opts.version} · ${opts.platformLabel} · Desktop: WASD/arrows + mouse · click fight · right-click aim · Tab weapons & powers · Shift sprint · Space jump · Enter interact · M map · Esc menu` }, t);
     const go = () => { t.remove(); onPlay(opts); };
     play.onclick = go;
     this.titleEl = t;
@@ -64,7 +64,7 @@ export class HUD {
     // buttons: [id, label, action, right, bottom, big, toggle]
     const B = [
       ['atk', 'PUNCH', 'attack', 30, 40, 1], ['jump', 'JUMP', 'jump', 30, 140], ['kick', 'KICK', 'kick', 130, 30], ['sprint', 'SPRINT', 'sprint', 112, 118, 0, 1], ['web', 'WEB', 'web', 200, 70],
-      ['aim', 'AIM', 'aim', 210, 160, 0, 1], ['roll', 'ROLL', 'roll', 285, 30], ['act', 'F', 'interact', 30, 225], ['sw', '⇄', 'switch', 120, 205], ['gun', 'GUN', 'weapon', 200, 245],
+      ['aim', 'AIM', 'aim', 210, 160, 0, 1], ['roll', 'ROLL', 'roll', 285, 30], ['act', 'F', 'interact', 30, 225], ['gun', 'GUN', 'weapon', 200, 245],
       ['chute', 'CHUTE', 'chute', 290, 120], ['up', 'UP ▲', 'jump', 30, 140], ['down', 'DOWN ▼', 'down', 120, 40], ['fire', 'FIRE', 'attack', 30, 40, 1], ['missile', 'MISSILE', 'kick', 130, 30], ['boost', 'BOOST', 'sprint', 112, 118],
       ['hand', 'DRIFT', 'jump', 30, 140], ['nitro', 'NITRO', 'sprint', 112, 118], ['exit', 'EXIT', 'interact', 30, 225], ['horn', 'HORN', 'horn', 130, 30], ['gallop', 'GALLOP', 'sprint', 30, 40, 1], ['cam', 'CAM', 'camera', 200, 245],
     ];
@@ -77,19 +77,20 @@ export class HUD {
       this.tb[id] = el;
     }
     this.modeSets = {
-      foot: ['atk', 'jump', 'kick', 'sprint', 'web', 'aim', 'roll', 'sw', 'gun'], air: ['atk', 'jump', 'web', 'chute', 'sw'], glide: ['chute', 'web'], chute: ['down'],
-      swim: ['jump', 'sprint', 'sw'], car: ['hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
+      foot: ['atk', 'jump', 'kick', 'sprint', 'web', 'aim', 'roll', 'gun'], air: ['atk', 'jump', 'web', 'chute', 'gun'], fly: ['up', 'down', 'atk', 'boost', 'gun'], glide: ['chute', 'web'], chute: ['down'],
+      swim: ['jump', 'sprint'], car: ['hand', 'nitro', 'exit', 'horn', 'cam'], heli: ['up', 'down', 'fire', 'exit', 'cam'], plane: ['up', 'down', 'exit', 'boost', 'cam'], jet: ['up', 'down', 'fire', 'missile', 'boost', 'exit', 'cam'],
       horse: ['gallop', 'jump', 'exit', 'cam'], boat: ['exit', 'horn', 'cam'], busy: [], climb: ['jump', 'web', 'sprint'],
     };
     this.curMode = '';
   }
   showTouch(on) { this.touch.style.display = on ? 'block' : 'none'; this.touchOn = on; }
   setMode(mode, canAct) {
-    const key = mode + (canAct ? '+' : '');
+    const pl = this.game.player, tool = pl && this.game.toolOf ? this.game.toolOf(pl) : null;
+    const key = mode + (canAct ? '+' : '') + (tool ? tool.id : '');
     if (key === this.curMode) return; this.curMode = key;
     const set = new Set(this.modeSets[mode] || []); if (canAct) set.add('act');
     for (const id in this.tb) this.tb[id].classList.toggle('hide', !set.has(id));
-    this.tb.atk.textContent = this.game.player && this.game.player.weapon > 0 ? 'FIRE' : 'PUNCH';
+    this.tb.atk.textContent = !tool ? 'PUNCH' : tool.id === 'pistol' || tool.id === 'rifle' ? 'FIRE' : tool.id === 'web' ? 'WEB' : tool.id === 'flash' ? 'FLASH' : tool.id === 'slam' ? 'SLAM' : tool.id === 'fly' ? (pl.state === 'fly' ? 'LAND' : 'FLY') : 'PUNCH';
   }
   // ---------- per-frame HUD ----------
   update(dt, s) {
@@ -113,6 +114,11 @@ export class HUD {
   hurtFlash(a) { this.flash.style.opacity = a; setTimeout(() => (this.flash.style.opacity = 0), 120); }
   toast(text, t = 3, color = '#ffd54f') { this.toastEl.style.display = 'block'; this.toastEl.style.color = color; this.toastEl.innerHTML = text; this.toastT = t; }
   stars(n) { this.starsEl.textContent = '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n)); this.starsEl.style.display = n ? 'block' : 'none'; }
+  cinematic(title, sub, dur) {
+    if (!this.cineEl) { this.cineEl = $('div', { id: 'cine' }, document.body); this.cineEl.innerHTML = '<div class="bar t"></div><div class="bar b"></div><div class="card"><h1></h1><p></p></div>'; }
+    const el = this.cineEl; el.querySelector('h1').textContent = title; el.querySelector('p').textContent = sub || ''; el.classList.add('on'); document.body.classList.add('cine');
+    clearTimeout(this.cineT); this.cineT = setTimeout(() => { el.classList.remove('on'); document.body.classList.remove('cine'); }, (dur || 5) * 1000);
+  }
   boss(name, frac) { if (name) { this.bossEl.style.display = 'block'; this.bossEl.querySelector('span').textContent = name; } if (frac !== undefined) this.bossEl.querySelector('.hp div').style.width = frac * 100 + '%'; if (frac <= 0) setTimeout(() => (this.bossEl.style.display = 'none'), 3000); }
   drawMinimap(s) {
     const c = this.mmx, W = 256, g = this.game, mc = g.world.mapCanvas; if (!mc) return;
@@ -126,6 +132,13 @@ export class HUD {
     for (const h of g.heroes) if (h !== g.player) dot(h.pos.x, h.pos.z, '#69f0ae', 4);
     if (s.serpent) dot(s.serpent.x, s.serpent.z, '#d500f9', 9);
     c.restore();
+    // boss arenas: always shown; when far away they sit on the rim pointing the way
+    const rot = -(g.rig.yaw + Math.PI);
+    for (const m of s.markers) if (m.boss) {
+      let dx = (m.x - P.x) * scale * zoom, dz = (m.z - P.z) * scale * zoom; const x0 = dx * Math.cos(rot) - dz * Math.sin(rot), z0 = dx * Math.sin(rot) + dz * Math.cos(rot); const L = Math.hypot(x0, z0), k = L > 104 ? 104 / L : 1;
+      const X = W / 2 + x0 * k, Y = W / 2 + z0 * k; c.fillStyle = m.color; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.arc(X, Y, 11, 0, 7); c.fill(); c.stroke();
+      c.fillStyle = '#fff'; c.font = 'bold 14px sans-serif'; c.textAlign = 'center'; c.fillText('☠', X, Y + 5); c.textAlign = 'left';
+    }
     c.fillStyle = '#fff'; c.beginPath(); c.moveTo(W / 2, W / 2 - 11); c.lineTo(W / 2 - 7, W / 2 + 8); c.lineTo(W / 2 + 7, W / 2 + 8); c.closePath(); c.fill();
     const na = -(g.rig.yaw + Math.PI); c.fillStyle = '#ff5252'; c.font = 'bold 20px sans-serif'; c.fillText('N', W / 2 + Math.sin(-na) * 108 - 7, W / 2 - Math.cos(-na) * 108 + 7);
   }
@@ -145,9 +158,12 @@ export class HUD {
     c.drawImage(g.world.mapCanvas, 0, 0, 1024, 1024);
     const k = 1024 / 20000, X = (x) => (x + 10000) * k, Z = (z) => (z + 10000) * k;
     c.font = 'bold 15px sans-serif'; c.textAlign = 'center';
-    for (const L of g.world.labels) { c.fillStyle = '#ffd54f'; c.beginPath(); c.arc(X(L.x), Z(L.z), 5, 0, 7); c.fill(); c.fillStyle = '#000a'; c.fillText(L.name, X(L.x) + 1, Z(L.z) - 9); c.fillStyle = '#fff'; c.fillText(L.name, X(L.x), Z(L.z) - 10); }
+    for (const L of g.world.labels) { if (L.boss) continue; c.fillStyle = '#ffd54f'; c.beginPath(); c.arc(X(L.x), Z(L.z), 5, 0, 7); c.fill(); c.fillStyle = '#000a'; c.fillText(L.name, X(L.x) + 1, Z(L.z) - 9); c.fillStyle = '#fff'; c.fillText(L.name, X(L.x), Z(L.z) - 10); }
     const P = g.playerPos(); c.fillStyle = '#00e5ff'; c.beginPath(); c.arc(X(P.x), Z(P.z), 9, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke();
-    for (const mk of g.markers()) { c.fillStyle = '#ffeb3b'; c.fillRect(X(mk.x) - 7, Z(mk.z) - 7, 14, 14); }
+    for (const mk of g.markers()) {
+      if (mk.boss) { c.fillStyle = mk.color; c.beginPath(); c.arc(X(mk.x), Z(mk.z), 16, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke(); c.fillStyle = '#fff'; c.font = 'bold 18px sans-serif'; c.fillText('☠', X(mk.x), Z(mk.z) + 6); c.font = 'bold 15px sans-serif'; c.fillStyle = '#000a'; c.fillText('BOSS: ' + mk.boss, X(mk.x) + 1, Z(mk.z) - 21); c.fillStyle = mk.color; c.fillText('BOSS: ' + mk.boss, X(mk.x), Z(mk.z) - 22); }
+      else { c.fillStyle = '#ffeb3b'; c.fillRect(X(mk.x) - 7, Z(mk.z) - 7, 14, 14); }
+    }
     this.mapEl.style.display = 'flex';
   }
   closeMap() { this.mapEl.style.display = 'none'; this.game.paused = false; }
@@ -166,6 +182,12 @@ export class HUD {
     const sec = (t) => $('div', { class: 'lbl', text: t, style: 'margin:14px 0 4px;opacity:.7;letter-spacing:.2em;font-size:12px' }, b);
     sec('MISSIONS');
     for (const ms of g.missions.list) { const r = $('div', { class: 'setrow' }, b); $('span', { text: (ms.done ? '✔ ' : '') + ms.name + ' — ' + ms.desc }, r); const go = $('button', { class: 'btn alt', text: ms.done ? 'REPLAY' : 'START' }, r); go.onclick = () => { this.closeMenu(); g.missions.start(ms.id); }; }
+    sec('BOSSES');
+    for (const bs of g.bosses || []) {
+      const r = $('div', { class: 'setrow' }, b), pw = { flash: 'Flash Speed', slam: 'Thunder Slam', flight: 'Flight' }[bs.reward || 'flash'];
+      $('span', { text: `${bs.defeated ? '✔ ' : '☠ '}${bs.name} — reward: ${pw}${g.powersUnlocked.has(bs.reward || 'flash') ? ' (unlocked)' : ''}` }, r);
+      const go = $('button', { class: 'btn alt', text: bs.active ? 'FIGHTING' : bs.defeated ? 'REMATCH' : 'FIGHT' }, r); go.onclick = () => { if (bs.active) return; this.closeMenu(); g.fightBoss(bs); };
+    }
     sec('WORLD');
     const set = (label, opts, cur, cb) => { const r = $('div', { class: 'setrow' }, b); $('span', { text: label }, r); const o = $('div', { class: 'opts' }, r); const els = opts.map(([k, t]) => { const e = $('button', { class: 'btn alt' + (k === cur ? ' on' : ''), text: t }, o); e.onclick = () => { els.forEach((x) => x.classList.remove('on')); e.classList.add('on'); cb(k); }; return e; }); };
     set('Season', [['summer', 'Summer'], ['monsoon', 'Monsoon'], ['postmonsoon', 'Post-monsoon'], ['winter', 'Winter']], g.weather.season, (k) => g.weather.setSeason(k));
@@ -194,11 +216,12 @@ export class HUD {
     const h = this.helpEl = $('div', { id: 'help' }, document.body), p = $('div', { class: 'panel' }, h);
     p.innerHTML = `<h3>CONTROLS</h3>
     <p><b>Phone:</b> left stick moves, drag the right side to look. Buttons change with what you're doing (on foot, driving, flying, riding, swimming). F appears when you can interact.</p>
-    <p><b>Desktop:</b> <kbd>WASD</kbd> move · mouse look · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / double-jump flip · <kbd>LMB</kbd> punch / fire · <kbd>E</kbd> kick · <kbd>RMB</kbd> aim / block · <kbd>X</kbd> roll · <kbd>R</kbd> hold to web-swing · <kbd>G</kbd> wingsuit → parachute · <kbd>F</kbd> enter / exit / interact · <kbd>Q</kbd> switch Veer ⇄ Mira · <kbd>Tab</kbd> weapon · <kbd>M</kbd> map · <kbd>V</kbd> camera · <kbd>Esc</kbd> menu · <kbd>F11</kbd> fullscreen</p>
-    <p><b>Cars:</b> <kbd>W</kbd>/<kbd>S</kbd> gas/brake · <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>Space</kbd> handbrake drift · <kbd>Shift</kbd> nitro · <kbd>H</kbd> horn.<br>
-    <b>Helicopter:</b> <kbd>WASD</kbd> tilt · <kbd>Space</kbd> up · <kbd>C</kbd> down · <kbd>LMB</kbd> guns.<br>
-    <b>Jets:</b> <kbd>W</kbd>/<kbd>S</kbd> pitch · <kbd>A</kbd>/<kbd>D</kbd> roll · <kbd>Z</kbd>/<kbd>Y</kbd> yaw · <kbd>Space</kbd> throttle up · <kbd>C</kbd> throttle down · <kbd>Shift</kbd> afterburner · <kbd>LMB</kbd> cannon · <kbd>E</kbd> missile · <kbd>F</kbd> eject (parachute!).<br>
-    <b>Horse:</b> move with stick · <kbd>Shift</kbd> tap repeatedly to gallop · <kbd>Space</kbd> jump.</p>
+    <p><b>Desktop — on foot:</b> <kbd>WASD</kbd>/<kbd>Arrows</kbd> move · <b>roll the mouse wheel forward</b> to walk · <b>move the mouse</b> to turn · <b>hold Left mouse + drag</b> to look around freely · <b>Left click</b> punch / shoot / use the selected power · <b>Right mouse</b> aim (then Left click fires; hold to keep firing) · <kbd>Tab</kbd> next weapon or power (Fists, Pistol, Rifle, Web Shooter + unlocked powers) · <kbd>Shift</kbd> sprint (tap = dodge roll, Shift + click = kick) · <kbd>Space</kbd> jump / double-jump flip / in the air: wingsuit, again: parachute · <kbd>Enter</kbd> enter vehicles and buildings, ride, make chai, talk · <kbd>Esc</kbd> menu · <kbd>M</kbd> map</p>
+    <p><b>Web Shooter:</b> select it with <kbd>Tab</kbd>, then Left click to zip up and swing (hold to keep swinging). <b>Powers</b> (beat the bosses to unlock): <b>Flash Speed</b> (click to run like lightning), <b>Thunder Slam</b> (click: leap and smash), <b>Flight</b> (click to take off · <kbd>Space</kbd> climb · <kbd>Shift</kbd> boost · steer with the mouse · click again to drop).</p>
+    <p><b>Cars:</b> <kbd>W</kbd>/<kbd>S</kbd> gas/brake · <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>Space</kbd> handbrake drift · <kbd>Shift</kbd> nitro · Left click horn · <kbd>Enter</kbd> exit.<br>
+    <b>Helicopter:</b> <kbd>WASD</kbd> fly · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · Left mouse guns.<br>
+    <b>Jets:</b> <kbd>W</kbd>/<kbd>S</kbd> pitch · <kbd>A</kbd>/<kbd>D</kbd> roll · <kbd>←</kbd>/<kbd>→</kbd> rudder · <kbd>↑</kbd>/<kbd>Space</kbd> throttle up · <kbd>↓</kbd> throttle down · <kbd>Shift</kbd> afterburner · Left mouse cannon · Right click missile · <kbd>Enter</kbd> eject (parachute!).<br>
+    <b>Horse:</b> <kbd>WASD</kbd> · <kbd>Shift</kbd> tap repeatedly to gallop · <kbd>Space</kbd> jump · <kbd>Enter</kbd> dismount.</p>
     <p><b>Things to do:</b> story missions (menu), street fights, gang hideout at Kachigam Docks, enter any building, make chai, explore caves, climb the 260 m Sky Tower and skydive, ride horses along Jampore beach, fly a fighter jet over the Arabian Sea, find the serpent of Naag Sarovar.</p>
     <button class="btn" id="helpclose">GOT IT</button>`;
     p.querySelector('#helpclose').onclick = () => this.showHelp(false);

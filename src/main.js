@@ -34,7 +34,7 @@ async function start(opts) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = q.desktop ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   hud.loading(true);
-  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game;
+  const game = new Game(renderer, q, presetKey, hud); game.newGame = !!opts.newGame; window.__game = game; window.__M = M;
   if (opts.newGame) try { localStorage.removeItem('damanduo.save'); } catch (e) {}
   const t0 = performance.now();
   await game.init(async (msg, p) => { hud.progress(msg, p); await nextFrame(); });
@@ -100,6 +100,22 @@ function setupTests(game) {
     waterfall: () => { at(world.falls.bot - 160, M.PLAT.z - 40, Math.PI / 2 - 0.2); game.rig.zoom = 1.6; game.rig.pitch = -0.05; game.sky.hour = 11; step(10); game.rig.zoom = 1; },
     mountains: () => { at(M.L.peak.x, M.L.peak.z, -Math.PI / 2); game.rig.zoom = 2; game.rig.pitch = 0.15; game.sky.hour = 6.6; game.weather.setSeason('winter'); step(10); game.weather.setSeason('postmonsoon'); game.rig.zoom = 1; },
     serpent_boss: () => { at(M.PLAT.lx - 330, M.PLAT.lz - 140, Math.PI / 2); game.serpent.awaken(); game.sky.hour = 18.4; for (let i = 0; i < 160; i++) game.update(1 / 20); game.rig.zoom = 2.2; game.rig.pitch = 0.2; game.rig.yaw = Math.atan2(game.player.pos.x - game.serpent.head.x, game.player.pos.z - game.serpent.head.z); step(3); game.rig.zoom = 1; },
+    serpent_close: () => { const S = game.serpent; game.fightBoss(S); S.awaken(); for (let i = 0; i < 200; i++) game.update(1 / 20); game.sky.hour = 17.6;
+      game.camOverride = () => { const h = S.head, d = new THREE.Vector3(Math.sin(S.yaw), 0, Math.cos(S.yaw)); return { pos: h.clone().addScaledVector(d, 70).add(new THREE.Vector3(18, -6, 0)), look: h.clone().add(new THREE.Vector3(0, -8, 0)) }; }; step(3); },
+    makara_boss: () => { const B = game.makara; game.fightBoss(B); B.awaken(); for (let i = 0; i < 130; i++) game.update(1 / 20); game.sky.hour = 16.5;
+      game.camOverride = () => { const p = B.pos, d = new THREE.Vector3(Math.sin(B.yaw), 0, Math.cos(B.yaw)); const sd = new THREE.Vector3(d.z, 0, -d.x); return { pos: p.clone().addScaledVector(d, 30).addScaledVector(sd, 22).add(new THREE.Vector3(0, 9, 0)), look: p.clone().addScaledVector(d, 8).add(new THREE.Vector3(0, 3, 0)) }; }; step(3); },
+    rakshasa_boss: () => { const B = game.rakshasa; game.fightBoss(B); B.awaken(); for (let i = 0; i < 130; i++) game.update(1 / 20); game.sky.hour = 15.5;
+      game.camOverride = () => { const p = B.pos, d = new THREE.Vector3(Math.sin(B.yaw), 0, Math.cos(B.yaw)); const sd = new THREE.Vector3(d.z, 0, -d.x); return { pos: p.clone().addScaledVector(d, 26).addScaledVector(sd, 8).add(new THREE.Vector3(0, 19, 0)), look: p.clone().add(new THREE.Vector3(0, 19, 0)) }; }; step(3); },
+    boss_intro: () => { const B = game.rakshasa; B.sleep && B.sleep(); game.fightBoss(B); B.awaken(); for (let i = 0; i < 40; i++) game.update(1 / 20); step(2); },
+    power_flight: () => { const p = game.player; at(-2300, -1300, Math.PI); for (const k of ['flash', 'slam', 'flight']) game.powersUnlocked.add(k); game.setTool(p, 'fly'); game.usePower(p, 'flight'); input.tx = 0; input.ty = 1; for (let i = 0; i < 70; i++) { input.held.add('sprint'); game.update(1 / 30); } input.held.delete('sprint'); input.ty = 0; game.sky.hour = 16; step(3); },
+    power_flash: () => { const p = game.player; at(-2238, -770, Math.PI); game.powersUnlocked.add('flash'); game.setTool(p, 'flash'); game.usePower(p, 'flash'); input.tx = 0; input.ty = 1; for (let i = 0; i < 25; i++) game.update(1 / 30); input.ty = 0; step(2); },
+    villa_colony: () => { const p = M.estates.find((e) => e.name) || M.estates[0]; at(p.cx + 40, p.cz + p.face * (p.z1 - p.z0) * 0.5 + p.face * 30, p.face > 0 ? Math.PI : 0); game.sky.hour = 17.3;
+      game.camOverride = () => ({ pos: new THREE.Vector3(p.cx + 70, p.y + 38, p.cz + p.face * 120), look: new THREE.Vector3(p.cx, p.y + 8, p.cz) }); step(6); },
+    mansion_front: () => { const e = M.estates.find((e) => e.kind === 'mansion' && e.style === 'modern') || M.estates[0], H = e.house, hx = (H.x0 + H.x1) / 2; at(hx, e.pool.z0 + e.face * 14, 0); game.sky.hour = 18.6;
+      game.camOverride = () => ({ pos: new THREE.Vector3(hx + 16, e.y + 7, (e.pool.z0 + e.pool.z1) / 2 + e.face * 26), look: new THREE.Vector3(hx, e.y + 5, (H.z0 + H.z1) / 2) }); step(6); },
+    villa_night: () => { const e = M.estates.find((e) => e.kind === 'villa') || M.estates[0], H = e.house, hx = (H.x0 + H.x1) / 2; at(hx, e.pool.z0 + e.face * 10, 0); game.sky.hour = 21;
+      game.camOverride = () => ({ pos: new THREE.Vector3(hx - 10, e.y + 5, (e.pool.z0 + e.pool.z1) / 2 + e.face * 16), look: new THREE.Vector3(hx, e.y + 3.5, (H.z0 + H.z1) / 2) }); step(6); },
+    mansion_interior: () => { const i = M.buildings.findIndex((b) => b.style === 5 && M.estates[b.estate].kind === 'mansion'), b = M.buildings[i]; game.enterInterior(game.interior.enter(b, i, 'mansion')); game.rig.zoom = 1.6; game.rig.pitch = 0.25; step(10); },
     gang_fight: () => { at(M.L.hideout.x - 20, M.L.hideout.z - 20, 0.7); const g = game.npcs.spawnGang(6, M.L.hideout.x, M.L.hideout.z, true); for (const e of g) e.pos.set(game.player.pos.x + (Math.random() - 0.5) * 8, game.player.pos.y, game.player.pos.z + 3 + Math.random() * 4); for (let i = 0; i < 30; i++) { input.pressed.add('attack'); game.update(1 / 30); } game.render(); },
     interior_home: () => { at(-2238, -770, 0); const b = M.buildings.find((b) => b.style === 0 && Math.abs(b.x0 + 2300) < 300 && Math.abs(b.z0 + 900) < 300); game.enterInterior(game.interior.enter(b, M.buildings.indexOf(b), 'home')); const p = game.player; p.pos.copy(game.interior.stove).add(new THREE.Vector3(0.6, 0, 0.2)); p.yaw = -Math.PI / 2; game.makeChai(game.interior.stoveTop); game.rig.yaw = p.yaw + Math.PI + 0.7; game.rig.pitch = 0.2; step(40); game.leaveInterior(); },
     cave: () => { const c = world.caves[0]; game.enterInterior(game.interior.enterCave(c)); step(12); game.leaveInterior(); },

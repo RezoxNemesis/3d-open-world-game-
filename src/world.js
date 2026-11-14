@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
+import { buildEstates } from './estates.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
 import * as TR from './terrain.js';
@@ -244,12 +245,13 @@ function buildBuildings(scene, q) {
   for (let i = 0; i < n; i++) {
     const b = B[i], w = b.x1 - b.x0, d = b.z1 - b.z0, top = b.y + b.h + 0.4;
     let rh = 0;
+    if (b.hidden) { addCol(b.x0, b.z0, b.x1, b.z1, b.y, top, { bld: i }); continue; }
     if (b.roof) { rh = Math.min(w, d) * 0.32; roofs.push({ b, rh, top }); }
     else if ((b.style === 0 || b.style === 1) && R() < 0.55) tanks.push({ x: b.x0 + 1.6 + R() * (w - 3.2), z: b.z0 + 1.6 + R() * (d - 3.2), y: top });
     addCol(b.x0, b.z0, b.x1, b.z1, b.y, top + rh * 0.55, { bld: i });
   }
   const bfar = q.bldFar || 6000, _c = new THREE.Color();
-  instTiles(scene, box, mat, B, 1000, bfar, (m, b, i) => {
+  instTiles(scene, box, mat, B.filter((b) => !b.hidden), 1000, bfar, (m, b, i) => {
     _m.compose(_p.set((b.x0 + b.x1) / 2, b.y, (b.z0 + b.z1) / 2), _q.identity(), _s.set(b.x1 - b.x0, b.h + 0.4, b.z1 - b.z0)); m.setMatrixAt(i, _m); m.setColorAt(i, _c.set(b.color));
   }, { xz: (b) => [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2], inst: [['aInfo', 2, (b) => [b.seed, b.style]]] });
   patch(mat, (s) => {
@@ -1238,6 +1240,9 @@ export async function buildWorld(scene, q, progress, renderer) {
   buildRoads(scene, mats, q);
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
+  buildEstates(scene, q, mats, TX, regLod, addCol);
+  world.labels.push({ name: 'Jampore Villa Colony', x: M.L.villas.x, z: M.L.villas.z });
+  { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);
   buildBuildings(scene, q);
   buildBoats(scene);
