@@ -621,6 +621,22 @@ function placeLights() {
   }
 }
 
+// electric poles + overhead wires along town streets and village lanes (the classic Indian streetscape)
+export const poles = [], wires = [];
+function placePoles() {
+  edges.forEach((e, ei) => {
+    if (e.elev || e.len < 30 || !(e.type === 'street' || e.type === 'village' || (e.type === 'major' && e.zone !== 'rural'))) return;
+    if (e.zone === 'villa' || e.zone === 'fort') return;
+    const A = nodes[e.a], B = nodes[e.b], dx = (B.x - A.x) / e.len, dz = (B.z - A.z) / e.len, s = ei % 2 ? 1 : -1, off = e.w / 2 + 1.7;
+    let prev = -1;
+    for (let t = 6; t < e.len - 4; t += 31) {
+      const x = A.x + dx * t + dz * s * off, z = A.z + dz * t - dx * s * off, y = terrainH(x, z);
+      if (y < 0.6 || excluded(x, z, 2)) { prev = -1; continue; }
+      poles.push({ x, z, y, ang: Math.atan2(dx, dz), tr: R() < 0.12 });
+      if (prev >= 0) wires.push([prev, poles.length - 1]); prev = poles.length - 1;
+    }
+  });
+}
 // ---------- ramps (stunts) ----------
 export const ramps = [];
 function addRamp(x, z, ang, w, len, h) { ramps.push({ x, z, ang, w, len, h, y: terrainH(x, z), c: Math.cos(ang), s: Math.sin(ang) }); }
@@ -700,6 +716,7 @@ export async function buildMap(progress) {
   for (const r of ramps) occMark(r.x - r.len, r.z - r.len, r.x + r.len, r.z + r.len);
   plantTrees();
   placeLights();
+  placePoles();
   await progress('Planting palms', 0.8);
   // spawns
   spawns.start = { x: -2241.6, z: -760, ang: Math.PI };

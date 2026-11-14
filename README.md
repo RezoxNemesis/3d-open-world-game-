@@ -65,6 +65,7 @@ The **desktop** builds start on the **Ultra** preset: 2048² terrain, 4K shadows
   - New: **Sunken Gold** (dive for treasure), **Bullet Run** (bike race), **Hot Pursuit** (steal a police bike and lose a three-star chase), **Street Kings of Devka** (a three-round fight club), **The Sagar Mahal Job** (storm the palace), **Makara Rising** and **Demon of the Ghats** (boss missions).
 - **Time and weather:** a day–night cycle (morning, afternoon, golden-hour evening, starry night). Four seasons: summer, **monsoon** (rain, wet roads, lightning), post-monsoon and winter mist.
 - **Music and voices:** a procedural Indian soundtrack (sitar, tabla, dhol, bansuri, drones) that changes raga with the time of day and the action. The heroes speak through the device's text-to-speech, with subtitles.
+- **Photo mode:** freeze the world and fly a free camera to frame your shot.
 - **Fast travel** by tapping a place on the full map. The game autosaves every minute.
 
 ## Controls

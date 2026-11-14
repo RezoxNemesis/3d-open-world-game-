@@ -1,3 +1,16 @@
+## Daman Duo — v1.6 "Golden Hour" update
+
+**What's new in 1.6**
+- **Cinematic colour grade on every device:**
+  - richer colour, cool shadows and warm highlights, with a gentle filmic contrast curve;
+  - built into the tone mapper, so it costs nothing on phones;
+  - a soft lens vignette.
+- **Indian streetscape:** concrete electric poles with crossarms, insulators and transformers line every town street and village lane, strung with sagging overhead wires.
+- **Photo mode** (Menu → 📷 PHOTO MODE):
+  - freezes the world and hides the HUD;
+  - fly the camera with WASD or the stick, drag to look, Space to rise, Shift to go fast;
+  - Enter, Esc or EXIT to leave.
+
 ## Daman Duo — v1.5 "Daman Stories" update
 
 **What's new in 1.5**

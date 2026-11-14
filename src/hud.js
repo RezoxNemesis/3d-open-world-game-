@@ -114,6 +114,10 @@ export class HUD {
   hurtFlash(a) { this.flash.style.opacity = a; setTimeout(() => (this.flash.style.opacity = 0), 120); }
   toast(text, t = 3, color = '#ffd54f') { this.toastEl.style.display = 'block'; this.toastEl.style.color = color; this.toastEl.innerHTML = text; this.toastT = t; }
   stars(n) { this.starsEl.textContent = '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n)); this.starsEl.style.display = n ? 'block' : 'none'; }
+  photoUI(on) {
+    if (!this.photoEl) { this.photoEl = $('div', { id: 'photoui' }, document.body); this.photoEl.innerHTML = '<span>PHOTO MODE · move: WASD / stick · look: drag · up: Space · fast: Shift</span><button class="btn">EXIT</button>'; this.photoEl.querySelector('button').onclick = () => this.game.stopPhoto(); }
+    this.photoEl.style.display = on ? 'flex' : 'none';
+  }
   // freeflow combat feedback: running combo count + popups (COUNTER!, FINISHER!, TAKEDOWN)
   combo(n) {
     if (!this.comboEl) { this.comboEl = $('div', { id: 'combo' }, document.body); }
@@ -193,6 +197,7 @@ export class HUD {
     const sec = (t) => $('div', { class: 'lbl', text: t, style: 'margin:14px 0 4px;opacity:.7;letter-spacing:.2em;font-size:12px' }, b);
     sec('MISSIONS');
     for (const ms of g.missions.list) { const r = $('div', { class: 'setrow' }, b); $('span', { text: (ms.done ? '✔ ' : '') + ms.name + ' — ' + ms.desc }, r); const go = $('button', { class: 'btn alt', text: ms.done ? 'REPLAY' : 'START' }, r); go.onclick = () => { this.closeMenu(); g.missions.start(ms.id); }; }
+    { const r = $('div', { class: 'setrow' }, b); const ph = $('button', { class: 'btn', text: '📷 PHOTO MODE' }, r); ph.onclick = () => g.startPhoto(); }
     sec('BOSSES');
     for (const bs of g.bosses || []) {
       const r = $('div', { class: 'setrow' }, b), pw = { flash: 'Flash Speed', slam: 'Thunder Slam', flight: 'Flight' }[bs.reward || 'flash'];
