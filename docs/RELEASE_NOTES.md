@@ -1,3 +1,14 @@
+## Daman Duo — v1.9 "Built in Blender" update
+
+**What's new in 1.9**
+- **Real buildings up close (PC and Mac):** a modular facade kit built in Blender now dresses every town, colonial and hotel building near you:
+  - Moti Daman's Portuguese-colonial houses get moulded arched windows with louvred shutters (one paint colour per house), cast-iron balconies, arched doors with fanlights, cornices and corner pilasters;
+  - Nani Daman's bazaar streets get shops with rolling shutters and coloured sign boards (lit at night), grilled windows under concrete sunshades, AC units and balconies;
+  - Devka's hotels get floor-to-ceiling glazing, deep balconies and glass-fronted lobbies with canopies.
+  Two detail rings keep it fast, and windows light up at night. Phones keep the lighter facades.
+- **New coconut palm** modelled in Blender (curved ringed trunk, 26 arching fronds, dry fronds, coconuts), with a light far version. It replaces every palm on the map.
+- **New Vikas look** to match the reference: black shirt, olive cargo trousers with side pockets, dark boots.
+
 ## Daman Duo — v1.8 "Golden Daman" update
 
 **What's new in 1.8**
