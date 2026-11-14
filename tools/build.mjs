@@ -25,7 +25,7 @@ if (existsSync('assets/tex/1k')) {
 {
   const A = {}, mime = { jpg: 'image/jpeg', json: 'application/json', glb: 'model/gltf-binary' };
   const add = (dir) => { if (!existsSync(dir)) return; for (const f of readdirSync(dir)) { const ext = f.split('.').pop(); if (mime[ext]) A[dir + '/' + f] = 'data:' + mime[ext] + ';base64,' + readFileSync(dir + '/' + f).toString('base64'); } };
-  add('assets/sky'); add('assets/sky/2k'); add('assets/models/1k');
+  add('assets/sky'); add('assets/sky/2k'); add('assets/models/1k'); add('assets/models/cars');
   for (const f of ['kit_facades.glb', 'kit_facades_lod.glb']) if (existsSync('assets/models/' + f)) A['assets/models/' + f] = 'data:model/gltf-binary;base64,' + readFileSync('assets/models/' + f).toString('base64');
   if (Object.keys(A).length) embed += '<script>window.__DD_ASSETS=' + JSON.stringify(A) + ';</script>';
 }

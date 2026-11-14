@@ -2,6 +2,7 @@
 // attributes aPaint (body paint mask) + aEmit (1 headlight, 2 tail light), plus wheel placement for player cars.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CAR_MODELS } from './carmodels.js';
 
 const lin = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255].map((c) => Math.pow(c, 2.2));
 function finish(g, col, paint = 0, emit = 0) {
@@ -251,10 +252,12 @@ export const CARS = {
     P: { L: 4.7, W: 2.05, ground: 0.12, noseY: 0.55, hoodY: 0.86, ws: 0.95, rf: 0.15, rr: -0.55, rw: -1.45, roofY: 1.16, deckY: 0.98, tailY: 0.93, r: 0.36, zf: 1.45, zr: -1.5, track: 0.86, nr: 0.35, spoiler: true, intake: true, round: 0.18, tumble: 0.7, caliper: 0xd32f2f, quadExhaust: true, rim: 0x2a2a2a, grilleW: 0.28, lampW: 0.42, tailBar: true } },
   agni: { name: 'Agni GT', cls: 'Supercar', top: 95, acc: 13, grip: 1.2, nitro: true, mass: 1.5, sound: 'super', paints: [0xd01020, 0xfafafa, 0x111111, 0xffd600],
     P: { L: 4.6, W: 1.98, ground: 0.13, noseY: 0.62, hoodY: 0.95, ws: 0.55, rf: -0.15, rr: -0.75, rw: -1.6, roofY: 1.22, deckY: 1.0, tailY: 0.98, r: 0.35, zf: 1.4, zr: -1.4, track: 0.84, nr: 0.4, round: 0.2, tumble: 0.72, caliper: 0xffc107, quadExhaust: true, grilleW: 0.26, lampW: 0.4 } },
-  shera: { name: 'Shera S9', cls: 'Sports', top: 88, acc: 12, grip: 1.15, nitro: true, mass: 1.4, sound: 'super', paints: [0x1a8cff, 0x9e9e9e, 0x2e7d32, 0xfafafa],
-    P: { L: 4.45, W: 1.85, ground: 0.13, noseY: 0.62, hoodY: 0.9, ws: 0.7, rf: 0.05, rr: -0.45, rw: -1.9, roofY: 1.28, deckY: 1.0, tailY: 0.95, r: 0.34, zf: 1.3, zr: -1.3, track: 0.78, nr: 0.3, spoiler: true, round: 0.22, tumble: 0.76, caliper: 0xd32f2f, quadExhaust: true } },
-  bison: { name: 'Bison 69', cls: 'Classic Muscle', top: 78, acc: 11, grip: 0.95, nitro: false, mass: 1.7, sound: 'super', paints: [0x111111, 0xffffff, 0xd84315, 0x1565c0],
-    P: { L: 4.85, W: 1.92, ground: 0.17, noseY: 0.82, hoodY: 0.98, ws: 0.15, rf: -0.4, rr: -1.2, rw: -1.65, roofY: 1.33, deckY: 1.0, tailY: 0.98, r: 0.36, zf: 1.5, zr: -1.45, track: 0.82, nr: 0.12, chrome: true, round: 0.05 } },
+  shera: { name: 'Shera S9', cls: 'Sports', top: 88, acc: 12, grip: 1.15, nitro: true, mass: 1.4, sound: 'super', paints: [0x0b4fb3, 0x9e9e9e, 0x1b5e20, 0xfafafa, 0xe8b800],
+    P: { L: 4.72, W: 1.88, ground: 0.15, noseY: 0.64, hoodY: 0.93, ws: 0.92, rf: 0.15, rr: -0.6, rw: -1.72, roofY: 1.385, deckY: 0.99, tailY: 0.93, r: 0.345, zf: 1.42, zr: -1.43, track: 0.775, nr: 0.3, round: 0.22, tumble: 0.76, caliper: 0xd32f2f, quadExhaust: true } },
+  gajraj: { name: 'Gajraj G6', cls: 'Luxury 4x4', top: 72, acc: 9.5, grip: 1.1, nitro: false, mass: 2.4, sound: 'car', paints: [0x0b0b0b, 0xf2f2f2, 0x4b5320, 0x8e9196, 0x5b0f12],
+    P: { L: 4.66, W: 1.98, ground: 0.46, noseY: 1.17, hoodY: 1.26, ws: 0.62, rf: 0.3, rr: -0.56, rw: -2.2, roofY: 1.97, deckY: 1.9, tailY: 1.88, r: 0.43, zf: 1.45, zr: -1.44, track: 0.81, nr: 0.05, bpillar: true, spare: true, rack: true, round: 0.03 } },
+  bison: { name: 'Bison 69', cls: 'Classic Muscle', top: 78, acc: 11, grip: 0.95, nitro: false, mass: 1.7, sound: 'super', paints: [0x7a0a0a, 0x111111, 0xf2efe6, 0x0d47a1, 0x2e4d2a],
+    P: { L: 4.62, W: 1.8, ground: 0.19, noseY: 0.8, hoodY: 0.88, ws: 0.62, rf: 0.05, rr: -0.55, rw: -1.6, roofY: 1.295, deckY: 0.98, tailY: 0.9, r: 0.335, zf: 1.45, zr: -1.29, track: 0.76, nr: 0.12, chrome: true, round: 0.05 } },
   amba: { name: 'Royal Amba', cls: 'Classic', top: 42, acc: 5, grip: 0.85, nitro: false, mass: 1.6, sound: 'car', paints: [0xf5f5f5, 0x212121, 0x8d6e63, 0x1b5e20, 0xb71c1c],
     P: { L: 4.35, W: 1.66, ground: 0.22, noseY: 0.92, hoodY: 1.0, ws: 0.65, rf: 0.25, rr: -0.95, rw: -1.25, roofY: 1.58, deckY: 0.98, tailY: 0.92, r: 0.34, zf: 1.35, zr: -1.3, track: 0.7, nr: 0.3, chrome: true, bpillar: true, round: 0.3, grille: 0xdedede } },
   regent: { name: 'Sterling Regent', cls: 'Premium', top: 80, acc: 9, grip: 1.05, nitro: false, mass: 1.9, sound: 'car', paints: [0x0d0d0d, 0xb0bec5, 0xeceff1, 0x1a237e],
@@ -284,6 +287,8 @@ Object.assign(CARS, SPECIAL);
 const cache = new Map();
 export function vehicleGeometry(key) {
   if (cache.has(key)) return cache.get(key);
+  const bm = CAR_MODELS[key];
+  if (bm) { const res = { body: bm.body, wheel: bm.wheel, wheels: bm.wheels, r: bm.r, len: bm.len, wid: bm.wid, all: bm.all, low: bm.low, mirrorLeft: true }; cache.set(key, res); return res; }
   const spec = CARS[key], m = spec.build ? spec.build() : carModel(spec.P);
   const wg = wheelGeo(m.r, m.narrow ? 0.12 : 0.26, m.rimCol, 14, m.caliper);
   const statics = [...m.parts, ...(m.rider || [])];

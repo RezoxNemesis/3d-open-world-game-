@@ -1,3 +1,14 @@
+## Daman Duo — v1.10 "Garage" update
+
+**What's new in 1.10**
+- **Three hero cars built in Blender**, each with a lofted body, exact window cut-outs with recessed glass and trims, panel gaps, real lamps, grilles, bumpers, mirrors, an interior behind the glass and ambient occlusion baked into the paint:
+  - **Bison 69**: a 1960s fastback muscle car (long hood, fastback roof, round lamps in a wide grille, tri-bar tail lamps, chrome bumpers, quarter scoops, 5-spoke wheels);
+  - **Shera S9**: a modern sports coupe (twin upright grilles, LED head and tail lamps, quad exhausts, diffuser, black twin-spoke wheels with red calipers);
+  - **Gajraj G6**: a boxy luxury off-roader (round lamps with LED rings, fender-top indicators, flared arches, exposed door hinges, side pipes, side steps, spare wheel on the tailgate).
+  All three drive, park and appear in traffic (with two lighter versions for traffic far away). The designs and badges are fictional.
+- **Rajhans R7 business jet** rebuilt in Blender for the airport: swept wings with winglets, T-tail, rear engines with fans, wrapped cockpit glazing, oval cabin windows, a navy-and-gold livery and full landing gear.
+- **Better tyres and trims:** rubber and matte plastics no longer shine grey in low sun.
+
 ## Daman Duo — v1.9 "Built in Blender" update
 
 **What's new in 1.9**

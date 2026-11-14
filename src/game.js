@@ -7,6 +7,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as M from './mapdata.js';
 import { buildWorld, world, updateWorld, updateTrees, updateWorldLOD } from './world.js';
+import { loadCarModels } from './carmodels.js';
 import { updateTerrain, updateGrass, T as TR } from './terrain.js';
 import { SkySystem } from './sky.js';
 import { U } from './shaders.js';
@@ -55,6 +56,7 @@ export class Game {
     await progress('Populating Daman with people', 0.95);
     crowd.renderer = this.renderer; this.crowdN = buildCrowd(S, q);
     await progress('Starting traffic', 0.96);
+    await loadCarModels(q);
     this.traffic = new Traffic(this, q);
     await progress('Waking the wildlife', 0.97);
     this.animals = spawnAnimals(this, q); this.birds = buildBirds(S);
@@ -83,7 +85,7 @@ export class Game {
     // parked vehicles
     for (const c of M.spawns.cars) this.addVehicle('car', c.key || (c.kind === 'super' ? 'rakshas' : c.kind === 'gt' ? 'agni' : 'bison'), c.color, c.x, c.z, c.ang);
     for (const b of M.spawns.bikes || []) this.addVehicle('car', b.key, CARS[b.key].paints[b.paint || 0], b.x, b.z, b.ang);
-    const extra = [['shera', 0x1a8cff, -2255.4, -640, 0], ['regent', 0x0d0d0d, -2244.6, -1300, Math.PI], ['amba', 0xf5f5f5, -2244.6, 700, Math.PI], ['jeep', 0x556b2f, M.L.jungleCamp.x - 20, M.L.jungleCamp.z + 25, 0.5], ['kaveri', 0xb71c1c, -2255.4, 3300, 0], ['jeep', 0xd84315, M.L.ghatEnd ? M.L.ghatEnd.x - 20 : 6400, M.L.ghatEnd ? M.L.ghatEnd.z : -500, 1]];
+    const extra = [['shera', 0x0b4fb3, -2255.4, -640, 0], ['gajraj', 0x0b0b0b, -2244.6, -600, Math.PI], ['bison', 0x7a0a0a, -2255.4, -560, 0], ['regent', 0x0d0d0d, -2244.6, -1300, Math.PI], ['amba', 0xf5f5f5, -2244.6, 700, Math.PI], ['jeep', 0x556b2f, M.L.jungleCamp.x - 20, M.L.jungleCamp.z + 25, 0.5], ['kaveri', 0xb71c1c, -2255.4, 3300, 0], ['jeep', 0xd84315, M.L.ghatEnd ? M.L.ghatEnd.x - 20 : 6400, M.L.ghatEnd ? M.L.ghatEnd.z : -500, 1]];
     for (const [k, col, x, z, a] of extra) this.addVehicle('car', k, col, x, z, a);
     for (const h of M.spawns.heli) this.addVehicle('heli', 'heli', 0xffffff, h.x, h.z, 0);
     this.addVehicle('plane', 'jet', 0xffffff, M.spawns.plane[0].x, M.spawns.plane[0].z, Math.PI / 2);
