@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as M from './mapdata.js';
-import { buildWorld, world, updateWorld, updateTrees } from './world.js';
+import { buildWorld, world, updateWorld, updateTrees, updateWorldLOD } from './world.js';
 import { updateTerrain, updateGrass, T as TR } from './terrain.js';
 import { SkySystem } from './sky.js';
 import { U } from './shaders.js';
@@ -28,6 +28,7 @@ import { input, pollInput, endFrame } from './input.js';
 import { clamp, lerp, damp, angDiff, nextFrame } from './util.js';
 
 const V3 = THREE.Vector3;
+const BLACK = new THREE.Color(0);
 export class Game {
   constructor(renderer, q, presetKey, hud) {
     this.renderer = renderer; this.q = q; this.presetKey = presetKey; this.hud = hud; hud.game = this;
@@ -39,15 +40,20 @@ export class Game {
     const S = this.scene, q = this.q;
     this.sky = new SkySystem(S, this.renderer); this.sky.setShadowQuality(q.shadowMap, q.shadowRange);
     initFx(S);
-    await buildWorld(S, q, progress);
+    await buildWorld(S, q, progress, this.renderer);
     await progress('Populating Daman with people', 0.95);
-    this.crowdN = buildCrowd(S, q);
+    crowd.renderer = this.renderer; this.crowdN = buildCrowd(S, q);
     await progress('Starting traffic', 0.96);
     this.traffic = new Traffic(this, q);
     await progress('Waking the wildlife', 0.97);
     this.animals = spawnAnimals(this, q); this.birds = buildBirds(S);
     this.serpent = new Serpent(this);
-    this.worldObjs = S.children.slice();
+    // put world content under one group so interiors can hide it without changing the light count (no shader recompiles)
+    this.worldRoot = new THREE.Group(); this.worldRoot.name = 'worldRoot';
+    const keepInScene = new Set([this.sky.sun, this.sky.sun.target, this.sky.hemi, ...fx.pool]);
+    for (const o of S.children.slice()) if (!keepInScene.has(o)) this.worldRoot.add(o);
+    S.add(this.worldRoot);
+    this.worldObjs = [this.worldRoot];
     this.npcs = new NPCs(this); this.interior = new Interiors(this); this.weather = new Weather(this); this.missions = new Missions(this);
     this.rain = initRain(S, q.desktop ? 9000 : 3500);
     // heroes
@@ -67,6 +73,10 @@ export class Game {
     for (const b of M.spawns.boats) this.addVehicle('boat', 'boat', 0xffffff, b.x, b.z, 0);
     this.load();
     this.setupPost();
+    await progress('Lighting the sky', 0.99);
+    this.sky.bakeEnv(q.desktop ? [0, 5.8, 6.6, 8, 10.5, 13, 15.5, 17.3, 18.3, 19.2, 21.5] : [0, 6.2, 9, 13, 17.4, 18.6, 21.5]);
+    this.sky.updateEnv(this.sky.hour);
+    this.renderer.shadowMap.autoUpdate = false; this.frameNo = 0;
     this.rig.yaw = this.player.yaw + Math.PI;
     this.hud.stars(0);
   }
@@ -384,12 +394,12 @@ export class Game {
     // sky / weather / world
     this.sky.update(dt, P, this.time, this.timeScale);
     this.weather.update(dt, this.sky, this.sky.hour);
-    if (this.inside) { this.sky.sun.intensity = 0; this.sky.sun.castShadow = false; const cave = this.interior.type === 'cave'; this.sky.hemi.intensity = cave ? 1.6 : 0.7; if (cave) { this.sky.hemi.color.setRGB(0.25, 0.35, 0.5); this.sky.hemi.groundColor.setRGB(0.1, 0.08, 0.12); } else { this.sky.hemi.color.setRGB(1, 0.92, 0.8); this.sky.hemi.groundColor.setRGB(0.5, 0.42, 0.35); } this.scene.environmentIntensity = 0.3; this.scene.background = new THREE.Color(0); } else this.scene.background = null;
+    if (this.inside) { this.sky.sun.intensity = 0; this.sky.sun.shadow.intensity = 0; const cave = this.interior.type === 'cave'; this.sky.hemi.intensity = cave ? 1.6 : 0.7; if (cave) { this.sky.hemi.color.setRGB(0.25, 0.35, 0.5); this.sky.hemi.groundColor.setRGB(0.1, 0.08, 0.12); } else { this.sky.hemi.color.setRGB(1, 0.92, 0.8); this.sky.hemi.groundColor.setRGB(0.5, 0.42, 0.35); } this.scene.environmentIntensity = 0.3; this.scene.background = BLACK; } else this.scene.background = null;
     this.renderer.toneMappingExposure = this.sky.exposure * (this.inside ? 1.2 : 1);
     if (!this.inside) { const L = this.interior.lights[0], n = U.uNight.value; if (n > 0.3) { const pp = this.playerPos(); L.color.setRGB(1, 0.85, 0.65); L.position.set(pp.x + 1.5, pp.y + 7, pp.z + 1.5); L.intensity = 90 * n; L.distance = 30; } else if (L.intensity > 0) { L.intensity = 0; L.position.set(0, -2000, 0); } }
     updateWorld(this.time, U.uNight.value);
     const cp = this.cam.position;
-    updateTerrain(cp, this.q); updateTrees(cp, this.q); updateGrass(cp); updateCrowd(cp, this.q, this.inside);
+    updateTerrain(cp, this.q); updateTrees(cp, this.q); updateWorldLOD(cp); updateGrass(cp); updateCrowd(cp, this.q, this.inside);
     updateFx(dt, cp); updateRain(cp);
     // audio
     this.updateAudio(dt);
@@ -403,7 +413,7 @@ export class Game {
     this.hud.setMode(mode, !!act);
     this.hud.update(dt, {
       hour: this.sky.hour, season: SEASONS[this.weather.season].name, rain: this.weather.rain, money: this.money, weaponName: v || p.mount ? '' : W.id === 'fists' ? 'Fists' : `${W.name}  ${p.clip[W.id]}/${p.ammo[W.id]}`,
-      speed, speedUnit: unit, aim: ctl.aim && !v && p.weapon > 0, prompt: act ? act.label : null, objective: this.missions.objective, fps: this.fps, fpsOn: this.fpsOn,
+      speed, speedUnit: unit, aim: ctl.aim && !v && p.weapon > 0, prompt: act ? act.label : null, objective: this.missions.objective, fps: this.fps, fpsOn: this.fpsOn, res: this.gov && this.gov.enabled ? Math.round(this.gov.scale * 100) : 0,
       markers: this.markers(), enemies: this.npcs.enemies.filter((e) => e.alive && e.ai && e.ai.alert).map((e) => ({ x: e.pos.x, z: e.pos.z, team: e.team })), serpent: this.serpent.active ? this.serpent.head : null, mmZoom: v && v.kind !== 'car' ? 1.0 : v ? 1.8 : 2.6,
     });
     // auto-save every 60 s
@@ -445,6 +455,8 @@ export class Game {
     setMood(mood);
   }
   render() {
+    const sm = this.renderer.shadowMap, every = this.q.shadowEvery || 1;
+    sm.needsUpdate = !this.inside && (this.frameNo++ % every === 0);
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.cam);
   }
   // ---------------- save / load ----------------

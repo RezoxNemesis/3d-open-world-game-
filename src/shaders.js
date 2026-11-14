@@ -6,6 +6,7 @@ export const U = {
   uHorizon: { value: new THREE.Color(0.7, 0.8, 0.9) }, uFogColor: { value: new THREE.Color(0.7, 0.8, 0.9) },
   uFogDensity: { value: 0.00011 }, uAmbient: { value: new THREE.Color(0.4, 0.45, 0.5) },
   uSeason: { value: new THREE.Vector4(0.5, 0.3, 0, 0) }, uWet: { value: 0 }, uRain: { value: 0 },
+  uCrowdLight: { value: new THREE.Color(1, 1, 1) },
 };
 export const NOISE = /* glsl */`
 float h21(vec2 p){ p = fract(p*vec2(0.1031,0.1030)); p += dot(p, p.yx+33.33); return fract((p.x+p.y)*p.x); }

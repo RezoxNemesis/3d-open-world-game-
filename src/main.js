@@ -1,6 +1,7 @@
 // Daman Duo — bootstrap: platform detection, graphics preset, title screen, main loop, test hooks.
 import * as THREE from 'three';
-import { PRESETS, detectPlatform, defaultPreset } from './quality.js';
+import { PRESETS, detectPlatform, defaultPreset, FPS_CAPS } from './quality.js';
+import { Governor, gpuInfo, autoPreset } from './perf.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
 import { initInput, input } from './input.js';
@@ -14,7 +15,10 @@ import { U } from './shaders.js';
 const qs = new URLSearchParams(location.search);
 const platform = detectPlatform(), TEST = qs.has('test');
 const ls = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-let presetKey = qs.get('quality') || ls('damanduo.preset') || defaultPreset(platform);
+// first launch: pick a preset from the GPU (Adreno/Mali/Apple/NVIDIA/AMD/Intel tiers)
+let gpu = { tier: 2, renderer: '' };
+try { const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl'); if (gl) { gpu = gpuInfo(gl); const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } } catch (e) {}
+let presetKey = qs.get('quality') || ls('damanduo.preset') || (gpu.renderer ? autoPreset(platform, gpu.tier) : defaultPreset(platform));
 if (!PRESETS[presetKey]) presetKey = 'mobile';
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'dev';
 const canvas = document.getElementById('gl');
@@ -25,7 +29,8 @@ async function start(opts) {
   const q = { ...PRESETS[presetKey], crowd: TEST ? Math.min(opts.crowd, 60000) : opts.crowd };
   if (!TEST) { initAudio(); if (platform !== 'desktop' && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !q.bloom && !q.ao && !TEST, powerPreference: 'high-performance', stencil: false });
-  renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio || 1, q.pixelRatio)); renderer.setSize(innerWidth, innerHeight);
+  const basePR = TEST ? 1 : Math.min(devicePixelRatio || 1, q.pixelRatio);
+  renderer.setPixelRatio(basePR); renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = q.desktop ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   hud.loading(true);
@@ -39,11 +44,16 @@ async function start(opts) {
   addEventListener('resize', () => game.resize());
   hud.loading(false); hud.show();
   if (!TEST) {
+    const cap = parseInt(ls('damanduo.fps') || '60', 10);
+    const gov = new Governor({ cap: FPS_CAPS.includes(cap) ? cap : 60, basePR, minScale: q.minScale, drs: ls('damanduo.drs') !== '0', onScale: () => { renderer.setPixelRatio(gov.pixelRatio); game.resize(); } });
+    game.gov = gov; game.gpu = gpu;
     let last = performance.now(), fpsAcc = 0, fpsN = 0;
-    const loop = () => {
-      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const loop = (now) => {
+      requestAnimationFrame(loop);
+      if (!gov.tick(now)) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
       fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { game.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
-      game.update(dt); game.render(); requestAnimationFrame(loop);
+      game.update(dt); game.render();
     };
     requestAnimationFrame(loop);
     setTimeout(() => { if (!game.missions.done.size && !game.missions.cur) game.missions.start('chai'); }, 1500);

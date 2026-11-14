@@ -73,7 +73,7 @@ export class SkySystem {
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     this.range = range;
   }
-  update(dt, focus, t, timeScale) {
+  update(dt, focus, t, timeScale, baking = false) {
     this.hour = (this.hour + dt * timeScale / 3600 + 24) % 24;
     const th = (this.hour - 6) / 12 * Math.PI;
     this.sunDir.set(Math.cos(th), Math.sin(th) * 0.93, 0.36).normalize();
@@ -100,7 +100,8 @@ export class SkySystem {
     const L = useMoon ? this.moonDir : this.sunDir;
     this.sun.color.copy(useMoon ? new THREE.Color(0.55, 0.65, 1.0) : sunCol);
     this.sun.intensity = useMoon ? 0.7 * smooth(0, 0.25, this.moonDir.y) : 3.2 * smooth(-0.04, 0.15, sy);
-    this.sun.castShadow = !useMoon;
+    // never toggle castShadow (that recompiles every shader); fade the shadow instead
+    this.sun.shadow.intensity = useMoon ? 0.55 * smooth(0.05, 0.3, this.moonDir.y) : smooth(-0.02, 0.08, sy);
     // stable shadow: snap target to texel grid
     const tex = (this.range * 2) / this.sun.shadow.mapSize.x;
     const fx = Math.round(focus.x / tex) * tex, fz = Math.round(focus.z / tex) * tex;
@@ -111,13 +112,22 @@ export class SkySystem {
     this.night.position.copy(focus); this.sky.position.copy(focus);
     this.exposure = lerp(0.62, 0.5, day) + night * 0.25;
     this.envGround.material.color.setRGB(0.25, 0.23, 0.18).multiplyScalar(lerp(0.05, 1, day));
-    if (Math.abs(t - this.envT) > 8 || this.env === null) {
-      this.envT = t;
-      const old = this.env;
-      this.env = this.pmrem.fromScene(this.envScene, 0, 0.1, 200);
-      this.scene.environment = this.env.texture;
-      if (old) old.dispose();
-    }
+    if (!baking) this.updateEnv(this.hour);
     this.scene.environmentIntensity = lerp(0.25, 1, day);
+    U.uCrowdLight.value.copy(this.hemi.color).multiplyScalar(this.hemi.intensity * 0.85).add(_c.copy(this.sun.color).multiplyScalar(this.sun.intensity * 0.32 * smooth(0, 0.3, L.y)));
+  }
+  // Reflection/ambient environment: baked once per time-of-day keyframe at load instead of every few seconds
+  // (PMREM generation causes frame hitches on phones).
+  bakeEnv(hours) {
+    const keep = this.hour; this.envKeys = [];
+    for (const h of hours) { this.hour = h; this.update(0, new THREE.Vector3(), 0, 0, true); this.envKeys.push({ h, rt: this.pmrem.fromScene(this.envScene, 0, 0.1, 200) }); }
+    this.hour = keep; this.envKey = null;
+  }
+  updateEnv(hour) {
+    if (!this.envKeys) return;
+    let best = null, bd = 99;
+    for (const k of this.envKeys) { const d = Math.min(Math.abs(k.h - hour), 24 - Math.abs(k.h - hour)); if (d < bd) { bd = d; best = k; } }
+    if (best !== this.envKey) { this.envKey = best; this.scene.environment = best.rt.texture; }
   }
 }
+const _c = new THREE.Color();

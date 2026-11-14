@@ -2,29 +2,30 @@
 // (positions are analytic so the CPU can hit-test / panic / knock down any of them).
 import * as THREE from 'three';
 import * as M from './mapdata.js';
-import { crowdGeometry, crowdGeometryLow, randomLook, SKINS } from './human.js';
+import { crowdGeometry, randomLook, SKINS } from './human.js';
 import { U, patch } from './shaders.js';
 import { mulberry32, clamp, lerp, packRGB, hexRGB } from './util.js';
 
 const CS = 200, CN = (2 * M.HALF) / CS;
-export const crowd = { n: 0, cells: new Map(), panic: new THREE.Vector4(0, 0, -999, 0), count: 0 };
+export const crowd = { n: 0, cells: new Map(), panic: new THREE.Vector4(0, 0, -999, 0), count: 0, renderer: null, pool: null };
 let A_PATH, A_MOVE, A_LOOK, A_FLAG; // big typed arrays
 const PANIC = crowd.panic;
-const CROWD_GLSL = /* glsl */`
-attribute vec4 aPath; attribute vec4 aMove; attribute vec4 aLook; attribute vec2 aFlag; attribute float aPart; attribute vec3 aPivot; attribute float aMat;
-uniform float uTime; uniform vec4 uPanic;
+const BASE_GLSL = /* glsl */`
+attribute vec4 aPath; attribute vec4 aMove; attribute vec4 aLook; attribute vec2 aFlag;
+uniform float uTime; uniform vec4 uPanic; uniform vec3 uSelCam; uniform float uNearR;
 vec3 unpackC(float v){ return vec3(floor(v/65536.), mod(floor(v/256.),256.), mod(v,256.))/255.; }
-void crowdX(out vec3 P, out vec3 N, out vec3 C){
+// analytic walker: base xz, ground y, facing yaw, gait phase, moving 0/1, running 0..1
+void crowdBase(out vec2 base, out float y, out float yaw, out float ph, out float moving, out float runK){
   float spd = aMove.x, L = max(aPath.w, 0.01);
   float d = spd*uTime + aMove.y*L*2.0;
   float m = mod(d, 2.0*L);
   float fw = step(m, L);
   float along = mix(2.0*L - m, m, fw);
   vec2 dir = vec2(sin(aPath.z), cos(aPath.z));
-  vec2 base = aPath.xy + dir*along*step(0.001, spd);
-  float yaw = aPath.z + (1.0-fw)*3.14159*step(0.001, spd);
-  float y = mix(aMove.w, aLook.w, along/L);
-  float runK = 0.0;
+  base = aPath.xy + dir*along*step(0.001, spd);
+  yaw = aPath.z + (1.0-fw)*3.14159*step(0.001, spd);
+  y = mix(aMove.w, aLook.w, along/L);
+  runK = 0.0;
   vec2 tp = base - uPanic.xy; float pd = length(tp); float pt = uTime - uPanic.z;
   if (pt > 0.0 && pt < 45.0 && pd < uPanic.w) {
     float k = 1.0 - pd/uPanic.w; float F = 10.0 + 30.0*k; float t1 = F/6.0;
@@ -33,21 +34,34 @@ void crowdX(out vec3 P, out vec3 N, out vec3 C){
     base += away*f;
     if (pt < t1) { yaw = atan(away.x, away.y); runK = 1.0; } else if (pt > 30.0 && pt < 45.0) { yaw = atan(-away.x, -away.y); runK = 0.3; }
   }
-  float moving = min(1.0, step(0.01, spd) + runK);
-  float ph = (uTime*(spd*2.7 + runK*9.0) + aMove.y*31.0);
+  moving = min(1.0, step(0.01, spd) + runK);
+  ph = uTime*(spd*2.7 + runK*9.0) + aMove.y*31.0;
+}
+`;
+// limb animation shared by the 3D crowd and the impostor baker
+const LIMB_GLSL = /* glsl */`
+void crowdPose(inout vec3 p, inout vec3 n, float aPart, vec3 aPivot, float sw, float amp, float idle, float style){
+  float ang = 0.0;
+  if (aPart > 0.5 && aPart < 1.5) ang = sw*0.45*amp + idle*0.08;
+  else if (aPart > 1.5 && aPart < 2.5) ang = -sw*0.45*amp - idle*(style > 0.5 ? 0.0 : 0.25);
+  else if (aPart > 2.5 && aPart < 3.5) ang = -sw*0.5*amp*(style > 1.5 ? 0.4 : 1.0);
+  else if (aPart > 3.5) ang = sw*0.5*amp*(style > 1.5 ? 0.4 : 1.0);
+  if (aPart > 0.5) { vec3 q = p - aPivot; float c = cos(ang), s = sin(ang); p = aPivot + vec3(q.x, q.y*c - q.z*s, q.y*s + q.z*c); n = vec3(n.x, n.y*c - n.z*s, n.y*s + n.z*c); }
+  if (style > 1.5 && aPart > 2.5) { p.x *= 1.6; p.z *= 1.4; }
+  if (style > 0.5 && aPart < 0.5 && p.y < 1.45 && p.y > 0.9) p.x *= 0.92;
+}
+`;
+const CROWD_GLSL = BASE_GLSL + LIMB_GLSL + /* glsl */`
+attribute float aPart; attribute vec3 aPivot; attribute float aMat;
+void crowdX(out vec3 P, out vec3 N, out vec3 C){
+  vec2 base; float y, yaw, ph, moving, runK; crowdBase(base, y, yaw, ph, moving, runK);
   float sw = sin(ph);
   vec3 p = position; vec3 n = normal;
   float amp = moving*(1.0+runK*0.7);
   float idle = (1.0-moving)*sin(uTime*1.1 + aMove.y*40.0);
-  float ang = 0.0;
-  if (aPart > 0.5 && aPart < 1.5) ang = sw*0.45*amp + idle*0.08;
-  else if (aPart > 1.5 && aPart < 2.5) ang = -sw*0.45*amp - idle*(aFlag.y > 0.5 ? 0.0 : 0.25);
-  else if (aPart > 2.5 && aPart < 3.5) ang = -sw*0.5*amp*(aFlag.y > 1.5 ? 0.4 : 1.0);
-  else if (aPart > 3.5) ang = sw*0.5*amp*(aFlag.y > 1.5 ? 0.4 : 1.0);
-  if (aPart > 0.5) { vec3 q = p - aPivot; float c = cos(ang), s = sin(ang); p = aPivot + vec3(q.x, q.y*c - q.z*s, q.y*s + q.z*c); n = vec3(n.x, n.y*c - n.z*s, n.y*s + n.z*c); }
-  if (aFlag.y > 1.5 && aPart > 2.5) { p.x *= 1.6; p.z *= 1.4; }
-  if (aFlag.y > 0.5 && aPart < 0.5 && p.y < 1.45 && p.y > 0.9) p.x *= 0.92;
-  float sc = aMove.z * aFlag.x;
+  crowdPose(p, n, aPart, aPivot, sw, amp, idle, aFlag.y);
+  // near pool only: people outside the near radius are drawn as impostors instead
+  float sc = aMove.z * aFlag.x * step(distance(base, uSelCam.xz), uNearR);
   p *= sc;
   float cy = cos(yaw), sy = sin(yaw);
   P = vec3(p.x*cy + p.z*sy, p.y, -p.x*sy + p.z*cy) + vec3(base.x, y + abs(sw)*0.035*moving, base.y);
@@ -56,21 +70,110 @@ void crowdX(out vec3 P, out vec3 N, out vec3 C){
   C = aMat < 0.5 ? skin : aMat < 1.5 ? top : aMat < 2.5 ? (aFlag.y > 1.5 ? top*0.9 : bot) : aMat < 3.5 ? vec3(0.05,0.035,0.025) : vec3(0.08,0.06,0.05);
   C = pow(C, vec3(2.2));
 }`;
+const NEAR = { uSelCam: { value: new THREE.Vector3(0, -1e5, 0) }, uNearR: { value: 0 } };
 function crowdMaterials() {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
   patch(mat, (s) => {
-    s.uniforms.uTime = U.uTime; s.uniforms.uPanic = { value: PANIC };
+    s.uniforms.uTime = U.uTime; s.uniforms.uPanic = { value: PANIC }; s.uniforms.uSelCam = NEAR.uSelCam; s.uniforms.uNearR = NEAR.uNearR;
     s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\n' + CROWD_GLSL)
       .replace('#include <color_vertex>', 'vec3 cP, cN, cC; crowdX(cP, cN, cC); vColor = cC;')
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = cN;')
       .replace('#include <begin_vertex>', 'vec3 transformed = cP;');
-  }, 'crowd');
+  }, 'crowd2');
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   patch(depth, (s) => {
-    s.uniforms.uTime = U.uTime; s.uniforms.uPanic = { value: PANIC };
+    s.uniforms.uTime = U.uTime; s.uniforms.uPanic = { value: PANIC }; s.uniforms.uSelCam = NEAR.uSelCam; s.uniforms.uNearR = NEAR.uNearR;
     s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\n' + CROWD_GLSL).replace('#include <begin_vertex>', 'vec3 cP, cN, cC; crowdX(cP, cN, cC); vec3 transformed = cP;');
-  }, 'crowdDepth');
+  }, 'crowdDepth2');
   return { mat, depth };
+}
+
+// ---------------- impostors ----------------
+// 3 body styles x 8 view directions x 5 frames (4 walk phases + idle), baked from the real 3D crowd model at load.
+const GRID = [16, 8], DIRS = 8, FRAMES = 5;
+function bakeImpostorAtlas(renderer, hi, size) {
+  const cells = 3 * DIRS * FRAMES, cellInfo = new Float32Array(cells * 4);
+  for (let ty = 0; ty < 3; ty++) for (let d = 0; d < DIRS; d++) for (let f = 0; f < FRAMES; f++) {
+    const ci = ty * DIRS * FRAMES + d * FRAMES + f;
+    cellInfo.set([ci, (d / DIRS) * Math.PI * 2, f < 4 ? Math.sin(f * Math.PI / 2) : 0, ty], ci * 4);
+  }
+  const g = new THREE.InstancedBufferGeometry(); g.index = hi.index;
+  for (const k of ['position', 'normal', 'aPart', 'aPivot', 'aMat']) g.setAttribute(k, hi.attributes[k]);
+  g.setAttribute('aCell', new THREE.InstancedBufferAttribute(cellInfo, 4)); g.instanceCount = cells;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uGrid: { value: new THREE.Vector2(...GRID) } },
+    vertexShader: LIMB_GLSL + /* glsl */`
+      attribute float aPart; attribute vec3 aPivot; attribute float aMat; attribute vec4 aCell; uniform vec2 uGrid;
+      varying float vMat; varying float vShade;
+      void main(){
+        vec3 p = position, n = normal; float sw = aCell.z, moving = step(0.001, abs(sw));
+        crowdPose(p, n, aPart, aPivot, sw, 1.0, 0.0, aCell.w);
+        float c = cos(aCell.y), s = sin(aCell.y);
+        p = vec3(p.x*c + p.z*s, p.y, -p.x*s + p.z*c); n = vec3(n.x*c + n.z*s, n.y, -n.x*s + n.z*c);
+        vec2 cell = vec2(mod(aCell.x, uGrid.x), floor(aCell.x/uGrid.x));
+        vec2 uv = (cell + vec2(p.x/1.2 + 0.5, p.y/2.3 + 0.02))/uGrid;
+        gl_Position = vec4(uv*2.0 - 1.0, -p.z*0.4, 1.0);
+        vMat = aMat; vShade = 0.42 + 0.58*max(dot(normalize(n), normalize(vec3(0.35, 0.75, 0.6))), 0.0);
+      }`,
+    fragmentShader: /* glsl */`
+      varying float vMat; varying float vShade;
+      void main(){
+        vec3 m = vMat < 0.5 ? vec3(0., 0., 1.) : vMat < 1.5 ? vec3(1., 0., 0.) : vMat < 2.5 ? vec3(0., 1., 0.) : vec3(0.);
+        gl_FragColor = vec4(m*vShade, 1.0);
+      }`,
+  });
+  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false;
+  const sc = new THREE.Scene(); sc.add(mesh);
+  const rt = new THREE.WebGLRenderTarget(size * GRID[0] / 8, size, { depthBuffer: true, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+  rt.texture.generateMipmaps = true;
+  const prevT = renderer.getRenderTarget(), prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), prevTM = renderer.toneMapping;
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.toneMapping = THREE.NoToneMapping;
+  renderer.render(sc, new THREE.Camera());
+  renderer.setRenderTarget(prevT); renderer.setClearColor(prevC, prevA); renderer.toneMapping = prevTM;
+  g.dispose(); mat.dispose();
+  return rt.texture;
+}
+function impostorMaterial(atlas) {
+  return new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: null }, uGrid: { value: new THREE.Vector2(...GRID) }, uLight: { value: null }, uTime: { value: 0 }, uPanic: { value: null }, uSelCam: { value: null }, uNearR: { value: 0 } }]),
+    vertexShader: BASE_GLSL + /* glsl */`
+      uniform vec2 uGrid; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin;
+      #include <fog_pars_vertex>
+      void main(){
+        vec2 base; float y, yaw, ph, moving, runK; crowdBase(base, y, yaw, ph, moving, runK);
+        float sc = aMove.z * aFlag.x * step(uNearR, distance(base, uSelCam.xz));
+        vec3 wp = vec3(base.x, y + abs(sin(ph))*0.035*moving, base.y);
+        vec2 tc = normalize(cameraPosition.xz - wp.xz + vec2(1e-4));
+        vec2 right = vec2(tc.y, -tc.x);
+        vec3 p = wp + vec3(right.x*position.x*1.2*sc, position.y*2.3*sc, right.y*position.x*1.2*sc);
+        float va = atan(tc.x, tc.y) - yaw;
+        float di = mod(floor(va/(6.2831853/8.0) + 0.5), 8.0);
+        float fr = moving > 0.5 ? floor(mod(ph + 0.785398, 6.2831853)/6.2831853*4.0) : 4.0;
+        float cell = floor(aFlag.y + 0.5)*40.0 + di*5.0 + fr;
+        vUv = (vec2(mod(cell, uGrid.x), floor(cell/uGrid.x)) + vec2(position.x + 0.5, position.y))/uGrid;
+        vTop = pow(unpackC(aLook.x), vec3(2.2)); vBot = aFlag.y > 1.5 ? vTop*0.9 : pow(unpackC(aLook.y), vec3(2.2)); vSkin = pow(unpackC(aLook.z), vec3(2.2));
+        vec4 mvPosition = viewMatrix*vec4(p, 1.0);
+        gl_Position = projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying vec3 vTop; varying vec3 vBot; varying vec3 vSkin;
+      #include <common>
+      #include <fog_pars_fragment>
+      void main(){
+        vec4 t = texture2D(uAtlas, vUv);
+        if (t.a < 0.5) discard;
+        vec3 c = (vTop*t.r + vBot*t.g + vSkin*t.b)/t.a + vec3(0.025);
+        gl_FragColor = vec4(c*uLight, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+  });
+}
+function linkImpostor(mat, atlas) {
+  const u = mat.uniforms; u.uAtlas.value = atlas; u.uLight = U.uCrowdLight; u.uTime = U.uTime; u.uPanic = { value: PANIC }; u.uSelCam = NEAR.uSelCam; u.uNearR = NEAR.uNearR;
 }
 
 // ---------------- generation ----------------
@@ -135,8 +238,12 @@ export function buildCrowd(scene, q) {
   const P2 = new Float32Array(n * 4), M2 = new Float32Array(n * 4), L2 = new Float32Array(n * 4), F2 = new Float32Array(n * 2);
   for (let i = 0; i < n; i++) { const o = order[i]; P2.set(A_PATH.subarray(o * 4, o * 4 + 4), i * 4); M2.set(A_MOVE.subarray(o * 4, o * 4 + 4), i * 4); L2.set(A_LOOK.subarray(o * 4, o * 4 + 4), i * 4); F2.set(A_FLAG.subarray(o * 2, o * 2 + 2), i * 2); }
   A_PATH = P2; A_MOVE = M2; A_LOOK = L2; A_FLAG = F2;
-  const hi = crowdGeometry(false), lo = crowdGeometryLow();
+  const hi = crowdGeometry(q.desktop);
   const { mat, depth } = crowdMaterials();
+  const atlas = bakeImpostorAtlas(crowd.renderer, crowdGeometry(true), q.desktop ? 2048 : 1024);
+  const imat = impostorMaterial(); linkImpostor(imat, atlas);
+  const quad = new THREE.BufferGeometry();
+  quad.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3)); quad.setIndex([0, 1, 2, 0, 2, 3]);
   let i0 = 0;
   while (i0 < n) {
     const c = cellOf[order[i0]]; let i1 = i0; while (i1 < n && cellOf[order[i1]] === c) i1++;
@@ -144,26 +251,67 @@ export function buildCrowd(scene, q) {
       aPath: new THREE.InstancedBufferAttribute(A_PATH.subarray(i0 * 4, i1 * 4), 4), aMove: new THREE.InstancedBufferAttribute(A_MOVE.subarray(i0 * 4, i1 * 4), 4),
       aLook: new THREE.InstancedBufferAttribute(A_LOOK.subarray(i0 * 4, i1 * 4), 4), aFlag: new THREE.InstancedBufferAttribute(A_FLAG.subarray(i0 * 2, i1 * 2), 2),
     };
-    const mk = (base) => { const g = new THREE.InstancedBufferGeometry(); g.index = base.index; for (const k of ['position', 'normal', 'aPart', 'aPivot', 'aMat']) g.setAttribute(k, base.attributes[k]); for (const k in attrs) g.setAttribute(k, attrs[k]); g.instanceCount = cnt; const cx = (c % CN) * CS - M.HALF + CS / 2, cz = Math.floor(c / CN) * CS - M.HALF + CS / 2; g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, M.terrainH(cx, cz), cz), CS * 0.95); return g; };
-    const gHi = mk(hi), gLo = mk(lo);
-    const mesh = new THREE.Mesh(gLo, mat); mesh.customDepthMaterial = depth; mesh.visible = false; mesh.matrixAutoUpdate = false; scene.add(mesh);
     const cx = (c % CN) * CS - M.HALF + CS / 2, cz = Math.floor(c / CN) * CS - M.HALF + CS / 2;
-    crowd.cells.set(c, { mesh, gHi, gLo, i0, i1, cx, cz, attrs, lod: 1 });
+    const g = new THREE.InstancedBufferGeometry(); g.index = quad.index; g.setAttribute('position', quad.attributes.position);
+    for (const k in attrs) g.setAttribute(k, attrs[k]); g.instanceCount = cnt;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, M.terrainH(cx, cz), cz), CS * 0.95);
+    const mesh = new THREE.Mesh(g, imat); mesh.visible = false; mesh.matrixAutoUpdate = false; scene.add(mesh);
+    crowd.cells.set(c, { mesh, i0, i1, cx, cz, attrs });
     i0 = i1;
   }
+  // near pool: the closest people, drawn with the full 3D body (and casting shadows)
+  const K = q.crowdHiK;
+  const pg = new THREE.InstancedBufferGeometry(); pg.index = hi.index;
+  for (const k of ['position', 'normal', 'aPart', 'aPivot', 'aMat']) pg.setAttribute(k, hi.attributes[k]);
+  crowd.pool = { K, n: 0, path: new Float32Array(K * 4), move: new Float32Array(K * 4), look: new Float32Array(K * 4), flag: new Float32Array(K * 2), idx: new Int32Array(K), t: 0, at: new THREE.Vector3(0, -1e5, 0) };
+  const P = crowd.pool;
+  pg.setAttribute('aPath', new THREE.InstancedBufferAttribute(P.path, 4)); pg.setAttribute('aMove', new THREE.InstancedBufferAttribute(P.move, 4));
+  pg.setAttribute('aLook', new THREE.InstancedBufferAttribute(P.look, 4)); pg.setAttribute('aFlag', new THREE.InstancedBufferAttribute(P.flag, 2));
+  for (const k of ['aPath', 'aMove', 'aLook', 'aFlag']) pg.attributes[k].setUsage(THREE.DynamicDrawUsage);
+  pg.instanceCount = 0;
+  P.mesh = new THREE.Mesh(pg, mat); P.mesh.customDepthMaterial = depth; P.mesh.frustumCulled = false; P.mesh.castShadow = true; P.mesh.receiveShadow = true; scene.add(P.mesh);
   crowd.count = n;
   return n;
 }
+const _cand = [];
+function selectNear(cam, q) {
+  const P = crowd.pool, R = q.crowdHiR, o = {}, t = U.uTime.value;
+  _cand.length = 0;
+  const c0x = Math.floor((cam.x - R - 60 + M.HALF) / CS), c1x = Math.floor((cam.x + R + 60 + M.HALF) / CS), c0z = Math.floor((cam.z - R - 60 + M.HALF) / CS), c1z = Math.floor((cam.z + R + 60 + M.HALF) / CS);
+  for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) {
+    const cell = crowd.cells.get(cx + cz * CN); if (!cell) continue;
+    for (let i = cell.i0; i < cell.i1; i++) {
+      if (A_FLAG[i * 2] < 0.5) continue;
+      personPos(i, t, o); const d = Math.hypot(o.x - cam.x, o.z - cam.z);
+      if (d < R + 4) _cand.push(d, i);
+    }
+  }
+  const m = _cand.length / 2, ord = new Array(m); for (let k = 0; k < m; k++) ord[k] = k;
+  if (m > P.K) ord.sort((a, b) => _cand[a * 2] - _cand[b * 2]);
+  const take = Math.min(m, P.K);
+  for (let k = 0; k < take; k++) {
+    const i = _cand[ord[k] * 2 + 1];
+    P.path.set(A_PATH.subarray(i * 4, i * 4 + 4), k * 4); P.move.set(A_MOVE.subarray(i * 4, i * 4 + 4), k * 4);
+    P.look.set(A_LOOK.subarray(i * 4, i * 4 + 4), k * 4); P.flag.set(A_FLAG.subarray(i * 2, i * 2 + 2), k * 2); P.idx[k] = i;
+  }
+  // everyone inside the radius must be in the pool; shrink the radius when the pool is full
+  NEAR.uNearR.value = m > P.K ? Math.max(0, _cand[ord[P.K - 1] * 2] - 4) : R;
+  NEAR.uSelCam.value.set(cam.x, cam.y, cam.z);
+  const g = P.mesh.geometry; g.instanceCount = take; P.n = take;
+  for (const k of ['aPath', 'aMove', 'aLook', 'aFlag']) { const a = g.attributes[k]; a.clearUpdateRanges(); a.addUpdateRange(0, take * a.itemSize); a.needsUpdate = true; }
+  P.at.copy(cam); P.t = t;
+}
 export function updateCrowd(cam, q, inside) {
+  const vis0 = !inside && cam.y < 1500;
   for (const cell of crowd.cells.values()) {
     const d = Math.hypot(cam.x - cell.cx, cam.z - cell.cz) - CS * 0.7;
-    const vis = !inside && d < q.crowdFar && cam.y < 1500;
-    cell.mesh.visible = vis;
-    if (!vis) continue;
-    const lod = d < q.crowdNear ? 0 : 1;
-    if (lod !== cell.lod) { cell.lod = lod; cell.mesh.geometry = lod ? cell.gLo : cell.gHi; cell.mesh.castShadow = lod === 0 && q.desktop; }
+    cell.mesh.visible = vis0 && d < q.crowdFar;
   }
+  const P = crowd.pool; if (!P) return;
+  P.mesh.visible = vis0;
+  if (vis0 && (Math.abs(U.uTime.value - P.t) > 0.18 || P.at.distanceToSquared(cam) > 9)) selectNear(cam, q);
 }
+export function refreshNearPool() { const P = crowd.pool; if (P) P.t = -1e9; }
 export function setPanic(x, z, r) {
   const t = U.uTime.value;
   if (t - PANIC.z < 8 && Math.hypot(x - PANIC.x, z - PANIC.y) < PANIC.w * 0.6) return; // already panicking here
@@ -212,6 +360,7 @@ export function crowdRay(origin, dir, maxT) {
 export function setAlive(i, alive) {
   A_FLAG[i * 2] = alive ? 1 : 0;
   for (const cell of crowd.cells.values()) if (i >= cell.i0 && i < cell.i1) { const a = cell.attrs.aFlag; a.array[(i - cell.i0) * 2] = alive ? 1 : 0; a.needsUpdate = true; break; }
+  refreshNearPool();
 }
 export function lookOf(i) {
   const un = (v) => ((Math.floor(v / 65536) & 255) << 16) | ((Math.floor(v / 256) & 255) << 8) | (Math.floor(v) & 255);
