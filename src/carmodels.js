@@ -51,9 +51,11 @@ function assemble(body, wheel, wheels) {
 export async function loadCarModels(q) {
   let meta = null;
   try { meta = await (await fetch(assetURL('assets/models/cars/cars.json'))).json(); } catch (e) { console.warn('car models: no cars.json', e); return CAR_MODELS; }
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader(), seen = new Map();
+  // one parse per file: on phones the driven car and the near traffic share the lod1 files
+  const get = (n) => { if (!seen.has(n)) seen.set(n, loadGLB(loader, assetURL(`assets/models/cars/${n}.glb`))); return seen.get(n); };
   await Promise.all(KEYS.filter((k) => meta[k]).map(async (key) => {
-    const f = (n) => loadGLB(loader, assetURL(`assets/models/cars/${n}.glb`));
+    const f = get;
     // phones drive the lod1 body (a third of the triangles) and skip the full-detail wheel
     const phone = !q.desktop;
     const [body, wheel, b1, w1, b2, w2] = await Promise.all([f(phone ? key + '_lod1' : key), f(phone ? key + '_wheel_lod1' : key + '_wheel'), f(key + '_lod1'), f(key + '_wheel_lod1'), f(key + '_lod2'), f(key + '_wheel_lod2')]);
@@ -61,7 +63,7 @@ export async function loadCarModels(q) {
     const m = meta[key], wheels = m.wheels.map(([x, y, z]) => [x, y, z]);
     CAR_MODELS[key] = { body, wheel, wheels, r: m.r, len: m.L, wid: m.W, all: assemble(b1, w1, wheels), low: b2 && w2 ? assemble(b2, w2, wheels) : null };
   }));
-  const [jet, jet1] = await Promise.all([loadGLB(loader, assetURL(`assets/models/cars/rajhans${q.desktop ? '' : '_lod1'}.glb`)), loadGLB(loader, assetURL('assets/models/cars/rajhans_lod1.glb'))]);
+  const [jet, jet1] = await Promise.all([get(q.desktop ? 'rajhans' : 'rajhans_lod1'), get('rajhans_lod1')]);
   if (jet) STATIC_MODELS.rajhans = { geo: jet, lod: jet1 || jet };
   return CAR_MODELS;
 }
