@@ -1,3 +1,14 @@
+## Daman Duo — v1.11 "Countryside" update
+
+**What's new in 1.11**
+- **Farmsteads round every village**, built in Blender with real photo materials (lime-washed plaster, clay roof tiles, wood, tin, brick and stone, baked with shadows and surface detail):
+  - tiled-roof farmhouses with a veranda (otla), wooden posts, shuttered and barred windows, and a dish antenna;
+  - thatched cow sheds with a feeding trough, brick water-tank towers, stone wells with a pulley;
+  - tractors or bullock carts parked in the yard, and bamboo fences.
+- **Haystacks in the fields:** conical rice-straw stacks and fodder ridges now line the field edges across the countryside.
+- **Kesar Horse Ranch:** a timber stable with dutch doors, a tin roof and a cupola, a white-railed paddock, water troughs, hay bales and a herd of horses to ride. It is marked on the map.
+- **New realistic horse** made in Blender as one smooth body: deep barrel, withers and croup, arched neck, a refined head, muscled legs with knees, hocks, fetlocks and hooves, plus a strand mane and tail. Each horse gets its own coat (bay, black, brown or grey) with dark legs. The neck now rests upright and lowers to graze, fixing the old horse's backward-leaning neck.
+
 ## Daman Duo — v1.10 "Garage" update
 
 **What's new in 1.10**

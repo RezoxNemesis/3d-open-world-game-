@@ -6,6 +6,8 @@ import { U, patch } from './shaders.js';
 import { clamp, lerp, damp, dampAngle, angDiff, mulberry32 } from './util.js';
 import { sfx } from './audio.js';
 import { burst } from './fx.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { assetURL } from './textures.js';
 
 const lin = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255].map((c) => Math.pow(c, 2.2));
 function vc(g, fn) {
@@ -118,7 +120,53 @@ function loftG(rings, seg = 12, caps = true) {
   if (caps) for (const [ri, dir] of [[0, -1], [rings.length - 1, 1]]) { const ci = P.length / 3; P.push(...rings[ri].c); for (let k = 0; k < seg; k++) { const a = ri * seg + k, b = ri * seg + (k + 1) % seg; if (dir > 0) I.push(ci, a, b); else I.push(ci, b, a); } }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
 }
+// ---- Blender horse (tools/blender/horse.py): one smooth skinned body weighted to the same joints as the procedural one ----
+const HORSE = { geo: null, layout: null, mask: null, ao: null, fixed: null };
+export async function loadHorseModel() {
+  try {
+    const [gltf, layout] = await Promise.all([new Promise((ok, no) => new GLTFLoader().load(assetURL('assets/models/horse/horse.glb'), ok, undefined, no)), fetch(assetURL('assets/models/horse/horse.json')).then((r) => r.json())]);
+    let sm = null; gltf.scene.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; });
+    if (!sm) return false;
+    const order = Object.keys(layout), names = sm.skeleton.bones.map((b) => b.name), src = sm.geometry, n = src.attributes.position.count;
+    const si = src.attributes.skinIndex, sw = src.attributes.skinWeight, col = src.attributes.color, uv = src.attributes.uv;
+    const SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4), mask = new Float32Array(n), ao = new Float32Array(n), fixed = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      for (let k = 0; k < 4; k++) { SI[i * 4 + k] = Math.max(0, order.indexOf(names[si.getComponent(i, k)])); SW[i * 4 + k] = sw.getComponent(i, k); }
+      mask[i] = uv ? uv.getX(i) : 1; ao[i] = uv ? 1 - uv.getY(i) : 1;      // the exporter stores V as 1 - v
+      fixed[i * 3] = col ? col.getX(i) : 0.03; fixed[i * 3 + 1] = col ? col.getY(i) : 0.025; fixed[i * 3 + 2] = col ? col.getZ(i) : 0.02;
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', src.attributes.position); g.setAttribute('normal', src.attributes.normal);
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4)); if (src.index) g.setIndex(src.index);
+    Object.assign(HORSE, { geo: g, layout, mask, ao, fixed });
+    return true;
+  } catch (e) { console.warn('horse model missing', e); return false; }
+}
+function horseBlender(color) {
+  const L = HORSE.layout, root = new THREE.Group(), B = {};
+  for (const k in L) { B[k] = new THREE.Bone(); B[k].name = k; }
+  for (const k in L) { const p = L[k].pos, par = L[k].parent; if (par) { const q = L[par].pos; B[k].position.set(p[0] - q[0], p[1] - q[1], p[2] - q[2]); B[par].add(B[k]); } else { B[k].position.set(p[0], p[1], p[2]); root.add(B[k]); } }
+  // per-horse coat: coat where mask = 1, darker points (lower legs, mane, tail) at 0.5, fixed colours (hooves, eyes) at 0
+  const coat = lin(color), light = coat[0] + coat[1] + coat[2] > 1.2, points = light ? coat.map((v) => v * 0.8) : [0.03, 0.024, 0.018];
+  const g = HORSE.geo.clone(), n = g.attributes.position.count, C = new Float32Array(n * 3), py = g.attributes.position;
+  for (let i = 0; i < n; i++) {
+    const m = HORSE.mask[i], a = HORSE.ao[i], y = py.getY(i), shade = a * (0.92 + 0.12 * Math.min(1, Math.max(0, (y - 0.8) / 0.8)));
+    for (let k = 0; k < 3; k++) { const fx = HORSE.fixed[i * 3 + k], pt = (light && m < 0.75 && m > 0.25 && y > 1.0 ? coat[k] * 0.55 : points[k]) * shade, ct = coat[k] * shade;
+      C[i * 3 + k] = m >= 0.5 ? lerp(pt, ct, (m - 0.5) * 2) : lerp(fx, pt, m * 2); }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+  const sm = new THREE.SkinnedMesh(g, SKIN); sm.castShadow = true; sm.receiveShadow = true;
+  root.add(sm); root.updateMatrixWorld(true); sm.bind(new THREE.Skeleton(Object.keys(L).map((k) => B[k])));
+  const parts = { body: B.body, neck: B.neck, head: B.head, tail: B.tail, neckBase: 0, grazeAng: 1.05,
+    legs: [['fl', true, 1], ['fr', true, -1], ['hl', false, 1], ['hr', false, -1]].map(([k, front, side]) => ({ hip: B['hip_' + k], knee: B['knee_' + k], front, side })) };
+  // saddle (same as the procedural horse), seated on the Blender horse's back
+  const sg = mergeGeometries([vc(loftG([{ c: [0, 0, -0.32], ax: [0, 0, 1], a: 0.36, b: 0.06 }, { c: [0, 0.01, 0.0], ax: [0, 0, 1], a: 0.38, b: 0.06 }, { c: [0, 0, 0.3], ax: [0, 0, 1], a: 0.35, b: 0.06 }], 12), solid(0x8a1c1c)),
+    vc(loftG([{ c: [0, 0.05, -0.26], ax: [0, 0, 1], a: 0.2, b: 0.07 }, { c: [0, 0.03, 0.0], ax: [0, 0, 1], a: 0.22, b: 0.05 }, { c: [0, 0.08, 0.22], ax: [0, 0, 1], a: 0.16, b: 0.08 }], 12), solid(0x4a2a12)),
+    ...[-1, 1].flatMap((sx) => [vc(new THREE.BoxGeometry(0.015, 0.4, 0.03).translate(sx * 0.3, -0.2, 0.05), solid(0x2a1a0e)), vc(new THREE.TorusGeometry(0.05, 0.01, 4, 10).rotateY(Math.PI / 2).translate(sx * 0.3, -0.42, 0.05), solid(0x9e9e9e))])]);
+  const saddle = new THREE.Mesh(sg, MAT); saddle.position.set(0, 1.51 - L.body.pos[1], 0.12); B.body.add(saddle); saddle.visible = false; saddle.castShadow = true; parts.saddle = saddle;
+  return { root, parts };
+}
 function horseModel(color) {
+  if (HORSE.geo) return horseBlender(color);
   const S = SPECIES.horse, root = new THREE.Group(), parts = {}, c = lin(color), dark = lin(0x15100c), mane = lin(Math.random() < 0.5 ? 0x15100c : color === 0xe8e0d0 ? 0xd8d0c0 : 0x2a1a10);
   const sock = Math.random() < 0.35 ? lin(0xf2ece0) : c;
   const body = new THREE.Bone(); body.position.y = S.back - S.bodyR[1] * 0.2; root.add(body);
@@ -275,7 +323,7 @@ export class Animal {
       l.hip.rotation.x = -s * A; l.knee.rotation.x = (l.front ? -1 : 1) * Math.max(0, Math.cos(this.ph + off)) * A * 1.2;
     });
     const grazing = this.state === 'graze' && !this.rider;
-    P.neck.rotation.x = damp(P.neck.rotation.x, grazing && this.type !== 'dog' && this.type !== 'tiger' ? 0.5 : -this.S.neck[1] + Math.sin(this.ph) * 0.06 * A, 3, dt);
+    P.neck.rotation.x = damp(P.neck.rotation.x, grazing && this.type !== 'dog' && this.type !== 'tiger' ? (P.grazeAng ?? 0.5) : (P.neckBase ?? -this.S.neck[1]) + Math.sin(this.ph) * 0.06 * A, 3, dt);
     P.tail.rotation.z = Math.sin(performance.now() * 0.003 + this.home.x) * 0.3;
     P.body.position.y = this.S.back - this.S.bodyR[1] * 0.2 + Math.abs(Math.sin(this.ph)) * 0.05 * A * (this.S.len);
     P.body.rotation.x = this.air ? clamp(-this.vy * 0.04, -0.3, 0.3) : gallop ? Math.sin(this.ph) * 0.06 : 0;
@@ -314,7 +362,7 @@ export function buildBirds(scene, n = 14) {
 
 export function spawnAnimals(game, q) {
   const list = [], rng = mulberry32(4242), add = (t, x, z, c) => { if (M.terrainH(x, z) < 0.6 || M.waterLevelAt(x, z) > M.terrainH(x, z)) return null; const a = new Animal(game, t, x, z, c); list.push(a); return a; };
-  for (const s of M.spawns.horses) { const h = add('horse', s.x, s.z); if (h) { h.parts.saddle.visible = true; h.rideable = true; } }
+  for (const s of M.spawns.horses) { const h = add('horse', s.x, s.z); if (h) { h.parts.saddle.visible = !s.ranch || Math.random() < 0.34; h.rideable = true; } }
   const mult = q.desktop ? 1 : 0.6;
   for (let k = 0; k < 90 * mult; k++) { const e = M.edges[Math.floor(rng() * M.edges.length)]; if (e.zone === 'rural' && rng() < 0.5) continue; const A = M.nodes[e.a]; add('cow', A.x + (rng() - 0.5) * 12, A.z + (rng() - 0.5) * 12); }
   for (const v of M.villages) { for (let k = 0; k < 3; k++) add('cow', v.x + (rng() - 0.5) * 120, v.z + (rng() - 0.5) * 120); for (let k = 0; k < 3; k++) add('goat', v.x + (rng() - 0.5) * 100, v.z + (rng() - 0.5) * 100); if (rng() < 0.6) add('peacock', v.x + (rng() - 0.5) * 140, v.z + (rng() - 0.5) * 140); }

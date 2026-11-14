@@ -17,7 +17,7 @@ import { Vehicle } from './vehicles.js';
 import { CARS } from './vehicle_models.js';
 import { Traffic } from './traffic.js';
 import { buildCrowd, updateCrowd, setPanic, crowdNear, crowdRay, densityAt, crowd } from './crowd.js';
-import { spawnAnimals, buildBirds } from './animals.js';
+import { spawnAnimals, buildBirds, loadHorseModel } from './animals.js';
 import { Serpent } from './serpent.js';
 import { Makara, Rakshasa } from './bosses.js';
 import { Underwater, REEF, WRECK } from './underwater.js';
@@ -56,7 +56,7 @@ export class Game {
     await progress('Populating Daman with people', 0.95);
     crowd.renderer = this.renderer; this.crowdN = buildCrowd(S, q);
     await progress('Starting traffic', 0.96);
-    await loadCarModels(q);
+    await Promise.all([loadCarModels(q), loadHorseModel()]);
     this.traffic = new Traffic(this, q);
     await progress('Waking the wildlife', 0.97);
     this.animals = spawnAnimals(this, q); this.birds = buildBirds(S);
