@@ -138,6 +138,64 @@ function dress(b, rnd) {
   return out;
 }
 
+// Tiles are dressed on demand: only the ones within R of the camera hold instanced meshes; a small live-tile texture
+// tells the facade-shader boxes which tiles to shrink, so a tile never shows half-built.
+const NT = Math.ceil(2 * M.HALF / KIT.T);
+KIT.flags = new Uint8Array(NT * NT);
+KIT.tex = new THREE.DataTexture(KIT.flags, NT, NT, THREE.RedFormat, THREE.UnsignedByteType); KIT.tex.magFilter = KIT.tex.minFilter = THREE.NearestFilter; KIT.tex.needsUpdate = true;
+KIT.uTex = { value: KIT.tex };
+const SHADOW_MODS = ['col_bal', 'town_bal', 'hotel_bay', 'cornice', 'town_shop', 'hotel_lobby', 'col_door'];
+
+function buildTile(K, k) {
+  const { hi, lo, mat, scene, R1 } = K, per = {};
+  for (const { b, i } of K.tiles.get(k)) {
+    const rnd = mulberry32(Math.floor(b.seed * 1e9) + i), seed = b.seed, col = _c.set(b.color).clone();
+    for (const it of dress(b, rnd)) (per[it.mod] ||= []).push({ ...it, seed, col });
+  }
+  const out = [];
+  for (const [mods, near] of [[hi, true], [lo || hi, false]]) {
+    const grp = new THREE.Group();
+    for (const name in per) {
+      const trim = ['band', 'plinth', 'pilaster', 'parapet'].includes(name);
+      if (!near && trim && name !== 'parapet') continue;          // the mid ring skips the small trims
+      const geo = (trim && lo ? lo : mods)[name]; if (!geo) continue;
+      const L = per[name], g = new THREE.BufferGeometry(); for (const a in geo.attributes) g.setAttribute(a, geo.attributes[a]); if (geo.index) g.setIndex(geo.index);
+      const seeds = new Float32Array(L.length);
+      const m = new THREE.InstancedMesh(g, mat, L.length);
+      // aSeed: integer part = the building (shutter paint), fraction = this bay
+      L.forEach((it, j) => { _m.compose(_p.set(it.x, it.y, it.z), _q.setFromEuler(_e.set(0, it.yaw, 0)), _s.set(it.sx, 1, 1)); m.setMatrixAt(j, _m); m.setColorAt(j, it.col); seeds[j] = Math.floor(it.seed * 997) + ((j * 0.1373) % 1) * 0.98; });
+      g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+      m.castShadow = near && SHADOW_MODS.includes(name); m.receiveShadow = true; m.computeBoundingSphere(); grp.add(m);
+    }
+    grp.matrixAutoUpdate = false; grp.visible = false; scene.add(grp); out.push(grp);
+  }
+  return { hi: out[0], lo: out[1] };
+}
+function freeTile(K, t) {
+  for (const grp of [t.hi, t.lo]) {
+    K.scene.remove(grp);
+    for (const m of grp.children) { const g = m.geometry, own = g.attributes.aSeed; for (const a of Object.keys(g.attributes)) if (a !== 'aSeed') g.deleteAttribute(a); g.setIndex(null); g.dispose(); m.dispose(); void own; }
+  }
+}
+// per frame: show the right ring, build at most `budget` new tiles, free tiles that drifted out of range
+export function updateKit(cam, budget = 1) {
+  const K = KIT.state; if (!K) return;
+  const T = KIT.T, want = [];
+  let dirty = false;
+  for (const k of K.tiles.keys()) {
+    const cx = (k % 1000) * T - M.HALF + T / 2, cz = Math.floor(k / 1000) * T - M.HALF + T / 2, d = Math.hypot(cam.x - cx, cam.z - cz), live = K.live.get(k);
+    if (d < K.R) { if (!live) want.push([d, k]); }
+    else if (live && d > K.R + 200) { freeTile(K, live); K.live.delete(k); }
+    const fi = (k % 1000) + Math.floor(k / 1000) * NT, on = live && d < K.R ? 1 : 0;
+    if (live) { live.hi.visible = on && d < K.R1; live.lo.visible = on && d >= K.R1; }
+    if (KIT.flags[fi] !== on) { KIT.flags[fi] = on; dirty = true; }
+  }
+  want.sort((a, b) => a[0] - b[0]);
+  for (let n = 0; n < Math.min(budget, want.length); n++) { const k = want[n][1]; K.live.set(k, buildTile(K, k)); }
+  if (want.length && budget > 0) return updateKit(cam, 0);       // refresh flags/visibility for the tiles just built
+  if (dirty) KIT.tex.needsUpdate = true;
+}
+
 export async function buildKitCity(scene, q, H) {
   if (!q.desktop) return null;                           // phones keep the facade-shader boxes
   const [hi, lo] = await Promise.all([loadKit('kit_facades'), loadKit('kit_facades_lod')]); if (!hi) return null;
@@ -151,29 +209,6 @@ export async function buildKitCity(scene, q, H) {
     const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, k = Math.floor((cx + M.HALF) / T) + Math.floor((cz + M.HALF) / T) * 1000;
     if (!tiles.has(k)) tiles.set(k, []); tiles.get(k).push({ b, i });
   });
-  let count = 0;
-  for (const [k, list] of tiles) {
-    const per = {};
-    for (const { b, i } of list) {
-      const rnd = mulberry32(Math.floor(b.seed * 1e9) + i), seed = b.seed, col = _c.set(b.color).clone();
-      for (const it of dress(b, rnd)) (per[it.mod] ||= []).push({ ...it, seed, col });
-    }
-    for (const [mods, near, far] of [[hi, 0, R1], [lo || hi, R1, R]]) {
-      const grp = new THREE.Group();
-      for (const name in per) {
-        const trim = ['band', 'plinth', 'pilaster', 'parapet'].includes(name);
-        if (near > 0 && trim && name !== 'parapet') continue;          // the mid ring skips the small trims
-        const geo = (trim && lo ? lo : mods)[name]; if (!geo) continue;
-        const L = per[name], g = new THREE.BufferGeometry(); for (const a in geo.attributes) g.setAttribute(a, geo.attributes[a]); if (geo.index) g.setIndex(geo.index);
-        const seeds = new Float32Array(L.length);
-        const m = new THREE.InstancedMesh(g, mat, L.length);
-        L.forEach((it, j) => { _m.compose(_p.set(it.x, it.y, it.z), _q.setFromEuler(_e.set(0, it.yaw, 0)), _s.set(it.sx, 1, 1)); m.setMatrixAt(j, _m); m.setColorAt(j, it.col); seeds[j] = Math.floor(it.seed * 997) + ((j * 0.1373) % 1) * 0.98; });   // integer part: the building (shutter paint), fraction: this bay
-        g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
-        m.castShadow = near === 0 && ['col_bal', 'town_bal', 'hotel_bay', 'cornice', 'town_shop', 'hotel_lobby', 'col_door'].includes(name); m.receiveShadow = true; m.computeBoundingSphere(); grp.add(m); if (near === 0) count += L.length;
-      }
-      grp.matrixAutoUpdate = false; scene.add(grp);
-      H.regLod(grp, (k % 1000) * T - M.HALF + T / 2, Math.floor(k / 1000) * T - M.HALF + T / 2, far, near);
-    }
-  }
-  return { tiles: tiles.size, modules: count };
+  KIT.state = { hi, lo, mat, scene, tiles, live: new Map(), R, R1 };
+  return { tiles: tiles.size };
 }

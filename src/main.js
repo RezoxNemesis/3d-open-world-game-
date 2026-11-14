@@ -9,7 +9,7 @@ import { initAudio, audio } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
 import { loadAvatar, describe as describeAvatar } from './avatars.js';
-import { world } from './world.js';
+import { world, updateWorldLOD } from './world.js';
 import { crowd } from './crowd.js';
 import { U } from './shaders.js';
 
@@ -76,7 +76,7 @@ async function start(opts) {
 // ---------------- test scenarios (headless render test) ----------------
 function setupTests(game) {
   const undo = [];
-  const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); game.render(); };
+  const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) game.update(dt); updateWorldLOD(game.cam.position, 400); game.render(); };   // tests: dress every nearby tile before the shot
   const WRECKX = () => M.coastX(3320) - 300;
   const at = (x, z, yaw) => { const p = game.player; if (p.vehicle) game.exitVehicle(); if (p.mount) game.dismountHorse(); if (game.inside) game.leaveInterior(); p.pos.set(x, M.groundAt(x, z), z); p.state = 'ground'; p.vel.set(0, 0, 0); p.yaw = yaw ?? p.yaw; game.rig.yaw = p.yaw + Math.PI; game.rig.target.set(x, p.pos.y + 1.5, z); game.companion.pos.set(x + 1.5, M.groundAt(x + 1.5, z - 1.5), z - 1.5); };
   const S = {
