@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as M from './mapdata.js';
 import { CARS, vehicleGeometry, heliGeometry, jetGeometry, boatGeometry } from './vehicle_models.js';
+import { STATIC_MODELS } from './carmodels.js';
 import { U, patch } from './shaders.js';
 import { clamp, lerp, damp, angDiff, dampAngle } from './util.js';
 import { burst, explosion, fx } from './fx.js';
@@ -24,9 +25,9 @@ export function vehicleMaterial(instanced) {
       .replace('#include <color_fragment>', `#include <color_fragment>
       vec3 tint = ${instanced ? 'vTint' : 'uTint'};
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*tint, vPaint);`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vEmit > 4.5 && vEmit < 5.5 ? 0.04 : vEmit > 5.5 ? 0.14 : mix(0.72, 0.3, vPaint);')
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vEmit > 5.5 ? 1.0 : vEmit > 4.5 ? 0.0 : mix(0.0, 0.5, vPaint);')
-      .replace('#include <lights_physical_fragment>', THREE.ShaderChunk.lights_physical_fragment.replace('material.clearcoat = clearcoat;', 'material.clearcoat = clearcoat * vPaint;'))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vEmit > 6.5 ? 0.92 : vEmit > 4.5 && vEmit < 5.5 ? 0.04 : vEmit > 5.5 ? 0.14 : mix(0.72, 0.3, vPaint);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vEmit > 6.5 ? 0.0 : vEmit > 5.5 ? 1.0 : vEmit > 4.5 ? 0.0 : mix(0.0, 0.5, vPaint);')
+      .replace('#include <lights_physical_fragment>', THREE.ShaderChunk.lights_physical_fragment.replace('material.clearcoat = clearcoat;', 'material.clearcoat = clearcoat * vPaint;') + '\n      if (vEmit > 6.5) { material.specularColor *= 0.35; material.specularF90 = 0.4; }   // tyres, rubber, matte trim')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       if (vEmit > 0.5 && vEmit < 1.5) totalEmissiveRadiance += vec3(1.,0.95,0.8)*(0.15 + uNight*3.5);
       if (vEmit > 1.5 && vEmit < 2.5) totalEmissiveRadiance += vec3(1.,0.05,0.03)*(0.1 + uNight*2. + uBrake*3.);
@@ -50,7 +51,7 @@ export class Vehicle {
       if (kind === 'boat') { const m = new THREE.Mesh(boatGeometry(), g); m.castShadow = true; this.obj.add(m); this.len = 6; this.wid = 2.2; }
       else {
         const vg = vehicleGeometry(key); const body = new THREE.Mesh(vg.body, g); body.castShadow = true; body.receiveShadow = true; this.obj.add(body);
-        for (const [wx, r, wz] of vg.wheels) { const w = new THREE.Mesh(vg.wheel, g); w.position.set(wx, r, wz); w.castShadow = true; this.obj.add(w); this.wheels.push({ m: w, front: wz > 0, r }); }
+        for (const [wx, r, wz] of vg.wheels) { const w = new THREE.Mesh(vg.wheel, g); w.position.set(wx, r, wz); if (vg.mirrorLeft && wx < 0) w.scale.x = -1; w.castShadow = true; this.obj.add(w); this.wheels.push({ m: w, front: wz > 0, r }); }
         this.len = vg.len; this.wid = vg.wid; this.wheelBase = Math.max(1.2, Math.abs(vg.wheels[0][2] - vg.wheels[vg.wheels.length - 1][2]));
       }
       const P = this.spec.P;
@@ -66,9 +67,10 @@ export class Vehicle {
       this.spec = { name: 'Garuda H4 Helicopter', top: 75 }; this.len = 11; this.wid = 3; this.seat = new THREE.Vector3(0.45, 1.1, 1.2);
     } else {
       const fighter = kind === 'jet';
-      const m = new THREE.Mesh(jetGeometry(fighter), g); m.castShadow = true; this.obj.add(m);
-      this.spec = fighter ? { name: 'Vajra F1 Fighter Jet', top: 330, stall: 55, rot: 70 } : { name: 'Rajhans Private Jet', top: 230, stall: 48, rot: 62 };
-      this.len = fighter ? 16 : 18; this.wid = fighter ? 11 : 15; this.seat = fighter ? new THREE.Vector3(0, 2.1, 3.6) : new THREE.Vector3(0.45, 2.1, 6.3);
+      const bj = !fighter && STATIC_MODELS.rajhans;   // Blender-built business jet when available
+      const m = new THREE.Mesh(bj ? bj.geo : jetGeometry(fighter), g); m.castShadow = true; m.receiveShadow = !!bj; this.obj.add(m);
+      this.spec = fighter ? { name: 'Vajra F1 Fighter Jet', top: 330, stall: 55, rot: 70 } : { name: 'Rajhans R7 Business Jet', top: 230, stall: 48, rot: 62 };
+      this.len = fighter ? 16 : bj ? 20 : 18; this.wid = fighter ? 11 : bj ? 18 : 15; this.seat = fighter ? new THREE.Vector3(0, 2.1, 3.6) : bj ? new THREE.Vector3(0.45, 1.95, 7.3) : new THREE.Vector3(0.45, 2.1, 6.3);
       this.fighter = fighter; this.ammo = 999; this.missiles = 24; this.after = 0;
     }
     this.mat.userData.uTintVal = this.tint;

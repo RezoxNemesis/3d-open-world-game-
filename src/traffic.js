@@ -7,7 +7,7 @@ import { mulberry32, clamp, lerp, damp, dampAngle, hexRGB } from './util.js';
 import { burst, explosion } from './fx.js';
 import { sfx } from './audio.js';
 
-const MIX = [['chhota', 22], ['sedan', 16], ['auto', 18], ['scooter', 14], ['thunder', 7], ['shera220', 9], ['vayurr', 0.7], ['policebike', 0.8], ['kaveri', 7], ['bus', 4], ['truck', 5], ['amba', 3], ['regent', 2], ['police', 1], ['jeep', 2], ['bison', 0.5], ['agni', 0.4], ['shera', 0.5]];
+const MIX = [['chhota', 22], ['sedan', 16], ['auto', 18], ['scooter', 14], ['thunder', 7], ['shera220', 9], ['vayurr', 0.7], ['policebike', 0.8], ['kaveri', 7], ['bus', 4], ['truck', 5], ['amba', 3], ['regent', 2], ['police', 1], ['jeep', 2], ['bison', 0.8], ['agni', 0.4], ['shera', 0.8], ['gajraj', 1.2]];
 const VMAX = { scooter: 13, auto: 10, bus: 13, truck: 13, amba: 13, police: 18, thunder: 15, shera220: 16, vayurr: 21, policebike: 18 };
 const _pm = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 export class Traffic {

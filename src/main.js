@@ -92,6 +92,31 @@ function setupTests(game) {
       game.camOverride = () => ({ pos: new THREE.Vector3(base.x + 3, base.y + M.groundAt(base.x, base.z) + 1.6, base.z + 7.5), look: new THREE.Vector3(base.x + 5, M.groundAt(base.x, base.z) + 0.6, base.z) });
       step(6);
     },
+    hero_cars: (hour = 16.6, view = 'wide') => {
+      const keys = ['bison', 'shera', 'gajraj'], tints = [0xa3121b, 0x0b4fb3, 0xeeeeee], vs = keys.map((k) => game.vehicles.find((v) => v.key === k));
+      const base = new THREE.Vector3(M.coastX(-3300) + 90, 0, -3300);
+      vs.forEach((v, i) => { if (!v) return; const x = base.x + i * 3.6, z = base.z - i * 2.8; v.pos.set(x, M.groundAt(x, z), z); v.yaw = 0.62; v.vel.set(0, 0, 0); v.speed = 0; v.tint.setHex(tints[i]); v.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), v.yaw); v.sync(); });
+      at(base.x - 8, base.z - 12, 0); game.sky.hour = hour;
+      const gy = M.groundAt(base.x, base.z), one = vs[keys.indexOf(view)];
+      game.camOverride = () => {
+        if (one) { const f = new THREE.Vector3(Math.sin(one.yaw), 0, Math.cos(one.yaw)), r = new THREE.Vector3(Math.cos(one.yaw), 0, -Math.sin(one.yaw));
+          return { pos: one.pos.clone().addScaledVector(f, 4.6).addScaledVector(r, 2.9).add(new THREE.Vector3(0, 1.25, 0)), look: one.pos.clone().addScaledVector(f, 0.3).add(new THREE.Vector3(0, 0.75, 0)) }; }
+        return { pos: new THREE.Vector3(base.x + 0.2, gy + 1.7, base.z + 8.5), look: new THREE.Vector3(base.x + 3.8, gy + 0.7, base.z - 2.6) };
+      };
+      step(6);
+    },
+    jet_closeup: (hour = 9.8) => {
+      const v = game.vehicles.find((v) => v.kind === 'plane'); if (!v) return;
+      at(v.pos.x - 30, v.pos.z - 30, 0); game.sky.hour = hour;
+      game.camOverride = () => { const f = new THREE.Vector3(Math.sin(v.yaw), 0, Math.cos(v.yaw)), r = new THREE.Vector3(Math.cos(v.yaw), 0, -Math.sin(v.yaw));
+        return { pos: v.pos.clone().addScaledVector(f, 17).addScaledVector(r, 15).add(new THREE.Vector3(0, 4.2, 0)), look: v.pos.clone().addScaledVector(f, 1.5).add(new THREE.Vector3(0, 2.4, 0)) }; };
+      step(6);
+    },
+    jet_golden: () => S.jet_closeup(17.3),
+    hero_cars_bison: () => S.hero_cars(16.6, 'bison'),
+    hero_cars_shera: () => S.hero_cars(16.6, 'shera'),
+    hero_cars_gajraj: () => S.hero_cars(16.6, 'gajraj'),
+    hero_cars_night: () => S.hero_cars(20.8, 'wide'),
     horse_closeup: () => {
       const h = game.animals.find((a) => a.rideable && a.parts.saddle && a.parts.saddle.visible) || game.animals.find((a) => a.type === 'horse');
       at(h.pos.x + 3, h.pos.z + 3, 0); h.want = 0; h.speed = 0; h.state = 'idle'; h.t = 99; game.sky.hour = 9.5; h.pos.y = M.groundAt(h.pos.x, h.pos.z); h.obj.position.copy(h.pos); const ft = h.update.bind(h); h.update = (dt) => { h.speed = 0; h.want = 0; h.animate(dt); h.obj.position.copy(h.pos); }; undo.push(() => (h.update = ft));
