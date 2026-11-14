@@ -23,7 +23,7 @@ export class Weather {
     // fog: winter mornings are foggy; rain thickens
     const morning = Math.max(0, 1 - Math.abs(hour - 7) / 3);
     const fog = S.fog * (1 + morning * (this.season === 'winter' ? 1.4 : 0.4) + this.rain * 2.5);
-    U.uFogDensity.value = 0.000105 * fog * this.game.q.fog;
+    U.uFogDensity.value = 0.000078 * fog * this.game.q.fog;
     this.game.scene.fog.density = U.uFogDensity.value;
     sky.cloudMat.uniforms.uCov.value = lerp(S.clouds, 0.18, this.rain);
     sky.sun.intensity *= 1 - this.rain * 0.75;

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
-import { U, NOISE, patch } from './shaders.js';
+import { U, NOISE, patch, beaconMaterial } from './shaders.js';
 import { clamp, lerp, damp, dampAngle, smooth } from './util.js';
 import { burst, explosion, fx } from './fx.js';
 import { sfx, say } from './audio.js';
@@ -136,7 +136,7 @@ export class Serpent {
     const spikeG = new THREE.ConeGeometry(0.5, 2.4, 5); spikeG.translate(0, 1.2, 0);
     this.spikes = new THREE.InstancedMesh(spikeG, new THREE.MeshStandardMaterial({ color: 0x1c1610, roughness: 0.5, metalness: 0.2 }), Math.floor(NSEG / 2)); this.spikes.frustumCulled = false; this.spikes.castShadow = true; game.scene.add(this.spikes);
     // a pillar of light over Naag Sarovar so the boss is easy to find
-    this.beacon = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 1400, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0xb04dff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    this.beacon = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 1400, 20, 1, true), beaconMaterial(0xb04dff, 0.3, 400));
     this.beacon.position.set(M.PLAT.lx, M.PLAT.water + 700, M.PLAT.lz); game.scene.add(this.beacon);
     // hood (flares open)
     const hg = new THREE.SphereGeometry(1, 24, 12, Math.PI * 0.15, Math.PI * 0.7, Math.PI * 0.12, Math.PI * 0.76);

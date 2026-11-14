@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
 import { buildEstates } from './estates.js';
+import { buildPromenade } from './promenade.js';
+import { buildCoast } from './coast.js';
+import { addGlow, buildGlows } from './glow.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
 import * as TR from './terrain.js';
@@ -135,8 +138,8 @@ function buildRoads(scene, stoneMat, q) {
       pts.push({ x, z, y, s });
     }
     cur = use((Aa.x + B.x) / 2, (Aa.z + B.z) / 2);
-    const lit = e.type === 'major' || e.type === 'coast' || e.type === 'fort' ? 1 : 0;
-    const sw = !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link') ? 1 : 0;
+    const lit = e.sea ? 2 : e.type === 'major' || e.type === 'coast' || e.type === 'fort' ? 1 : 0;
+    const sw = e.sea || !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link') ? 1 : 0;
     ribbon(pts, e.w + sw * 5.2, e.type === 'village' ? 0 : e.lanes, (typeCode[e.type] ?? 1) + sw * 100, e.len, lit, e.w);
     if (e.elev) {
       // bridge structure
@@ -177,7 +180,8 @@ function buildRoads(scene, stoneMat, q) {
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix*vec4(transformed,1.)).xyz;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight; uniform float uWet; uniform sampler2D uAsphD, uAsphN, uPaveD, uPaveN, uCobD, uSoilD; varying vec4 vRoad; varying vec2 vRUV; varying vec3 vWP; vec3 rN; float rWet;\n' + NOISE + TEX_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        float w = vRoad.x, lanes = vRoad.y, len = vRoad.z, side = step(99., vRoad.w), code = mod(vRoad.w, 100.), tcode = mod(code, 10.), lit = floor(code/10.);
+        // the packed code is interpolated: round it first, or 120.0 arrives as 119.99998 and lit/type flicker per pixel (the old 'road dots')
+        float rw = floor(vRoad.w + 0.5), w = vRoad.x, lanes = floor(vRoad.y + 0.5), len = vRoad.z, side = step(99.5, rw), code = mod(rw, 100.), tcode = mod(code, 10.), lit = floor(code/10. + 0.05);
         float totalW = w + side*5.2;
         float across = (vRUV.x-0.5)*totalW, a = abs(across), v = vRUV.y;
         float camDr = length(vViewPosition), nearR = 1. - smoothstep(60., 110., camDr);
@@ -213,12 +217,13 @@ function buildRoads(scene, stoneMat, q) {
           float curb = 1. - step(w*0.5 + 0.28, a);
           pave = mix(pave, vec3(0.72,0.72,0.68), curb);
           if (curb > 0.5) rN = vec3(0.,0.,1.);
-          if (curb > 0.5 && fract(v/2.0) < 0.5) pave = vec3(0.85,0.82,0.15)*0.8;
+          if (curb > 0.5) pave = fract(v/1.8) < 0.5 ? vec3(0.06,0.06,0.065) : vec3(0.86,0.85,0.82);   // black-and-white painted curbs, as on the Daman seafront
           pave = mix(pave, vec3(0.42,0.37,0.3), smoothstep(w*0.5+2.0, w*0.5+2.6, a)*0.6);
           diffuseColor.rgb = pave;
         }
         float pool = 0.;
-        if (lit > 0.5) { float dv = mod(v - 15., 38.) - 19.; pool = exp(-dv*dv/70.)*exp(-a*a/(w*w*0.4)); }`)
+        if (lit > 1.5) { float dz = mod(vWP.z - (${(M.SEA.z0 + 9.5).toFixed(1)}) + 9.5, 19.) - 9.5; pool = exp(-dz*dz/40.)*(exp(-(across + 6.4)*(across + 6.4)/18.) + 0.45*exp(-across*across/40.)); }
+        else if (lit > 0.5) { float dv = mod(v - 15. + 19., 38.) - 19.; pool = exp(-dv*dv/70.)*exp(-a*a/(w*w*0.4)); }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.,0.7,0.4)*pool*uNight*0.35;')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.88, 0.22, uWet);\ndiffuseColor.rgb *= mix(1.0, 0.55, uWet);')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nrN = normalize(mix(vec3(0.,0.,1.), rN, 1.0 - smoothstep(8., 45., length(vViewPosition))));\nnormal = normalize((viewMatrix*vec4(nmapXZ(rN, vec3(0.,1.,0.)), 0.)).xyz);\n// specular anti-aliasing: widen the highlight where the normal varies faster than a pixel (no sparkle on wet asphalt)\nfloat sv = length(fwidth(normal)); roughnessFactor = clamp(sqrt(roughnessFactor*roughnessFactor + sv*sv*4.0), 0.0, 1.0);');
@@ -1277,15 +1282,19 @@ export async function buildWorld(scene, q, progress, renderer) {
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
   buildEstates(scene, q, mats, TX, regLod, addCol);
+  world.promenade = buildPromenade(scene, q, TX, { regLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [] });
   buildPoles(scene, q);
   world.labels.push({ name: 'Jampore Villa Colony', x: M.L.villas.x, z: M.L.villas.z });
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);
   buildBuildings(scene, q);
   buildBoats(scene);
+  world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated });
   await progress('Growing the jungle', 0.93);
   buildTrees(scene, q, renderer);
   buildStreetLights(scene, q);
+  for (const l of M.lights) addGlow(l.x + 2.2 * Math.sin(l.ang), l.y + 7.72, l.z + 2.2 * Math.cos(l.ang), 1.15, [1.0, 0.74, 0.42], l.y + 0.17);
+  world.glows = buildGlows(scene, q);
   M.setColliders(world.colliders);
   if (q.grassR > 0) TR.buildGrass(scene, hTex, TR.occTexture(), splat, q);
   world.mapCanvas = buildMapCanvas();

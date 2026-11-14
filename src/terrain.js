@@ -266,6 +266,7 @@ export function waterMaterial(level, hTex) {
     fragmentShader: `uniform float uTime,uNight,uFogDensity,uLevel,uRain; uniform vec3 uSunDir,uSunColor,uZenith,uHorizon,uFogColor,uAmbient; varying vec3 vW;
     ${NOISE}
     ${HEIGHT_GLSL}
+    float murky0(float m){ return 1. - m*0.6; }
     vec2 wv(vec2 p, vec2 d, float f, float a, float s){ float ph = dot(p,d)*f + uTime*s; return d*(cos(ph)*a*f); }
     void main(){
       vec2 p = vW.xz;
@@ -275,6 +276,9 @@ export function waterMaterial(level, hTex) {
       g += (vec2(vn(p*0.9 + uTime*0.4), vn(p*0.9 - uTime*0.35+7.)) - 0.5)*0.12;
       float rn = vn(p*6. + uTime*7.); g += (vec2(rn, vn(p*6.-uTime*6.)) - 0.5)*0.35*uRain;
       g *= mix(1.0, 0.25, smoothstep(150., 3000., dist)) * mix(0.35, 1.0, smoothstep(0., 6., depth));
+      // close-range capillary ripples: the sparkle in the sun / lamp glitter path
+      float nearW = 1. - smoothstep(25., 380., dist);
+      g += (vec2(vn(p*2.6 + uTime*vec2(1.3, 0.4)), vn(p*2.6 - uTime*vec2(0.5, 1.2) + 5.)) - 0.5)*0.22*nearW;
       vec3 n = normalize(vec3(-g.x, 1., -g.y));
       vec3 V = normalize(cameraPosition - vW);
       if (cameraPosition.y < uLevel - 0.02) {
@@ -292,20 +296,28 @@ export function waterMaterial(level, hTex) {
       float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
       vec3 Rf = reflect(-V, n);
       vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
-      vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y, 0.3));
+      vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y*0.5, 0.8));
       float murky = (uLevel > 1. || (p.x > -2900. && p.x < 6100.)) ? 1. : 0.;
-      vec3 deep = mix(vec3(0.01,0.09,0.14), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.06,0.42,0.42), vec3(0.2,0.24,0.14), murky);
+      vec3 deep = mix(vec3(0.012,0.12,0.19), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.05,0.5,0.47), vec3(0.2,0.24,0.14), murky);
       vec3 light = uAmbient + uSunColor*max(uSunDir.y,0.)*0.6 + vec3(0.05,0.07,0.12)*uNight*max(moonD.y, 0.3);
-      vec3 col = mix(mix(shal, deep, smoothstep(0., 9., depth))*light, sky, fres*0.85);
+      vec3 col = mix(mix(shal, deep, smoothstep(0., 12., depth))*light, sky, fres*0.75);
       float sd = max(dot(Rf, uSunDir), 0.);
-      col += uSunColor*(pow(sd, 700.)*25. + pow(sd, 50.)*0.25)*step(0.,uSunDir.y)*(1.-uRain*0.8);
+      col += uSunColor*(pow(sd, 700.)*25. + pow(sd, 2400.)*60.*nearW + pow(sd, 50.)*0.25 + pow(sd, 160.)*1.3*(1. - smoothstep(0.05, 0.4, uSunDir.y)))*step(0.,uSunDir.y)*(1.-uRain*0.8);
       float md = max(dot(Rf, moonD), 0.);
       col += vec3(0.55,0.65,0.9)*(pow(md, 400.)*6. + pow(md, 24.)*0.18)*uNight*step(0., moonD.y)*(1.-uRain*0.8);
-      float band = sin(depth*6. - uTime*1.6 + vn(p*0.3)*6.)*0.5+0.5;
-      float foam = (1. - smoothstep(0., 1.5, depth))*smoothstep(0.6, 0.95, band*0.75 + vn(p*0.35+uTime*0.2)*0.35)*0.7;
-      foam = max(foam, smoothstep(0.35, 0.0, depth)*0.6);
-      col = mix(col, vec3(0.92)*light*1.1, foam);
-      float alpha = mix(0.3, 1., smoothstep(0., murky > 0.5 ? 2.5 : 11., depth)) * mix(1., 0.82, (1. - fres)*(1. - murky)*(1. - smoothstep(4., 16., depth)));
+      // surf: wave sets roll toward the beach, steepen and break in 0.3-3 m of water, leaving whitewash and lacy swash
+      float ph = depth*1.15 + uTime*0.95 + vn(p*0.012)*4.0 + vn(p*0.05 + 3.)*1.4;
+      float w = fract(ph/6.2832);
+      float zone = smoothstep(3.4, 2.0, depth)*smoothstep(0.02, 0.35, depth)*murky0(murky);
+      float brk = smoothstep(0.35, 0.7, vn(p*vec2(0.09, 0.03) + vec2(0., floor(ph/6.2832)*1.7)) + 0.25);
+      float crest = smoothstep(0.955, 0.992, w)*smoothstep(1.0, 0.996, w) + exp(-w*9.0)*0.85;
+      float wash = exp(-w*3.2)*0.45*smoothstep(0.45, 0.75, vn(p*0.45 + vec2(uTime*0.15, 0.)) + vn(p*1.7)*0.4);
+      float foam = (crest + wash)*zone*brk;
+      float lace = smoothstep(0.5, 0.72, vn(p*1.2 + uTime*vec2(0.2, 0.05)) + vn(p*4.0)*0.3)*smoothstep(0.45, 0.0, depth)*0.8;
+      foam = clamp(max(foam, lace) + smoothstep(0.12, 0.0, depth)*0.5, 0., 1.)*(1. - murky*0.5);
+      col = mix(col, vec3(0.95)*(light*1.05 + uSunColor*0.25*max(uSunDir.y, 0.)), foam);
+      float alpha = mix(0.4, 1., smoothstep(0., murky > 0.5 ? 2.5 : 8., depth)) * mix(1., 0.85, (1. - fres)*(1. - murky)*(1. - smoothstep(4., 16., depth)));
+      alpha = mix(alpha, 1.0, smoothstep(0.12, 0.6, fres));   // grazing views see the reflection, not the sand below
       float f = 1. - exp(-uFogDensity*uFogDensity*dist*dist);
       col = mix(col, uFogColor, f);
       gl_FragColor = vec4(col, max(alpha, f));

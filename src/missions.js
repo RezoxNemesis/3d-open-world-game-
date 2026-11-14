@@ -90,11 +90,11 @@ export class Missions {
   starts() { if (this.cur) return []; const out = []; for (const m of this.list) { if (this.done.has(m.id)) continue; const p = this.startAt(m); if (p) out.push({ m, x: p.x, z: p.z }); } return out; }
   updateStarts(dt) {
     const g = this.game, P = g.playerPos(), list = this.starts();
-    if (!this.startMeshes) { this.startMeshes = new Map(); this.startMat = new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); }
+    if (!this.startMeshes) { this.startMeshes = new Map(); this.startMat = markerMat(0xffd54f, 0.7); this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }); }
     const live = new Set();
     for (const st of list) {
       live.add(st.m.id); let o = this.startMeshes.get(st.m.id);
-      if (!o) { o = new THREE.Group(); const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.12, 8, 36).rotateX(Math.PI / 2), this.startMat), col = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 14, 24, 1, true).translate(0, 7, 0), this.startMat); o.add(ring, col); o.position.set(st.x, M.groundAt(st.x, st.z) + 0.15, st.z); g.scene.add(o); this.startMeshes.set(st.m.id, o); }
+      if (!o) { o = new THREE.Group(); const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.07, 8, 40).rotateX(Math.PI / 2), this.ringMat), col = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 7, 32, 1, true).translate(0, 3.5, 0), this.startMat); o.add(ring, col); o.position.set(st.x, M.groundAt(st.x, st.z) + 0.15, st.z); g.scene.add(o); this.startMeshes.set(st.m.id, o); }
       const d = Math.hypot(st.x - P.x, st.z - P.z); o.visible = d < 450; o.children[0].scale.setScalar(1 + 0.08 * Math.sin(g.time * 3));
     }
     for (const [id, o] of this.startMeshes) if (!live.has(id)) { g.scene.remove(o); this.startMeshes.delete(id); }
@@ -106,8 +106,8 @@ export class Missions {
   }
   cleanup() { for (const o of this.objs) this.game.scene.remove(o); this.objs = []; this.cps = null; this.rings = null; for (const f of this.game.friends || []) f.holdBack = false; }
   beam(x, z, y, color = 0xffd54f, h = 60, r = 3) {
-    const g = new THREE.CylinderGeometry(r, r, h, 16, 1, true);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    const g = new THREE.CylinderGeometry(r, r, h, 24, 1, true);
+    const m = new THREE.Mesh(g, markerMat(color, 0.55));
     m.position.set(x, (y ?? M.groundAt(x, z)) + h / 2, z); this.game.scene.add(m); this.objs.push(m); return m;
   }
   resolve(t) {
@@ -201,4 +201,12 @@ export class Missions {
     else if (s.boss) { if (g.serpent.defeated) this.next(); }
     if (!g.player.alive && this.cur && (s.cps || s.kill || s.boss || s.fight || s.bossFight)) this.fail('You were knocked out');
   }
+}
+// GTA-style marker column: bright at the ground, fading out upward, gently pulsing
+function markerMat(color, k) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uC: { value: new THREE.Color(color) }, uK: { value: k }, uTime: U.uTime }, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+    fragmentShader: 'uniform vec3 uC; uniform float uK, uTime; varying vec2 vUv; void main(){ float a = pow(1.0 - vUv.y, 2.4)*uK*(0.82 + 0.18*sin(uTime*3.0 - vUv.y*9.0)); gl_FragColor = vec4(uC*a, 1.0); }',
+  });
 }

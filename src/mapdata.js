@@ -12,6 +12,22 @@ export function coastX(z) {
   return -3150 + 140 * Math.sin(z / 1500 + 0.6) + 55 * Math.sin(z / 530 + 2.0) + (fbm(z * 0.004, 7.3, 3) - 0.5) * 50;
 }
 export const coastRoadX = (z) => coastX(z) + 200;
+// Devka Sea Face: a two-lane seafront drive 92 m inland of the waterline with a wide promenade on its sea side
+// (planting strip with Victorian lamps, paver walkway, stone sea wall with bollards and chains). Built in promenade.js.
+export const SEA = { z0: -4660, z1: -3060, step: 40, off: 92, road: 5, walk0: 7.6, plant1: 9.6, walk1: 21.0, wall1: 21.6, pts: [] };
+// road centre + local frame at z (null outside the promenade)
+export function seaFrame(z) {
+  const P = SEA.pts; if (!P.length || z < SEA.z0 || z > SEA.z1) return null;
+  const f = (z - SEA.z0) / SEA.step, i = Math.min(Math.floor(f), P.length - 2), t = f - i, A = P[i], B = P[i + 1];
+  const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz);
+  return { x: A.x + dx * t, z, y: lerp(A.y, B.y, t), tx: dx / l, tz: dz / l };
+}
+// walking surface of the promenade (sidewalk edge to the sea wall), or -1e9
+export function promAt(x, z) {
+  const F = seaFrame(z); if (!F) return -1e9;
+  const a = (F.x - x) * F.tz;   // metres toward the sea from the road centre
+  return a >= SEA.walk0 - 0.1 && a <= SEA.wall1 ? F.y + 0.03 : -1e9;
+}
 export function rivZ(x) { const u = x + 3150; return smooth(0, 1800, u) * (170 * Math.sin(u / 1150) + 60 * Math.sin(u / 420)); }
 export const RIVER_END = 6000;
 export function kolZ(x) { return -7300 + 150 * Math.sin((x + 3000) / 900) + 60 * Math.sin((x + 3000) / 330); }
@@ -405,7 +421,7 @@ function hashEdges() {
     for (let gx = x0; gx <= x1; gx++) for (let gz = z0; gz <= z1; gz++) { const k = gx * 100000 + gz; if (!edgeHash.has(k)) edgeHash.set(k, []); edgeHash.get(k).push(i); }
   });
 }
-export function markSidewalks() { for (const e of edges) e.side = !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link'); }
+export function markSidewalks() { for (const e of edges) e.side = !!e.sea || !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link'); }
 export function edgesNear(x, z) { return edgeHash.get(Math.floor(x / EH) * 100000 + Math.floor(z / EH)) || []; }
 export function nearestRoad(x, z) {
   let best = null, bd = 1e9;
@@ -607,10 +623,18 @@ function plantTrees() {
     for (let t = 10; t < e.len - 10; t += 24) for (const sg of [-1, 1]) if (R() < 0.5) tryAdd(trees.round, A.x + dx * t + dz * sg * (e.w / 2 + 4.5), A.z + dz * t - dx * sg * (e.w / 2 + 4.5), 0.7, 1.1);
   }
 }
+// palms in stone planters down the middle of the Devka promenade walkway
+export const seaPalms = [];
+function placeSeaPalms() {
+  for (let z = SEA.z0 + 9.5; z < SEA.z1 - 5; z += 38) {
+    const F = seaFrame(z), a = 15.3, x = F.x - F.tz * a, zz = F.z + F.tx * a, y = F.y + 0.03 + 0.42;
+    seaPalms.push({ x, z: zz, y }); trees.palm.push({ x, z: zz, y, s: rr(0.95, 1.15), r: R() * Math.PI * 2, lean: rr(-0.06, 0.06) });
+  }
+}
 export const lights = []; // street lights {x,z,y,ang}
 function placeLights() {
   for (const e of edges) {
-    if (!(e.type === 'major' || e.type === 'coast' || e.type === 'fort')) continue;
+    if (!(e.type === 'major' || e.type === 'coast' || e.type === 'fort') || e.sea) continue;
     const A = nodes[e.a], B = nodes[e.b], dx = (B.x - A.x) / e.len, dz = (B.z - A.z) / e.len;
     let s = 1;
     for (let t = 15; t < e.len - 8; t += 38) {
@@ -665,6 +689,20 @@ export async function buildMap(progress) {
   for (let z = -8900; z <= -300; z += 55) cn.push({ x: coastRoadX(z), z });
   for (let z = 330; z <= 8900; z += 55) cs.push({ x: coastRoadX(z), z });
   const coastChains = [...chainBuild(cn, 12, 1, 'coast', true), ...chainBuild(cs, 12, 1, 'coast', true)];
+  // Devka seafront drive, linked to the coastal highway every ~400 m
+  {
+    const pts = []; for (let z = SEA.z0; z <= SEA.z1 + 0.1; z += SEA.step) pts.push({ x: coastX(z) + SEA.off, z });
+    SEA.pts = pts.map((p) => ({ x: p.x, z: p.z, y: terrainH(p.x, p.z) + 0.17 }));
+    const hw = new Set(coastChains.flat());
+    for (const ch of chainBuild(pts, 10, 1, 'coast', false)) {
+      for (let i = 1; i < ch.length; i++) for (const ei of nodes[ch[i]].e) { const e = edges[ei]; if (e.a === ch[i - 1] || e.b === ch[i - 1]) e.sea = true; }
+      for (let i = 0; i < ch.length; i += 10) {
+        const C = nodes[ch[i]]; let best = -1, bd = 160;
+        for (const j of hw) { const d = Math.hypot(nodes[j].x - C.x, nodes[j].z - C.z); if (d < bd && nodes[j].e.length < 4) { bd = d; best = j; } }
+        if (best >= 0 && segLand(C.x, C.z, nodes[best].x, nodes[best].z, 0.9)) addEdge(ch[i], best, 9, 1, 'link');
+      }
+    }
+  }
   // ghat road up to the plateau (Naag Sarovar), grade-limited
   {
     const pts = [], wp = [[4600, -1150], [5000, -1080], [5450, -900], [5800, -820], [6150, -720], [6450, -560], [PLAT.x - 60, PLAT.z - PLAT.r + 60]];
@@ -698,6 +736,7 @@ export async function buildMap(progress) {
   for (const ex of EXCL) { if (ex.r !== undefined) occMark(ex.x - ex.r, ex.z - ex.r, ex.x + ex.r, ex.z + ex.r); else if (ex.tag !== 'motiFort' && ex.tag !== 'naniFort') occMark(ex.x0, ex.z0, ex.x1, ex.z1); }
   // beaches: no buildings on sand
   for (let z = -9996; z < 9996; z += 5) { const c = coastX(z); occMark(c - 400, z, c + 120, z, 3); }
+  for (let z = SEA.z0 - 10; z <= SEA.z1 + 10; z += 2) { const F = seaFrame(Math.min(Math.max(z, SEA.z0), SEA.z1)); occMark(F.x - SEA.wall1 - 1.5, z, F.x + SEA.walk0 + 1, z, 2); }
   for (let x = -3300; x < RIVER_END + 60; x += 5) { const rz = rivZ(x), hw = rivHalfW(x); occMark(x, rz - hw - 30, x, rz + hw + 30); }
   for (let x = -3300; x < KOLAK_END + 60; x += 5) { const rz = kolZ(x), hw = kolHalfW(x); occMark(x, rz - hw - 12, x, rz + hw + 12); }
   occMark(PLAT.lx - PLAT.lr - 30, PLAT.lz - PLAT.lr - 30, PLAT.lx + PLAT.lr + 30, PLAT.lz + PLAT.lr + 30);
@@ -713,9 +752,10 @@ export async function buildMap(progress) {
   // ramps
   const ap = L.airport;
   addRamp(1350, 2520, Math.PI / 2, 10, 26, 6); addRamp(1500, 2560, Math.PI / 2, 12, 40, 11); addRamp(-150, 2560, -Math.PI / 2, 9, 20, 4);
-  addRamp(coastX(-3700) + 50, -3700, Math.PI, 8, 18, 3.5); addRamp(coastX(3100) + 50, 3100, 0, 8, 18, 3.5);
+  addRamp(coastX(-3700) + 34, -3700, Math.PI, 8, 18, 3.5); addRamp(coastX(3100) + 50, 3100, 0, 8, 18, 3.5);
   for (const r of ramps) occMark(r.x - r.len, r.z - r.len, r.x + r.len, r.z + r.len);
   plantTrees();
+  placeSeaPalms();
   placeLights();
   placePoles();
   markSidewalks();
@@ -780,6 +820,7 @@ export function groundAt(x, z, y = 1e9, step = 0.7) {
     else if (d < e.w / 2 + (e.side ? 2.8 : 0.3)) { const yy = t0 + ((t < 0.02 && A.e.length > 2) || (t > 0.98 && B.e.length > 2) ? 0.25 : 0.17); if (yy <= y + step && yy > g) g = yy; }
   }
   const rh = rampHeight(x, z); if (rh > g && rh <= y + step + 0.6) g = rh;
+  if (z > SEA.z0 && z < SEA.z1) { const ph = promAt(x, z); if (ph > g && ph <= y + step) g = ph; }
   for (const ci of collidersNear(x, z)) {
     const c = colliders[ci];
     if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && c.y1 <= y + step && c.y1 > g && !c.noTop) g = c.y1;
