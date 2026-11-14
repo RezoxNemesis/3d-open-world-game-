@@ -11,7 +11,7 @@ const KEYMAP = {
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', Enter: 'interact', NumpadEnter: 'interact', Tab: 'weapon', Escape: 'pause', KeyM: 'map',
   KeyE: 'kick', KeyF: 'interact', KeyR: 'web', KeyC: 'down', ControlLeft: 'down', KeyX: 'roll',
   KeyH: 'horn', KeyV: 'camera', KeyG: 'chute', KeyT: 'wait', KeyN: 'nitro', KeyB: 'brake', KeyZ: 'yawL', KeyY: 'yawR',
-  Digit1: 'w1', Digit2: 'w2', Digit3: 'w3', Digit4: 'w4', KeyP: 'photo',
+  CapsLock: 'walk', AltLeft: 'walk', Digit1: 'w1', Digit2: 'w2', Digit3: 'w3', Digit4: 'w4', KeyP: 'photo',
 };
 const ARROWS = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };
 let lmb = null, shiftAt = 0, wheelAt = 0;
@@ -95,9 +95,12 @@ export function pollInput() {
     if (!p || !p.connected) continue;
     const dz = (v) => (Math.abs(v) < 0.15 ? 0 : v);
     const ax = dz(p.axes[0]), ay = dz(p.axes[1]);
-    if (ax || ay) { x = ax; y = -ay; input.usingPad = true; }
+    if (ax || ay) { x = ax; y = -ay; }
+    // any stick, button or trigger marks the controller as the device in use (the triggers are the car pedals, also with the stick centred)
+    if (ax || ay || dz(p.axes[2]) || dz(p.axes[3]) || p.buttons.some((b) => b && (b.pressed || b.value > 0.05))) input.usingPad = true;
     input.lookX += dz(p.axes[2]) * 0.05 * input.sens; input.lookY += dz(p.axes[3]) * 0.04 * input.sens;
     const map = [['jump', 0], ['kick', 1], ['attack', 2], ['interact', 3], ['switch', 4], ['web', 5], ['aim', 6], ['fire', 7], ['weapon', 8], ['pause', 9], ['sprint', 10], ['camera', 11], ['map', 12]];
+    input.padGas = p.buttons[7] ? p.buttons[7].value : 0; input.padBrake = p.buttons[6] ? p.buttons[6].value : 0;
     for (const [a, i] of map) { const b = p.buttons[i]; if (!b) continue; const on = b.pressed || b.value > 0.5; const k = 'pad_' + a; if (on && !input[k]) press(a); if (!on && input[k]) release(a); input[k] = on; }
     break;
   }

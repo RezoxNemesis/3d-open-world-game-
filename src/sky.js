@@ -103,7 +103,7 @@ export class SkySystem {
         #include <colorspace_fragment>
       }`,
     });
-    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(50000, 50000, 1, 1).rotateX(Math.PI / 2), this.cloudMat);
+    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(50000, 50000, 20, 20).rotateX(Math.PI / 2), this.cloudMat);
     this.clouds.position.y = 1600; this.clouds.renderOrder = 2; scene.add(this.clouds);
 
     this.sun = new THREE.DirectionalLight(0xffffff, 3); this.sun.castShadow = true;

@@ -1,5 +1,6 @@
 // Terrain: biome splat map, procedural detail textures, chunked LOD tiles, water, grass/crops.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
 import { U, NOISE, patch } from './shaders.js';
 import { TEX_GLSL } from './textures.js';
@@ -248,8 +249,18 @@ export function buildTerrainTiles(scene, mat, q) {
     const cx = -M.HALF + (ti + 0.5) * ts, cz = -M.HALF + (tj + 0.5) * ts;
     T.tiles.push({ m, geos, ti, tj, cx, cz, cy: M.terrainH(cx, cz), lod: 3, segsL, tilesPer, size: ts });
   }
+  // far terrain: each 4 x 4 block of tiles is drawn as ONE merged mesh while all its tiles are at the lowest detail
+  // (a phone was spending 50-80 draw calls on distant 256-triangle tiles)
+  const B = 4; T.blocks = [];
+  for (let bj = 0; bj < tilesPer / B; bj++) for (let bi = 0; bi < tilesPer / B; bi++) {
+    const tiles = T.tiles.filter((t) => Math.floor(t.ti / B) === bi && Math.floor(t.tj / B) === bj); if (!tiles.length) continue;
+    const g = mergeGeometries(tiles.map((t) => t.geos[3])); g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.matrixAutoUpdate = false; m.visible = false; scene.add(m);
+    T.blocks.push({ m, tiles });
+  }
 }
 export function updateTerrain(cam, q, force = false) {
+  if (T.sea) { T.sea.position.set(Math.round(cam.x / 40) * 40, 0, Math.round(cam.z / 40) * 40); T.sea.updateMatrix(); }
   const th = q.terrainLod; // distances (in tile sizes)
   let built = 0;
   for (const t of T.tiles) {
@@ -260,6 +271,7 @@ export function updateTerrain(cam, q, force = false) {
       t.lod = want; t.m.geometry = t.geos[want];
     }
   }
+  if (T.blocks) for (const b of T.blocks) { let all = true; for (const t of b.tiles) if (t.lod !== 3) { all = false; break; } if (b.m.visible !== all) { b.m.visible = all; for (const t of b.tiles) t.m.visible = !all; } }
 }
 
 // ---------- water ----------
@@ -340,7 +352,15 @@ export function waterMaterial(level, hTex) {
   });
 }
 export function buildWaters(scene, hTex, fallsTop) {
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000, 1, 1).rotateX(-Math.PI / 2), waterMaterial(0, hTex));
+  // The sea used to be ONE 90 km quad. Triangles that large lose depth precision in the rasteriser: at some render
+  // resolutions the water bled through the land as a grey haze (this is what "the picture suddenly gets worse" was when the
+  // dynamic resolution changed). It is now a graded grid that follows the camera: small cells near, large cells far.
+  const ring = [0]; for (let d = 40; ring[ring.length - 1] < 45000; d *= 1.8) ring.push(Math.min(45000, ring[ring.length - 1] + d));
+  const xs = [...ring.slice(1).reverse().map((v) => -v), ...ring], n = xs.length, pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3), idx = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = (j * n + i) * 3; pos[k] = xs[i]; pos[k + 2] = xs[j]; nor[k + 1] = 1; }
+  for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i; idx.push(a, a + n, a + 1, a + 1, a + n, a + n + 1); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); sg.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); sg.setIndex(idx);
+  const sea = new THREE.Mesh(sg, waterMaterial(0, hTex)); sea.frustumCulled = false;
   sea.renderOrder = 1; scene.add(sea);
   const lake = new THREE.Mesh(new THREE.CircleGeometry(M.PLAT.lr + 34, 64).rotateX(-Math.PI / 2), waterMaterial(M.PLAT.water, hTex));
   lake.position.set(M.PLAT.lx, M.PLAT.water, M.PLAT.lz); lake.renderOrder = 1; scene.add(lake);
@@ -356,9 +376,11 @@ export function buildGrass(scene, hTex, occTex, splat, q) {
   const R1 = Math.round(q.grassR * 0.42);
   const inner = grassRing(scene, hTex, occTex, splat, q, R1, q.grassSp, 0);
   const outer = grassRing(scene, hTex, occTex, splat, q, q.grassR, q.grassSp * 2, R1);
-  T.grass = { meshes: [inner.mesh, outer.mesh], unis: [inner.uni, outer.uni] };
+  // far ring: sparse, larger tufts that take over as the outer ring thins out, so the meadow never ends in a visible edge
+  const far = grassRing(scene, hTex, occTex, splat, q, Math.round(q.grassR * 1.9), q.grassSp * (q.desktop ? 4.6 : 4.2), q.grassR, { soft: q.grassR * 0.3, big: 1.9 });
+  T.grass = { meshes: [inner.mesh, outer.mesh, far.mesh], unis: [inner.uni, outer.uni, far.uni] };
 }
-function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
+function grassRing(scene, hTex, occTex, splat, q, R, sp, R0, o = {}) {
   const n = Math.floor((2 * R) / sp), count = n * n;
   // one tuft = 5 curved, tapering leaves leaning outwards (built at unit height; the shader scales it)
   const P = [], C = [], NB = q.desktop ? 5 : 4, SEG = q.desktop ? 4 : 3;
@@ -381,11 +403,11 @@ function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = i + j * n; off[k * 2] = (i + Math.random() * 0.9) * sp; off[k * 2 + 1] = (j + Math.random() * 0.9) * sp; }
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 2)); g.instanceCount = count;
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide });
-  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uR0: { value: R0 }, uTime: U.uTime, uSeason: U.uSeason, uSunColor: U.uSunColor, uSunDir: U.uSunDir };
+  const uni = { uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uOcc: { value: occTex }, uSplat: { value: splat }, uCam: { value: new THREE.Vector3() }, uR: { value: R }, uR0: { value: R0 }, uRS: { value: new THREE.Vector2(o.soft || 0, o.big || (R0 > 0.5 ? 1.25 : 1)) }, uTime: U.uTime, uSeason: U.uSeason, uSunColor: U.uSunColor, uSunDir: U.uSunDir };
   patch(mat, (s) => {
     Object.assign(s.uniforms, uni);
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>
-      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uR0, uTime; uniform vec4 uSeason; varying float vT; varying vec3 vGc; varying float vDist;
+      attribute float aT; attribute vec2 aOff; uniform sampler2D uOcc, uSplat; uniform vec3 uCam; uniform float uR, uR0, uTime; uniform vec2 uRS; uniform vec4 uSeason; varying float vT; varying vec3 vGc; varying float vDist;
       ${HEIGHT_GLSL}
       float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }`)
       .replace('#include <begin_vertex>', `
@@ -403,7 +425,7 @@ function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
       float y = hAt(wp);
       float dist = length(wp - uCam.xz); vDist = dist;
       float dens = (1. - spl.r)*(1. - smoothstep(0.2,0.6,spl.a))*(1.-spl.g*0.35)*step(occ, 0.02);
-      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.7, uR, dist)) * step(uR0, dist);
+      dens *= step(0.8, y) * step(r1, 0.92) * (1. - smoothstep(uR*0.7, uR, dist)) * smoothstep(uR0 - uRS.x - 0.001, uR0, dist);
       float slopeOk = 1.0 - smoothstep(0.6, 1.4, abs(hAt(wp+vec2(2.,0.)) - y) + abs(hAt(wp+vec2(0.,2.)) - y));
       dens *= slopeOk;
       float bund = 1. - step(0.05, min(min(fract((wp.x+13.)/70.), 1.-fract((wp.x+13.)/70.)), min(fract((wp.y+7.)/48.), 1.-fract((wp.y+7.)/48.))));
@@ -427,7 +449,7 @@ function grassRing(scene, hTex, occTex, splat, q, R, sp, R0) {
       float ang = r1*6.283; transformed.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * transformed.xz;
       float wind = sin(uTime*1.7 + wp.x*0.15 + wp.y*0.11)*0.5 + sin(uTime*3.1 + wp.x*0.5)*0.2;
       transformed.x += wind*aT*aT*0.25*s; transformed.z += wind*aT*aT*0.12*s;
-      transformed *= mix(1.0, 1.25, step(0.5, uR0)); // outer ring tufts are a little larger to keep coverage
+      transformed *= uRS.y; // outer rings: larger tufts to keep coverage
       transformed += vec3(wp.x, y - 0.04, wp.y);`);
     s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vT; varying vec3 vGc; varying float vDist; uniform vec3 uSunColor; uniform vec3 uSunDir;')
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGc*(0.55 + 0.45*vT);')

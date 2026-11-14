@@ -1,4 +1,7 @@
 // Characters (heroes, companions, enemies share this), parkour, web-swing, combat, camera rig.
+import { WeaponRig, seatGun } from './aimrig.js';
+import { WEAPON_MODELS } from './carmodels.js';
+import { vehicleMaterial } from './vehicles.js';
 import * as THREE from 'three';
 import * as M from './mapdata.js';
 import { Human, Pose, blendPose, overlay, UPPER } from './human.js';
@@ -24,12 +27,19 @@ export const WEAPONS = [
   { id: 'pistol', name: 'Pistol', dmg: 26, rate: 0.22, mag: 14, spread: 0.012, range: 160, sound: 'pistol' },
   { id: 'rifle', name: 'Assault Rifle', dmg: 19, rate: 0.085, mag: 32, spread: 0.02, range: 260, sound: 'rifle' },
 ];
-function gunMesh(kind) {
-  const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, metalness: 0.7, roughness: 0.35 });
-  if (kind === 'pistol') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.05, 0.2).translate(0, 0.02, 0.06), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.11, 0.045).translate(0, -0.04, -0.01), m)); }
-  else { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.62).translate(0, 0.02, 0.18), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.14, 0.05).translate(0, -0.06, 0.08), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.07, 0.22).translate(0, 0.0, -0.18), new THREE.MeshStandardMaterial({ color: 0x5d4037 }))); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.04).translate(0, -0.06, 0.26).rotateX(0.3), m)); }
-  g.rotation.set(-Math.PI / 2, 0, 0); g.position.set(0, -0.08, 0.03); return g;
+// guns: the Blender models once they are loaded (carmodels.js), simple blocks until then
+const EARLY = []; let gunMat = null;
+function fillGun(g) {
+  const kind = g.userData.kind, W = WEAPON_MODELS[kind]; g.clear();
+  if (W) { if (!gunMat) gunMat = vehicleMaterial(false, true); const m = new THREE.Mesh(g.userData.lite ? W.lod : W.geo, gunMat); m.castShadow = true; g.add(m); return true; }
+  const m = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, metalness: 0.7, roughness: 0.35 });
+  if (kind === 'pistol') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.035, 0.185).translate(0, 0.032, 0.04), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.11, 0.045).translate(0, -0.05, -0.012), m)); }
+  else { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.07, 0.6).translate(0, 0.04, 0.2), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.11, 0.045).translate(0, -0.055, -0.012), m)); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.2).translate(0, 0.02, -0.2), m)); }
+  return false;
 }
+function gunMesh(kind, lite) { const g = new THREE.Group(); g.userData.kind = kind; g.userData.lite = !!lite; seatGun(g, kind); if (!fillGun(g)) EARLY.push(g); return g; }
+// call once the weapon models have loaded: guns built before that get the real model
+export function refreshGuns() { for (const g of EARLY.splice(0)) fillGun(g); }
 function chuteMesh() {
   const g = new THREE.Group();
   const geo = new THREE.SphereGeometry(5, 16, 6, 0, Math.PI * 2, 0, 0.9); geo.scale(1.25, 0.5, 0.75);
@@ -48,11 +58,11 @@ export class Character {
     this.pos = new THREE.Vector3(opts.x || 0, 0, opts.z || 0); this.pos.y = M.groundAt(this.pos.x, this.pos.z) ;
     this.vel = new THREE.Vector3(); this.yaw = opts.yaw || 0; this.state = 'ground'; this.t = 0; this.ph = 0; this.spd = 0;
     this.maxHp = opts.hp || 100; this.hp = this.maxHp; this.armor = 0;
-    this.runSpeed = opts.runSpeed || 5.4; this.sprintSpeed = opts.sprintSpeed || 8.6; this.jumpV = opts.jumpV || 7; this.climbSpeed = opts.climbSpeed || 3.4;
+    this.runSpeed = opts.runSpeed || 5.2; this.sprintSpeed = opts.sprintSpeed || 7.6; this.jumpV = opts.jumpV || 7; this.climbSpeed = opts.climbSpeed || 3.4;
     this.powers = opts.powers ?? false; this.weapon = 0; this.ammo = { pistol: 60, rifle: 180 }; this.clip = { pistol: 14, rifle: 32 };
     this.atk = null; this.combo = null; this.comboT = 0; this.stun = 0; this.inv = 0; this.flipT = -1; this.usedFlip = false; this.landT = 0;
     this.vehicle = null; this.mount = null; this.anchor = null; this.ropeL = 0; this.webCd = 0; this.wall = null; this.busy = null;
-    this.guns = { pistol: gunMesh('pistol'), rifle: gunMesh('rifle') };
+    this.guns = { pistol: gunMesh('pistol', opts.team !== 'hero' && !opts.hero), rifle: gunMesh('rifle', opts.team !== 'hero' && !opts.hero) };
     this.chute = chuteMesh(); this.chute.visible = false; this.obj.add(this.chute);
     this.lastStep = 0; this.dmgMul = opts.dmgMul || 1; this.radius = 0.35;
     this.sync();
@@ -118,7 +128,7 @@ export class Character {
     // --- desired horizontal velocity ---
     const mv = c.move || new THREE.Vector3(), mag = Math.min(1, mv.length());
     let want = 0;
-    if (canAct && mag > 0.05) want = (c.sprint ? this.sprintSpeed : mag > 0.6 ? this.runSpeed : 2.0 + mag * 3) * (this.atk ? 0.15 : 1) * (c.aim ? 0.55 : 1);
+    if (canAct && mag > 0.05) want = (c.sprint ? this.sprintSpeed : c.walk ? 1.45 : mag > 0.62 ? this.runSpeed : mag < 0.35 ? 0.9 + mag * 2.2 : 2.25 + (mag - 0.35) * 3.4) * (this.atk ? 0.15 : 1) * (c.aim ? 0.55 : 1);
     // Flash Speed power: lightning-fast running with an afterimage trail
     if (this.flash > 0) { this.flash -= dt; want *= 4.2; if (want > 1 && Math.random() < 0.8) burst('spark', this.pos.x, this.pos.y + 0.6 + Math.random() * 1.0, this.pos.z, 2, 0.6); if (this.flash <= 0) this.game.onPowerEnd && this.game.onPowerEnd(this, 'flash'); }
     const dir = mag > 0.05 ? mv.clone().normalize() : this.forward();
@@ -315,7 +325,7 @@ export class Character {
   fireGun(c) {
     const W = WEAPONS[this.weapon]; if (this.t < (this.nextShot || 0)) return;
     if (this.clip[W.id] <= 0) { if (this.ammo[W.id] > 0) { const n = Math.min(W.mag, this.ammo[W.id]); this.clip[W.id] = n; this.ammo[W.id] -= n; this.nextShot = this.t + 1.2; sfx('ui', 0.6); } return; }
-    this.clip[W.id]--; this.nextShot = this.t + W.rate;
+    this.clip[W.id]--; this.nextShot = this.t + W.rate; this.lastShot = this.t;
     this.game.shoot(this, W, c);
   }
   land(ng) {
@@ -428,25 +438,44 @@ export class Character {
       case 'dead': P = Pose.down(Math.min(1, this.t * 3)); break;
       default: P = Pose.idle(this.t);
     }
+    let upper = false;
     if (this.atk && (this.state === 'ground' || this.state === 'air')) { const A = ATK[this.atk.id]; P = Pose.attack(this.atk.id, this.atk.t / A.dur); }
-    else if (this.weapon > 0 && (this.state === 'ground' || this.state === 'air') && (c && (c.aim || c.fire || c.attack) || this.t - (this.nextShot || -9) < 1.5)) P = overlay(P, Pose.aim(c && c.pitch ? c.pitch : 0, this.weapon === 2), UPPER);
+    // guns: the torso takes a stance and the arms are solved onto the weapon (aimrig.js); the rifle is carried at low-ready
+    const gunOut = this.weapon > 0 && !!this.h.held && (this.state === 'ground' || this.state === 'air') && !this.atk && !this.busy && this.stun <= 0 && !this.vehicle && !this.mount;
+    const aimNow = gunOut && (c && (c.aim || c.fire || c.attack) || this.t - (this.nextShot || -9) < 1.5);
+    const aimDir = c && c.aimDir ? c.aimDir : null, since = this.t - (this.lastShot ?? -9);
+    if (gunOut && (this.weapon === 2 || aimNow)) { P = overlay(P, Pose.gun(this.weapon === 2, aimNow, aimNow && aimDir ? Math.asin(clamp(aimDir.y, -0.9, 0.9)) : 0, since), UPPER); upper = true; }
+    if (this.blocking) upper = true;
     if (this.stun > 0) P = blendPose(P, Pose.hit(this.stun / 0.35), 0.6);
     H.apply(P, dt, this.state === 'roll' || this.flipT >= 0 || this.atk ? 26 : this.state === 'dead' ? 8 : 13);
     // tilt body into swings / glide
     if (this.state === 'glide') this.obj.rotation.x = 0;
-    if (this.avatar) this.avatar.update();
+    if (this.avatar) {
+      // mocap locomotion on the ground (walk / jog / run / sprint, idle), procedural for everything else
+      const hs = Math.hypot(this.vel.x, this.vel.z), yr = angDelta(this.yaw, this.prevYaw ?? this.yaw) / Math.max(dt, 1e-3); this.prevYaw = this.yaw;
+      const walkIn = this.busy && this.busy.walkSpeed > 0;
+      const loco = this.state === 'ground' && !this.landT && !this.atk && (!this.busy || walkIn) && this.stun <= 0;
+      this.avatar.update({ dt, loco, speed: walkIn ? this.busy.walkSpeed : hs, upper, turn: yr });
+    }
+    if (this.weapon > 0 || (this.rig && this.rig.k > 0)) {
+      if (!this.rig) this.rig = new WeaponRig();
+      const S = this.avatar && this.avatar.cal ? this.avatar.rigBones() : this.procRig || (this.procRig = { upR: H.bones.armR, loR: H.bones.foreR, handR: H.bones.handR, upL: H.bones.armL, loL: H.bones.foreL, handL: H.bones.handL });
+      if (S) this.rig.update(S, { gun: this.h.held, rifle: this.weapon === 2, held: gunOut, aim: aimNow, yaw: this.yaw, dir: aimDir, since, dt });
+    }
   }
   remove() { this.game.scene.remove(this.obj); }
 }
 
+function angDelta(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
 // ---------------- camera rig ----------------
 export class CameraRig {
   constructor(cam) { this.cam = cam; this.yaw = Math.PI; this.pitch = 0.18; this.dist = 4.3; this.target = new THREE.Vector3(); this.pos = new THREE.Vector3(); this.idle = 0; this.fov = 62; this.zoom = 1; }
   update(dt, look, focus, mode, opts = {}) {
     const lx = look.x, ly = look.y; this.idle = Math.abs(lx) + Math.abs(ly) > 0.0005 ? 0 : this.idle + dt;
     this.yaw -= lx; this.pitch = clamp(this.pitch + ly, -1.25, 1.35);
-    if (opts.followYaw !== undefined && this.idle > 1.0) this.yaw = dampAngle(this.yaw, opts.followYaw + Math.PI, opts.followK ?? 2.2, dt);
-    if (opts.followPitch !== undefined && this.idle > 1.0) this.pitch = damp(this.pitch, opts.followPitch, 1.5, dt);
+    const fd = opts.followDelay ?? 1.0;
+    if (opts.followYaw !== undefined && this.idle > fd) this.yaw = dampAngle(this.yaw, opts.followYaw + Math.PI, (opts.followK ?? 2.2) * Math.min(1, (this.idle - fd) * 2 + 0.3), dt);
+    if (opts.followPitch !== undefined && this.idle > fd) this.pitch = damp(this.pitch, opts.followPitch, 1.5, dt);
     const cfg = { foot: [4.2, 1.55, 0.42, 62], aim: [2.1, 1.6, 0.62, 48], car: [opts.len ? opts.len * 1.15 + 3 : 7.5, 1.9, 0, 64], heli: [17, 3, 0, 62], plane: [opts.len ? opts.len * 1.6 : 26, 3.5, 0, 65], horse: [5.8, 2.3, 0.3, 62], swim: [4.4, 0.6, 0.3, 62], air: [6, 1.4, 0, 70], interior: [4.2, 1.5, 0.3, 66], boat: [10, 2.6, 0, 62] }[mode] || [4.2, 1.5, 0.4, 62];
     this.dist = damp(this.dist, cfg[0] * this.zoom * (opts.zoomK || 1), opts.zoomK ? 9 : 5, dt);
     const fovT = cfg[3] + (opts.speedFov || 0); this.fov = damp(this.fov, fovT, 4, dt);

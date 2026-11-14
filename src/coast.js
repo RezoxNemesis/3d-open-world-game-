@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as M from './mapdata.js';
 import { U } from './shaders.js';
 import { mulberry32 } from './util.js';
+import { fadeable, fadeCtl, shallowGeo } from './fade.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 function prep(g, color) {
@@ -98,22 +99,32 @@ export function buildCoast(scene, q, H) {
   };
   beach(-4560, -3140, 22); beach(2700, 4000, 16);
   for (let i = 0; i < 18; i++) { const z = (i < 10 ? -4500 : 2700) + rnd() * (i < 10 ? 1300 : 1200), x = M.coastX(z) - 70 - rnd() * 260; anchored.push({ x, z, y: 0, yaw: rnd() * 6.28, pitch: 0, roll: 0, v: (rnd() * variants.length) | 0, p: rnd() * 6 }); }
-  const sets = variants.map((g, k) => {
-    const b = beached.filter((o) => o.v === k), a = anchored.filter((o) => o.v === k);
-    if (b.length) H.instTiles(scene, g, mat, b, 600, q.desktop ? 1400 : 700, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(o.pitch, o.yaw, o.roll, 'YXZ')), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
-    if (!a.length) return null;
-    const m = new THREE.InstancedMesh(g, mat, a.length); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m);
-    return { m, a };
-  }).filter(Boolean);
+  // anchored boats bob on the swell (their matrices change every frame): one small instanced set per boat type and beach, with a
+  // real bounding sphere so it is frustum-culled, only updated and drawn near, and dissolving away at its draw distance
+  const sets = [], bfar = q.desktop ? 2600 : 1000; fadeable(mat);
+  variants.forEach((g, k) => {
+    const b = beached.filter((o) => o.v === k);
+    if (b.length) H.instTiles(scene, g, mat, b, 600, q.desktop ? 1400 : 700, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(o.pitch, o.yaw, o.roll, 'YXZ')), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); }, { tag: 'boat' });
+    for (const north of [false, true]) {
+      const a = anchored.filter((o) => o.v === k && (o.z > 0) === north); if (!a.length) continue;
+      const gg = shallowGeo(g); gg.setAttribute('aFadeCtl', fadeCtl(bfar));
+      const m = new THREE.InstancedMesh(gg, mat, a.length); m.castShadow = true; m.receiveShadow = true; m.userData.tag = 'boat anchored';
+      const c = new THREE.Vector3(); for (const o of a) c.add(_p.set(o.x, 0, o.z)); c.multiplyScalar(1 / a.length);
+      let r = 0; for (const o of a) r = Math.max(r, Math.hypot(o.x - c.x, o.z - c.z)); r += 9;
+      a.forEach((o, i) => { _m.compose(_p.set(o.x, -0.35, o.z), _q.setFromEuler(_e.set(0, o.yaw, 0)), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
+      m.boundingSphere = new THREE.Sphere(c, r); scene.add(m); H.regLod(m, c.x, c.z, bfar + r);
+      sets.push({ m, a, c, r });
+    }
+  });
   for (const o of beached) { const c = Math.cos(o.yaw), s = Math.sin(o.yaw); const hx = Math.abs(s) * 5 + Math.abs(c) * 1.4, hz = Math.abs(c) * 5 + Math.abs(s) * 1.4; H.addCol(o.x - hx * 0.8, o.z - hz * 0.8, o.x + hx * 0.8, o.z + hz * 0.8, o.y, o.y + 1.4); }
   H.animated.push((t) => {
-    for (const S of sets) { S.a.forEach((o, i) => { _m.compose(_p.set(o.x, Math.sin(t * 1.1 + o.p) * 0.18 - 0.35, o.z), _q.setFromEuler(_e.set(Math.sin(t * 0.9 + o.p) * 0.05, o.yaw + Math.sin(t * 0.13 + o.p) * 0.2, Math.cos(t * 1.05 + o.p) * 0.07)), _s.set(1, 1, 1)); S.m.setMatrixAt(i, _m); }); S.m.instanceMatrix.needsUpdate = true; }
+    for (const S of sets) { if (!S.m.visible) continue; S.a.forEach((o, i) => { _m.compose(_p.set(o.x, Math.sin(t * 1.1 + o.p) * 0.18 - 0.35, o.z), _q.setFromEuler(_e.set(Math.sin(t * 0.9 + o.p) * 0.05, o.yaw + Math.sin(t * 0.13 + o.p) * 0.2, Math.cos(t * 1.05 + o.p) * 0.07)), _s.set(1, 1, 1)); S.m.setMatrixAt(i, _m); }); S.m.instanceMatrix.needsUpdate = true; }
   });
   // photo-scanned rocky shelves in the surf (Devka, Jampore, below the forts) and stones scattered up the beach
   const MD = H.models || {};
   if (MD.coast_rocks_01 && MD.coast_rocks_02) {
     const shelves = [[-4470, 0], [-3330, 1], [-405, 0], [520, 1], [2860, 1], [3960, 0], [-6100, 0], [6200, 1]].map(([z, k]) => ({ x: M.coastX(z) + 6 + rnd() * 6, z, y: -2.05 - rnd() * 0.4, s: 0.85 + rnd() * 0.3, r: rnd() * 6.28, k }));
-    for (const k of [0, 1]) { const md = MD[k ? 'coast_rocks_02' : 'coast_rocks_01'], list = shelves.filter((o) => o.k === k); if (list.length) H.instTiles(scene, md.geo, md.mat, list, 2000, q.desktop ? 3000 : 1500, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(0, o.r, 0)), _s.set(o.s, o.s, o.s)); m.setMatrixAt(i, _m); }); }
+    for (const k of [0, 1]) { const md = MD[k ? 'coast_rocks_02' : 'coast_rocks_01'], list = shelves.filter((o) => o.k === k); if (list.length) H.instTiles(scene, md.geo, md.mat, list, 2000, q.desktop ? 3000 : 1500, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(0, o.r, 0)), _s.set(o.s, o.s, o.s)); m.setMatrixAt(i, _m); }, { lod: md.lod ? { geo: md.lod, d: q.desktop ? 320 : 160, tile: 500 } : null, tag: 'shelf' }); }
     if (MD.rock_07) {
       const stones = [];
       for (const sh of shelves) for (let i = 0; i < 45; i++) { const a = rnd() * 6.28, r = 22 + rnd() * 26, x = sh.x + Math.cos(a) * r, z = sh.z + Math.sin(a) * r; if (x < M.coastX(z) - 8) continue; stones.push({ x, z, y: M.terrainH(x, z) - 0.05, s: 3 + rnd() * 7, r: rnd() * 6.28 }); }

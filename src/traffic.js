@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as M from './mapdata.js';
 import { CARS, vehicleGeometry } from './vehicle_models.js';
 import { vehicleMaterial } from './vehicles.js';
+import { lodBand } from './fade.js';
 import { mulberry32, clamp, lerp, damp, dampAngle, hexRGB } from './util.js';
 import { burst, explosion } from './fx.js';
 import { sfx } from './audio.js';
@@ -34,7 +35,13 @@ export class Traffic {
         const mesh = new THREE.InstancedMesh(g, mat, counts[key]); mesh.count = 0; mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.frustumCulled = false;
         game.scene.add(mesh); return { mesh, tint, n: 0 };
       };
-      this.models[key] = { hi: mk(vg.all, true), lo: vg.low ? mk(vg.low, false) : null };
+      // the two versions cross-dissolve over a band around the LOD distance, and every car dissolves away before the draw distance
+      const far = q.desktop ? 900 : 620, lodD = q.desktop ? 170 : 105, bw = q.desktop ? 22 : 14;
+      this.far = far; this.lodD = lodD; this.bw = bw;
+      const hi = mk(vg.all, true), lo = vg.low ? mk(vg.low, false) : null;
+      hi.mesh.geometry.setAttribute('aLodBand', lo ? lodBand(0, 0, lodD - bw, lodD + bw) : lodBand(0, 0, far * 0.8, far));
+      if (lo) lo.mesh.geometry.setAttribute('aLodBand', lodBand(lodD - bw, lodD + bw, far * 0.8, far));
+      this.models[key] = { hi, lo };
     }
     this.frustum = new THREE.Frustum(); this.sphere = new THREE.Sphere(new THREE.Vector3(), 6);
     for (const c of this.cars) this.place(c, true);
@@ -60,7 +67,7 @@ export class Traffic {
     this.hash.clear();
     for (let i = 0; i < this.cars.length; i++) { const c = this.cars[i]; const k = Math.floor(c.x / 25) * 100000 + Math.floor(c.z / 25); let l = this.hash.get(k); if (!l) this.hash.set(k, (l = [])); l.push(i); }
     for (const m of Object.values(this.models)) { m.hi.n = 0; if (m.lo) m.lo.n = 0; }
-    const far = q.desktop ? 900 : 550, simFar = 2500, lodD = q.desktop ? 160 : 85;
+    const far = this.far, simFar = 2500, lodD = this.lodD, bw = this.bw + 6;
     const cam = this.game.cam; cam.updateMatrixWorld(); _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); this.frustum.setFromProjectionMatrix(_pm);
     const P = this.game.playerPos();
     const o = {};
@@ -88,10 +95,13 @@ export class Traffic {
       this.sphere.center.set(c.x, c.y + 1, c.z); this.sphere.radius = c.key === 'bus' || c.key === 'truck' ? 7 : 4;
       if (dist < far && (dist < 25 || this.frustum.intersectsSphere(this.sphere))) {
         const mm = this.models[c.key]; if (!mm) continue;
-        const md = dist < lodD || !mm.lo ? mm.hi : mm.lo;
-        const i = md.n++; c.idx = i;
         _q.setFromEuler(_e.set(0, c.yaw, 0)); _m.compose(_p.set(c.x, c.y, c.z), _q, _s);
-        md.mesh.setMatrixAt(i, _m); md.tint.setXYZ(i, c.tint.r, c.tint.g, c.tint.b);
+        // inside the band both versions are drawn; the shader hands over between them pixel by pixel
+        for (const md of [dist < lodD + bw || !mm.lo ? mm.hi : null, mm.lo && dist > lodD - bw ? mm.lo : null]) {
+          if (!md) continue;
+          const i = md.n++; c.idx = i;
+          md.mesh.setMatrixAt(i, _m); md.tint.setXYZ(i, c.tint.r, c.tint.g, c.tint.b);
+        }
       } else c.idx = dist < far ? 0 : -1;
     }
     for (const mm of Object.values(this.models)) for (const m of [mm.hi, mm.lo]) { if (!m) continue; m.mesh.count = m.n; m.mesh.instanceMatrix.clearUpdateRanges(); m.mesh.instanceMatrix.addUpdateRange(0, m.n * 16); m.mesh.instanceMatrix.needsUpdate = true; m.tint.needsUpdate = true; }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import * as M from './mapdata.js';
 import { buildEstates } from './estates.js';
 import { buildPromenade } from './promenade.js';
@@ -9,6 +10,7 @@ import { loadModels } from './models.js';
 import { buildKitCity, KIT, updateKit } from './buildkit.js';
 import { addGlow, buildGlows } from './glow.js';
 import { U, NOISE, patch } from './shaders.js';
+import { fadeable, fadeCtl, lodBand, shallowGeo, Dissolve, updateDissolves } from './fade.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
 import * as TR from './terrain.js';
 import { loadTextures, TEX, TEX_GLSL } from './textures.js';
@@ -57,24 +59,74 @@ function canvasTex(w, h, draw, srgb = true) {
 // ---- tiled LOD registry: big instanced sets are split into map tiles so the camera frustum and a far distance can skip them
 const LOD = [];
 function regLod(obj, cx, cz, far, near = 0) { LOD.push({ obj, cx, cz, far2: far * far, near2: near * near }); }
+// a streamed tile whose own geometry dissolves over the last stretch before `far` (per vertex, or per instance for instanced
+// children); the tile stays switched on until its far corner (radius) is past `far`
+function fadeLod(obj, cx, cz, far, radius = 0) {
+  const ctl = fadeCtl(far);
+  obj.traverse((m) => { if ((m.isMesh || m.isLine) && m.geometry && m.material) { fadeable(m.material); if (!m.geometry.attributes.aFadeCtl) m.geometry.setAttribute('aFadeCtl', ctl); } });
+  regLod(obj, cx, cz, far + radius);
+}
 export function updateWorldLOD(cam, kitBudget = 1) { KIT.uCam.value.copy(cam); updateKit(cam, kitBudget); for (const t of LOD) { const dx = cam.x - t.cx, dz = cam.z - t.cz; const d2 = dx * dx + dz * dz; t.obj.visible = d2 < t.far2 && d2 >= t.near2; } }
 function bucket(items, size, xz) {
   const m = new Map();
   for (const it of items) { const [x, z] = xz(it); const k = Math.floor((x + M.HALF) / size) + Math.floor((z + M.HALF) / size) * 1000; if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
   return [...m].map(([k, list]) => ({ list, cx: (k % 1000) * size - M.HALF + size / 2, cz: Math.floor(k / 1000) * size - M.HALF + size / 2 }));
 }
-function instTiles(scene, geo, mat, items, size, far, place, opts = {}) {
-  const out = [];
-  for (const T of bucket(items, size, opts.xz || ((it) => [it.x, it.z]))) {
-    let g = geo;
-    if (opts.inst) { g = new THREE.BufferGeometry(); for (const k in geo.attributes) g.setAttribute(k, geo.attributes[k]); if (geo.index) g.setIndex(geo.index); }
-    const m = new THREE.InstancedMesh(g, mat, T.list.length);
-    T.list.forEach((it, i) => place(m, it, i, g));
-    if (opts.inst) for (const [name, size2, fn] of opts.inst) { const a = new Float32Array(T.list.length * size2); T.list.forEach((it, i) => a.set(fn(it), i * size2)); g.setAttribute(name, new THREE.InstancedBufferAttribute(a, size2)); }
-    m.castShadow = opts.shadow !== false; m.receiveShadow = opts.receive !== false; m.computeBoundingSphere(); m.matrixAutoUpdate = false;
-    if (opts.depth) m.customDepthMaterial = opts.depth;
-    scene.add(m); regLod(m, T.cx, T.cz, far); out.push(m);
+// Every instance dissolves over the last stretch before `far` (by its own distance), so a tile never pops: the tile itself
+// stays switched on until its nearest corner is past `far`.
+// opts.lod = { geo, d, tile }: two layers. Out to `d` metres the full model is drawn from small tiles (tight culling, and the
+// only layer that casts shadows when d is beyond the shadow range); further out the light model `geo` from the big tiles.
+// The two cross-dissolve around `d`. geo may be the same geometry: then the layering only buys culling.
+// Without opts.lod the layering is automatic: solid props with enough triangles get a simplified far model (lowGeo), and very
+// large sets (buildings, roofs, tanks) are split into the two layers with the same geometry.
+const AUTO = { d: 60, near: 220, shadow: 80 };
+const triCount = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+const _low = new WeakMap();
+function lowGeo(geo, ratio) {
+  if (_low.has(geo)) return _low.get(geo);
+  let out = null;
+  try {
+    if (Object.keys(geo.attributes).every((k) => ['position', 'normal', 'uv', 'color'].includes(k))) {
+      // weld by position (+ colour / uv) so the collapse sees a closed surface, then rebuild the normals
+      const src = geo.clone(); src.deleteAttribute('normal'); if (src.attributes.aFadeCtl) src.deleteAttribute('aFadeCtl');
+      const mg = mergeVertices(src, 1e-3), n = mg.attributes.position.count;
+      const g = new SimplifyModifier().modify(mg, Math.floor(n * (1 - ratio)));
+      g.computeVertexNormals(); g.computeBoundingBox(); g.computeBoundingSphere();
+      const t = triCount(g);
+      if (t >= 8 && t < triCount(geo) * 0.75) { for (const k of Object.keys(geo.attributes)) if (!g.attributes[k]) throw new Error('lost ' + k); out = g; }
+    }
+  } catch (e) { out = null; }
+  _low.set(geo, out); return out;
+}
+function instTiles(scene, geo0, mat, items, size, far, place, opts = {}) {
+  let L = opts.lod && opts.lod.geo ? opts.lod : null;
+  if (!L && opts.lod !== false && items.length) {
+    const tris = triCount(geo0), solid = !Array.isArray(mat) && !mat.alphaTest && !mat.transparent;
+    if (solid && tris >= 90 && items.length >= 10 && far > AUTO.d * 2.2) { const lg = lowGeo(geo0, tris > 600 ? 0.22 : 0.34); if (lg) L = { geo: lg, d: AUTO.d * (tris > 600 ? 1.3 : 1) }; }
+    if (!L && items.length > 300 && far > 600) L = { geo: geo0, d: Math.min(AUTO.near, far * 0.4), tile: 250 };
   }
+  if (L && L.d >= far * 0.7) L = null;
+  const out = [], w = L ? Math.max(5, L.d * 0.16) : 0, xz = opts.xz || ((it) => [it.x, it.z]);
+  fadeable(mat);
+  const layer = (g0, tile, hi) => {
+    const geo = shallowGeo(g0);
+    if (!L || !hi) geo.setAttribute('aFadeCtl', fadeCtl(far));
+    if (L) geo.setAttribute('aLodBand', hi ? lodBand(0, 0, L.d - w, L.d + w) : lodBand(L.d - w, L.d + w, 0, 0));
+    for (const T of bucket(items, tile, xz)) {
+      let g = geo;
+      if (opts.inst) g = shallowGeo(geo);
+      const m = new THREE.InstancedMesh(g, mat, T.list.length);
+      T.list.forEach((it, i) => place(m, it, i, g));
+      if (opts.inst) for (const [name, size2, fn] of opts.inst) { const a = new Float32Array(T.list.length * size2); T.list.forEach((it, i) => a.set(fn(it), i * size2)); g.setAttribute(name, new THREE.InstancedBufferAttribute(a, size2)); }
+      m.castShadow = opts.shadow !== false && (hi || !L); m.receiveShadow = opts.receive !== false; m.computeBoundingSphere(); m.matrixAutoUpdate = false;
+      if (opts.depth) m.customDepthMaterial = opts.depth;
+      m.userData.tag = (opts.tag || '') + ' far' + Math.round(far) + (L ? (hi ? ' hi' : ' lo') : '');
+      const r = tile * 0.72;
+      scene.add(m); out.push(m);
+      if (L && hi) regLod(m, T.cx, T.cz, (m.castShadow ? Math.max(L.d + w, AUTO.shadow) : L.d + w) + r); else regLod(m, T.cx, T.cz, far + r, L ? Math.max(0, L.d - w - r) : 0);
+    }
+  };
+  if (L) { layer(geo0, L.tile || Math.max(60, size / 4), true); layer(L.geo, size, false); } else layer(geo0, size, false);
   return out;
 }
 function addCol(x0, z0, x1, z1, y0, y1, extra = {}) { world.colliders.push({ x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), y0, y1, ...extra }); }
@@ -241,7 +293,7 @@ function buildRoads(scene, stoneMat, q) {
     geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
     geo.setIndex(b.I); geo.computeBoundingSphere();
     const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.matrixAutoUpdate = false; scene.add(m);
-    regLod(m, (b.k % 1000) * RT - M.HALF + RT / 2, Math.floor(b.k / 1000) * RT - M.HALF + RT / 2, q.roadFar || 5000);
+    fadeLod(m, (b.k % 1000) * RT - M.HALF + RT / 2, Math.floor(b.k / 1000) * RT - M.HALF + RT / 2, q.roadFar || 5000, RT * 0.72);
   }
   kit.build({ concrete: stoneMat.concrete }, scene);
 }
@@ -276,7 +328,7 @@ function buildPoles(scene, q) {
   for (const [k, arr] of tiles) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
     const L = new THREE.LineSegments(g, wmat); scene.add(L);
-    regLod(L, (k % 1000) * 500 - M.HALF + 250, Math.floor(k / 1000) * 500 - M.HALF + 250, far * 0.8);
+    fadeLod(L, (k % 1000) * 500 - M.HALF + 250, Math.floor(k / 1000) * 500 - M.HALF + 250, far * 0.8, 360);
   }
 }
 
@@ -507,7 +559,7 @@ function buildBuildings(scene, q) {
   }
   if (tanks.length) {
     const tg = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 10, 1, false); tg.translate(0, 0.75, 0);
-    instTiles(scene, tg, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), tanks, 500, Math.min(bfar, 1800), (m, t, i) => { _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
+    instTiles(scene, tg, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }), tanks, 500, q.desktop ? Math.min(bfar, 1800) : 800, (m, t, i) => { _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); });
   }
 }
 
@@ -673,19 +725,22 @@ function bakeTreeAtlas(renderer, geos, mats, cellPx) {
   rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); rt.scissor.set(0, 0, rt.width, rt.height); renderer.setRenderTarget(prevT); renderer.setClearColor(prevC, prevA); renderer.toneMapping = prevTM; renderer.shadowMap.enabled = prevSM;
   return rt.texture;
 }
-const TREE_IMP_SEL = { uSel: { value: new THREE.Vector3(0, -1e5, 0) }, uNear: { value: 0 }, uNearBush: { value: 0 }, uBushFar: { value: 600 }, uFar: { value: 3000 } };
+const TREE_IMP_SEL = { uSel: { value: new THREE.Vector3(0, -1e5, 0) }, uNear: { value: 0 }, uNearBush: { value: 0 }, uBushFar: { value: 600 }, uFar: { value: 3000 }, uLod: { value: new THREE.Vector4(0, 0, 0, 1) } };
 function treeImpostorMaterial(atlas) {
   return new THREE.ShaderMaterial({
     fog: true,
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: null }, uLight: { value: null }, uSel: { value: null }, uNear: { value: 0 }, uNearBush: { value: 0 }, uBushFar: { value: 0 }, uFar: { value: 0 }, uBox: { value: TREE_SP.map((k) => new THREE.Vector2(...TREE_BOX[k])) } }]),
     vertexShader: /* glsl */`
       attribute vec4 aTree; attribute float aKind; uniform vec3 uSel; uniform float uNear; uniform float uNearBush; uniform float uBushFar; uniform float uFar; uniform vec2 uBox[6];
-      varying vec2 vUv; varying float vShade;
+      varying vec2 vUv; varying float vShade; varying vec2 vLodK;
       #include <fog_pars_vertex>
       void main(){
         int k = int(aKind + 0.5); vec2 box = uBox[k];
         float d = distance(aTree.xz, uSel.xz), dc = distance(aTree.xz, cameraPosition.xz);
-        float sc = aTree.w * step(k == 5 ? uNearBush : uNear, d) * step(dc, k == 5 ? uBushFar : uFar);
+        // cross-dissolve with the 3D tree over the last stretch of the 3D ring, dissolve away before the draw distance
+        float rn = k == 5 ? uNearBush : uNear, rf = k == 5 ? uBushFar : uFar;
+        vLodK = vec2(smoothstep(rn*0.86, rn, d), 1.0 - smoothstep(rf*0.8, rf, dc));
+        float sc = aTree.w * step(rn*0.86, d) * step(dc, rf);
         vec2 tc = normalize(cameraPosition.xz - aTree.xz + vec2(1e-4)); vec2 right = vec2(tc.y, -tc.x);
         float flip = fract(aTree.x*0.137 + aTree.z*0.291) > 0.5 ? 1.0 : -1.0;
         vec3 p = vec3(aTree.x, aTree.y - 0.2, aTree.z) + vec3(right.x*position.x*box.x*sc, position.y*box.y*sc, right.y*position.x*box.x*sc);
@@ -696,10 +751,12 @@ function treeImpostorMaterial(atlas) {
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */`
-      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying float vShade;
+      uniform sampler2D uAtlas; uniform vec3 uLight; varying vec2 vUv; varying float vShade; varying vec2 vLodK;
       #include <common>
       #include <fog_pars_fragment>
       void main(){
+        float dn = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        if ((vLodK.x < 0.996 && vLodK.x <= 1.0 - dn) || (vLodK.y < 0.996 && vLodK.y <= dn)) discard;
         vec4 t = texture2D(uAtlas, vUv); if (t.a < 0.42) discard;
         gl_FragColor = vec4(t.rgb/max(t.a, 0.01)*uLight*vShade*0.62, 1.0);
         #include <tonemapping_fragment>
@@ -710,9 +767,16 @@ function treeImpostorMaterial(atlas) {
 }
 function buildTrees(scene, q, renderer) {
   const atlas = frondAtlas();
+  // aLodRole per mesh: 0 = 3D tree out to the impostor ring, 1 = full-detail palm (out at r1), 2 = light palm (in at r1, out at the ring), 3 = bush
   const swayPatch = (s) => {
-    s.uniforms.uTime = U.uTime;
-    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace('#include <begin_vertex>', `#include <begin_vertex>
+    s.uniforms.uTime = U.uTime; s.uniforms.uTreeSel = TREE_IMP_SEL.uSel; s.uniforms.uTreeLod = TREE_IMP_SEL.uLod;
+    s.fragmentShader = 'varying vec2 vLodK;\n' + s.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      { float dn = ddNoise(gl_FragCoord.xy); if ((vLodK.x < 0.996 && vLodK.x <= 1.0 - dn) || (vLodK.y < 0.996 && vLodK.y <= dn)) discard; }`);
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; attribute float aLodRole; uniform vec3 uTreeSel; uniform vec4 uTreeLod; varying vec2 vLodK;').replace('#include <begin_vertex>', `#include <begin_vertex>
+      { float dSel = distance(instanceMatrix[3].xz, uTreeSel.xz), rr = aLodRole > 2.5 ? uTreeLod.y : uTreeLod.x;
+        vLodK = vec2(1.0, 1.0 - smoothstep(rr*0.86, rr, dSel));
+        if (aLodRole > 0.5 && aLodRole < 1.5) vLodK.y = 1.0 - smoothstep(uTreeLod.z - uTreeLod.w, uTreeLod.z + uTreeLod.w, dSel);
+        if (aLodRole > 1.5 && aLodRole < 2.5) vLodK.x = smoothstep(uTreeLod.z - uTreeLod.w, uTreeLod.z + uTreeLod.w, dSel); }
       float ph = instanceMatrix[3].x*0.13 + instanceMatrix[3].z*0.11;
       float hgt = max(position.y - 3.0, 0.);
       transformed.x += sin(uTime*1.3 + ph)*0.045*hgt + sin(uTime*3.1+ph*2.)*0.015*hgt;
@@ -761,16 +825,18 @@ function buildTrees(scene, q, renderer) {
       const g = Math.floor((t.x + M.HALF) / 100) + Math.floor((t.z + M.HALF) / 100) * 1000; if (!grid.has(g)) grid.set(g, []); grid.get(g).push(i);
     });
     const cap = Math.min(list.length, sp === 'bush' ? 2500 : 1600);
-    const near = new THREE.InstancedMesh(geos[sp][0], sp === 'palm' ? palmMat : leafMat, Math.max(1, cap));
+    const role = (g0, r) => { const g = shallowGeo(g0); g.setAttribute('aLodRole', new THREE.InstancedBufferAttribute(new Float32Array([r]), 1, false, 1e9)); return g; };
+    const twoPalm = sp === 'palm' && PM && world.models.palm_coconut_lod;
+    const near = new THREE.InstancedMesh(role(geos[sp][0], twoPalm ? 1 : sp === 'bush' ? 3 : 0), sp === 'palm' ? palmMat : leafMat, Math.max(1, cap));
     near.count = 0; near.frustumCulled = false; near.castShadow = q.treeShadows; near.receiveShadow = false; near.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     near.customDepthMaterial = sp === 'palm' ? depthMat : leafDepth;
     scene.add(near);
     // palms: full Blender model up close, the 460-triangle LOD out to the impostor ring
     let nearLo = null, r1 = 0;
     if (sp === 'palm' && PM && world.models.palm_coconut_lod) {
-      nearLo = new THREE.InstancedMesh(world.models.palm_coconut_lod.geo, palmMat, Math.max(1, cap)); nearLo.count = 0; nearLo.frustumCulled = false; nearLo.castShadow = q.treeShadows; nearLo.receiveShadow = false;
+      nearLo = new THREE.InstancedMesh(role(world.models.palm_coconut_lod.geo, 2), palmMat, Math.max(1, cap)); nearLo.count = 0; nearLo.frustumCulled = false; nearLo.castShadow = q.treeShadows; nearLo.receiveShadow = false;
       nearLo.instanceMatrix.setUsage(THREE.DynamicDrawUsage); nearLo.customDepthMaterial = depthMat; scene.add(nearLo);
-      r1 = q.desktop ? (q.treeDensity >= 1 ? 160 : 110) : 60;
+      r1 = q.desktop ? (q.treeDensity >= 1 ? 160 : 110) : 36; TREE_IMP_SEL.uLod.value.z = r1; TREE_IMP_SEL.uLod.value.w = q.desktop ? 16 : 8;
     }
     world.treeSpecies[sp] = { list, mats, grid, near, cap, nearLo, r1 };
   }
@@ -792,24 +858,26 @@ function buildTrees(scene, q, renderer) {
 export function updateTrees(cam, q) {
   for (const c of world.treeChunks) c.mesh.visible = Math.hypot(cam.x - c.cx, cam.z - c.cz) < q.treeFar + 720;
   const S = world.treeSel;
-  if (S.at.distanceToSquared(cam) < 36 && U.uTime.value - S.t < 0.6) return;
+  if (S.at.distanceToSquared(cam) < 6.25 && U.uTime.value - S.t < 0.6) return;
   S.at.copy(cam); S.t = U.uTime.value;
   let R = q.treeLod;
   for (let attempt = 0; attempt < 4; attempt++) { if (selectTrees(cam, R)) break; R *= 0.7; }
-  TREE_IMP_SEL.uNear.value = R; TREE_IMP_SEL.uNearBush.value = Math.min(R, 90);
+  TREE_IMP_SEL.uNear.value = R; TREE_IMP_SEL.uNearBush.value = Math.min(R, 90); TREE_IMP_SEL.uLod.value.x = R; TREE_IMP_SEL.uLod.value.y = Math.min(R, 90);
   TREE_IMP_SEL.uSel.value.copy(cam);
 }
 function selectTrees(cam, R) {
   for (const sp of TREE_SP) {
     const T = world.treeSpecies[sp], Rs = sp === 'bush' ? Math.min(R, 90) : R, out = T.near.instanceMatrix.array, r2 = (Rs + 4) * (Rs + 4);
-    let n = 0, nl = 0; const lo = T.nearLo, outLo = lo ? lo.instanceMatrix.array : null, rr1 = T.r1 * T.r1;
+    let n = 0, nl = 0; const lo = T.nearLo, outLo = lo ? lo.instanceMatrix.array : null, bw = TREE_IMP_SEL.uLod.value.w, rIn = T.r1 - bw, rOut = T.r1 + bw;
     const g0x = Math.floor((cam.x - Rs - 4 + M.HALF) / 100), g1x = Math.floor((cam.x + Rs + 4 + M.HALF) / 100), g0z = Math.floor((cam.z - Rs - 4 + M.HALF) / 100), g1z = Math.floor((cam.z + Rs + 4 + M.HALF) / 100);
     for (let gz = g0z; gz <= g1z; gz++) for (let gx = g0x; gx <= g1x; gx++) {
       const cell = T.grid.get(gx + gz * 1000); if (!cell) continue;
       for (const i of cell) {
         const dx = T.mats[i * 16 + 12] - cam.x, dz = T.mats[i * 16 + 14] - cam.z;
         if (dx * dx + dz * dz > r2) continue;
-        if (lo && dx * dx + dz * dz > rr1) { if (nl < T.cap) { outLo.set(T.mats.subarray(i * 16, i * 16 + 16), nl * 16); nl++; } continue; }
+        const d2 = dx * dx + dz * dz;
+        if (lo && d2 > rIn * rIn && nl < T.cap) { outLo.set(T.mats.subarray(i * 16, i * 16 + 16), nl * 16); nl++; }
+        if (lo && d2 > rOut * rOut) continue;
         if (n >= T.cap) return false;
         out.set(T.mats.subarray(i * 16, i * 16 + 16), n * 16); n++;
       }
@@ -963,12 +1031,11 @@ function buildLandmarks(scene, mats) {
     bulbs.forEach((g, i) => wk.add('bulbs', g, [0xff4466, 0x44ddff, 0xffdd33, 0x77ff66][i % 4]));
     wk.build({ metal: mats.metal, bulbs: mats.bulbs }, wheel, false);
     scene.add(wheel);
-    const gond = [];
-    for (let k = 0; k < 16; k++) {
-      const gm = new THREE.Mesh(T(new THREE.BoxGeometry(2.6, 2.4, 3.2), 0, -1.6, 0), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(k / 16, 0.7, 0.5), roughness: 0.5 }));
-      scene.add(gm); gond.push(gm);
-    }
-    world.animated.push((t) => { const r = t * 0.06; wheel.rotation.z = r; gond.forEach((g, k) => { const a = r + k / 16 * Math.PI * 2; g.position.set(x + Math.cos(a) * 22, y + 28 + Math.sin(a) * 22, z); }); });
+    // the 16 gondolas are one instanced mesh (one draw call instead of 16)
+    const gond = new THREE.InstancedMesh(T(new THREE.BoxGeometry(2.6, 2.4, 3.2), 0, -1.6, 0), new THREE.MeshStandardMaterial({ roughness: 0.5 }), 16);
+    for (let k = 0; k < 16; k++) gond.setColorAt(k, new THREE.Color().setHSL(k / 16, 0.7, 0.5));
+    gond.boundingSphere = new THREE.Sphere(new THREE.Vector3(x, y + 28, z), 30); scene.add(gond);
+    world.animated.push((t) => { const r = t * 0.06; wheel.rotation.z = r; for (let k = 0; k < 16; k++) { const a = r + k / 16 * Math.PI * 2; _m.makeTranslation(x + Math.cos(a) * 22, y + 28 + Math.sin(a) * 22, z); gond.setMatrixAt(k, _m); } gond.instanceMatrix.needsUpdate = true; });
     addCol(x - 9, z - 4, x + 9, z + 4, y, y + 4, { noTop: true });
     for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2, sx = x + Math.cos(a) * 40, sz = z + Math.sin(a) * 40; K.box('plain', 4, 3, 3, sx, ty(sx, sz), sz, [0xff7043, 0xffca28, 0x26c6da, 0xab47bc][k % 4]); K.box('red', 4.6, 0.3, 3.6, sx, ty(sx, sz) + 3, sz, [0xffffff, 0xd32f2f][k % 2]); }
     world.labels.push({ name: 'Devka Amusement Park', x, z });
@@ -1272,6 +1339,7 @@ export function buildMapCanvas() {
 
 // ---------------- main build ----------------
 export async function buildWorld(scene, q, progress, renderer) {
+  AUTO.d = q.desktop ? (q.treeDensity >= 1 ? 150 : 120) : 60; AUTO.near = q.desktop ? 320 : 220; AUTO.shadow = q.shadowRange || 80;
   M.setRes(q.terrainN);
   await M.buildMap(progress);
   await progress('Painting the land', 0.8);
@@ -1305,10 +1373,10 @@ export async function buildWorld(scene, q, progress, renderer) {
   buildRoads(scene, mats, q);
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
-  buildEstates(scene, q, mats, TX, regLod, addCol);
+  buildEstates(scene, q, mats, TX, fadeLod, addCol);
   const MD = await loadModels(q, ['boulder_01', 'coast_land_rocks_03', 'rock_07', 'coast_rocks_01', 'coast_rocks_02', 'palm_coconut', 'palm_coconut_lod']);
   world.models = MD;
-  world.promenade = buildPromenade(scene, q, TX, { regLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [], models: MD });
+  world.promenade = buildPromenade(scene, q, TX, { regLod, fadeLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [], models: MD });
   buildPoles(scene, q);
   world.labels.push({ name: 'Jampore Villa Colony', x: M.L.villas.x, z: M.L.villas.z });
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
@@ -1316,7 +1384,7 @@ export async function buildWorld(scene, q, progress, renderer) {
   buildBuildings(scene, q);
   world.kit = await buildKitCity(scene, q, { regLod });
   buildBoats(scene);
-  world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated, models: world.models });
+  world.coast = buildCoast(scene, q, { instTiles, regLod, addCol, animated: world.animated, models: world.models });
   world.farms = await buildFarms(scene, q, { instTiles, addCol, labels: world.labels }, splat);
   await progress('Growing the jungle', 0.93);
   buildTrees(scene, q, renderer);

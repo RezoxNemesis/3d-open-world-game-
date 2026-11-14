@@ -376,7 +376,8 @@ export class Human {
     this.hipY = 0; this.rootRot = [0, 0, 0];
     this.held = null;
   }
-  hold(obj) { if (this.held) this.bones.handR.remove(this.held); this.held = obj; if (obj) this.bones.handR.add(obj); }
+  // props go in the right hand; with a realistic avatar that is the avatar's own hand (anchor set by the avatar)
+  hold(obj) { const hand = this.handAnchor || this.bones.handR; if (this.held && this.held.parent) this.held.parent.remove(this.held); this.held = obj; if (obj) hand.add(obj); }
   // apply target pose with smoothing (k = responsiveness)
   apply(P, dt, k = 14) {
     for (const n of BONES) {
@@ -452,6 +453,13 @@ export const Pose = {
     const b = S(ph) * 0.06;
     return { thighL: [-1.25, 0, 0.75], shinL: [1.4, 0, -0.2], thighR: [-1.25, 0, -0.75], shinR: [1.4, 0, 0.2], spine: [0.15 + b, 0, 0], armL: [-0.8, 0, 0.15], foreL: [-0.9, 0, 0], armR: [-0.8, 0, -0.15], foreR: [-0.9, 0, 0], hipY: -0.3 + b * 0.5 };
   },
+  // getting into a car: body bends at the hips, inside leg goes in first
+  duck() { return { spine: [0.55, 0, 0], chest: [0.1, 0, 0], neck: [-0.35, 0, 0], armL: [-0.75, 0, 0.35], foreL: [-0.7, 0, 0], armR: [-0.5, 0, -0.25], foreR: [-0.5, 0, 0], thighL: [-1.05, 0, 0.25], shinL: [1.35, 0, 0], footL: [-0.2, 0, 0], thighR: [-0.45, 0, -0.1], shinR: [0.75, 0, 0], hipY: -0.34 }; },
+  // swinging a leg over a motorbike / scooter
+  legOver() { return { spine: [0.35, 0, -0.1], neck: [-0.2, 0, 0], armL: [-1.15, 0, 0.2], foreL: [-0.55, 0, 0], armR: [-1.1, 0, -0.25], foreR: [-0.55, 0, 0], thighL: [-0.25, 0, 0.05], shinL: [0.35, 0, 0], thighR: [-1.55, 0, -0.95], shinR: [1.45, 0, 0], hipY: -0.12 }; },
+  // mounting a horse from the near (left) side: foot in the stirrup, hands on the saddle, then the leg swings over
+  stirrup() { return { spine: [0.15, 0, 0], neck: [-0.15, 0, 0], armL: [-2.3, 0, 0.25], foreL: [-0.7, 0, 0], armR: [-2.45, 0, -0.15], foreR: [-0.55, 0, 0], thighL: [-1.85, 0, 0.25], shinL: [2.0, 0, 0], footL: [-0.3, 0, 0], thighR: [-0.1, 0, -0.05], shinR: [0.25, 0, 0], hipY: -0.05 }; },
+  swingOver() { return { spine: [0.45, 0, 0.05], neck: [-0.4, 0, 0], armL: [-1.6, 0, 0.3], foreL: [-0.6, 0, 0], armR: [-1.7, 0, -0.2], foreR: [-0.5, 0, 0], thighL: [-0.7, 0, 0.35], shinL: [0.9, 0, 0], thighR: [0.55, 0, -0.9], shinR: [1.0, 0, 0], hipY: -0.1 }; },
   skydive(t) { return { hips: [1.4, 0, 0], neck: [-1.0, 0, 0], armL: [-0.4, 0, 1.4 + S(t * 4) * 0.08], foreL: [-0.6, 0, 0], armR: [-0.4, 0, -1.4 - S(t * 4) * 0.08], foreR: [-0.6, 0, 0], thighL: [0.15, 0, 0.3], shinL: [0.8, 0, 0], thighR: [0.15, 0, -0.3], shinR: [0.8, 0, 0] }; },
   // superhero flight: body horizontal, one fist forward, legs trailing
   fly(t, boost) { const b = S(t * 3) * 0.05; return { hips: [1.45, 0, 0], neck: [-1.15, 0, 0], head: [-0.15, 0, 0], armR: [-3.05 - b, 0, -0.08], foreR: [0, 0, 0], armL: boost ? [-3.0 + b, 0, 0.1] : [0.25, 0, 0.35], foreL: boost ? [0, 0, 0] : [-0.3, 0, 0], thighL: [0.12 + b, 0, 0.06], shinL: [0.25, 0, 0], thighR: [0.05 - b, 0, -0.06], shinR: [0.45, 0, 0] }; },
@@ -459,9 +467,20 @@ export const Pose = {
   slam(t) { return { spine: [0.6, 0, 0], chest: [0.3, 0, 0], armL: [-2.8 + t * 2.5, 0, 0.3], foreL: [-0.3, 0, 0], armR: [-2.8 + t * 2.5, 0, -0.3], foreR: [-0.3, 0, 0], thighL: [-1.4, 0, 0.1], shinL: [1.8, 0, 0], thighR: [-1.2, 0, -0.1], shinR: [1.6, 0, 0], hipY: -0.3 }; },
   chute(t) { return { armL: [-2.6, 0, 0.35], foreL: [-0.6, 0, 0], armR: [-2.6, 0, -0.35], foreR: [-0.6, 0, 0], thighL: [-0.3 + S(t * 2) * 0.1, 0, 0.05], shinL: [0.3, 0, 0], thighR: [-0.2 - S(t * 2) * 0.1, 0, -0.05], shinR: [0.4, 0, 0] }; },
   web(t, swing) { return { armR: [-2.9, 0, -0.15], foreR: [-0.1, 0, 0], armL: [-0.6 + swing * 0.5, 0, 0.6], foreL: [-1.2, 0, 0], spine: [-0.2 + swing * 0.3, 0, 0], thighL: [-0.6 - swing * 0.6, 0, 0.1], shinL: [1.2, 0, 0], thighR: [-0.2 + swing * 0.4, 0, -0.1], shinR: [0.5, 0, 0], neck: [-0.3, 0, 0] }; },
-  aim(pitch, rifle) {
-    return rifle ? { chest: [0, 0.35, 0], neck: [0, -0.3, 0], armR: [-1.4 - pitch, 0.1, -0.15], foreR: [-0.7, 0, 0], handR: [0.2, 0, 0], armL: [-1.5 - pitch, -0.2, 0.45], foreL: [-0.55, 0, 0], spine: [-pitch * 0.4, 0, 0] }
-      : { chest: [0, 0.15, 0], armR: [-1.55 - pitch, 0.1, -0.05], foreR: [-0.05, 0, 0], armL: [-1.4 - pitch, -0.3, 0.5], foreL: [-0.5, 0, 0], spine: [-pitch * 0.4, 0, 0] };
+  // aiming stance + recoil (since = seconds since the last shot): rifle shouldered with the off hand under the barrel,
+  // pistol held two-handed (isosceles); each shot kicks the arms up and the chest back, settling in ~0.2 s
+  aim(pitch, rifle, since = 9) {
+    const k = since >= 0 && since < 0.35 ? Math.exp(-since * 16) : 0, kick = k * (rifle ? 0.16 : 0.28);
+    return rifle ? { chest: [-kick * 0.4, 0.38, 0], neck: [0.05, -0.32, 0.12], head: [0.08, 0, 0.08], armR: [-1.35 - pitch - kick, 0.12, -0.32], foreR: [-1.05, 0, 0], handR: [0.25, 0, 0], armL: [-1.45 - pitch - kick, -0.35, 0.42], foreL: [-0.45, 0, 0], handL: [-0.2, 0, 0], spine: [-pitch * 0.45 - kick * 0.3, 0.05, 0], shR: [0, 0, -0.08] }
+      : { chest: [-kick * 0.3, 0.12, 0], neck: [0.02, -0.1, 0], armR: [-1.52 - pitch - kick, 0.05, -0.12], foreR: [-0.08 - kick * 0.5, 0, 0], handR: [-kick * 0.6, 0, 0], armL: [-1.48 - pitch - kick, -0.42, 0.48], foreL: [-0.42, 0, 0], handL: [0, 0, 0], spine: [-pitch * 0.45 - kick * 0.25, 0, 0] };
+  },
+  // torso for a held gun (the arms are solved onto the weapon by aimrig.js): bladed stance for the rifle, lean with the aim
+  gun(rifle, aim, up = 0, since = 9) {
+    const k = since >= 0 && since < 0.3 ? Math.exp(-since * 18) : 0, a = aim ? 1 : 0;
+    return rifle ? { spine: [-up * 0.3 + k * 0.03, -0.12 - 0.1 * a, 0], chest: [-up * 0.25 + k * 0.05, -0.2 - 0.3 * a, 0], neck: [0.06 * a - up * 0.2, 0.18 + 0.14 * a, 0], head: [0.06 * a - up * 0.2, 0.12 + 0.12 * a, -0.07 * a],
+        armR: [-0.5, 0, -0.3], foreR: [-1.3, 0, 0], armL: [-0.9, 0, 0.35], foreL: [-0.9, 0, 0] }
+      : { spine: [-up * 0.3 + k * 0.04, 0, 0], chest: [-up * 0.25 + k * 0.06, -0.06, 0], neck: [-up * 0.2, 0.04, 0], head: [-up * 0.2, 0, 0],
+        armR: [-1.2, 0, -0.15], foreR: [-0.5, 0, 0], armL: [-1.1, 0, 0.3], foreL: [-0.7, 0, 0] };
   },
   // melee: k in [0,1] progress, move id
   attack(id, k) {

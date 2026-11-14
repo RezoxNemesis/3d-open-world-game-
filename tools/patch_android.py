@@ -25,6 +25,48 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideBars();
+        setRefresh(60f);
+        // the game picks the panel refresh rate that matches its frame-rate setting (60 / 90 / 120 Hz): window.DDNative.refresh(hz)
+        try {
+            getBridge().getWebView().addJavascriptInterface(new Object() {
+                @android.webkit.JavascriptInterface
+                public void refresh(final float hz) { runOnUiThread(new Runnable() { public void run() { setRefresh(hz); } }); }
+                @android.webkit.JavascriptInterface
+                public String modes() { return refreshModes(); }
+            }, "DDNative");
+        } catch (Throwable e) { }
+    }
+
+    private String refreshModes() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 23) {
+                android.view.Display d = getWindowManager().getDefaultDisplay();
+                android.view.Display.Mode cur = d.getMode();
+                for (android.view.Display.Mode m : d.getSupportedModes())
+                    if (m.getPhysicalWidth() == cur.getPhysicalWidth() && m.getPhysicalHeight() == cur.getPhysicalHeight()) { if (sb.length() > 0) sb.append(','); sb.append(Math.round(m.getRefreshRate())); }
+            }
+        } catch (Throwable e) { }
+        return sb.toString();
+    }
+
+    // choose the display mode (same resolution) whose refresh rate is the lowest one that is >= hz, or the highest available
+    private void setRefresh(float hz) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT < 23) return;
+            android.view.Display d = getWindowManager().getDefaultDisplay();
+            android.view.Display.Mode cur = d.getMode(), best = null, top = cur;
+            for (android.view.Display.Mode m : d.getSupportedModes()) {
+                if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
+                if (m.getRefreshRate() > top.getRefreshRate()) top = m;
+                if (m.getRefreshRate() >= hz - 1f && (best == null || m.getRefreshRate() < best.getRefreshRate())) best = m;
+            }
+            if (best == null) best = top;
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.preferredDisplayModeId = best.getModeId();
+            lp.preferredRefreshRate = best.getRefreshRate();
+            getWindow().setAttributes(lp);
+        } catch (Throwable e) { }
     }
 
     @Override

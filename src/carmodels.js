@@ -48,6 +48,7 @@ function assemble(body, wheel, wheels) {
   for (const [x, y, z] of wheels) { const w = x < 0 ? mirrorX(wheel) : wheel.clone(); w.translate(x, y, z); parts.push(w); }
   return mergeGeometries(parts);
 }
+export const WEAPON_MODELS = {};
 export async function loadCarModels(q) {
   let meta = null;
   try { meta = await (await fetch(assetURL('assets/models/cars/cars.json'))).json(); } catch (e) { console.warn('car models: no cars.json', e); return CAR_MODELS; }
@@ -62,6 +63,11 @@ export async function loadCarModels(q) {
     if (!body || !wheel || !b1 || !w1) { console.warn('car models: incomplete', key); return; }
     const m = meta[key], wheels = m.wheels.map(([x, y, z]) => [x, y, z]);
     CAR_MODELS[key] = { body, wheel, wheels, r: m.r, len: m.L, wid: m.W, all: assemble(b1, w1, wheels), low: b2 && w2 ? assemble(b2, w2, wheels) : null };
+  }));
+  // weapons (tools/blender/weapons.py): the full model in the heroes' hands, the light one for everyone else
+  await Promise.all(['rifle', 'pistol'].map(async (k) => {
+    const [geo, lod] = await Promise.all([loadGLB(loader, assetURL(`assets/models/weapons/${k}.glb`)), loadGLB(loader, assetURL(`assets/models/weapons/${k}_lod.glb`))]);
+    if (geo) WEAPON_MODELS[k] = { geo, lod: lod || geo };
   }));
   const [jet, jet1] = await Promise.all([get(q.desktop ? 'rajhans' : 'rajhans_lod1'), get('rajhans_lod1')]);
   if (jet) STATIC_MODELS.rajhans = { geo: jet, lod: jet1 || jet };

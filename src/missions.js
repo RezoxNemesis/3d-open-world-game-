@@ -10,10 +10,6 @@ export class Missions {
     const L = M.L, ap = L.airport;
     const fort = L.motiFort;
     this.list = [
-      { id: 'chai', name: 'Chai Pe Charcha', desc: 'Make masala chai with Mira', reward: 2000, steps: [
-        { say: [['Mira', 'Vikas! Welcome back to Daman. First things first — chai.'], ['Vikas', 'You read my mind. Let us find a stall near the jetty.']] },
-        { goto: 'stall', text: 'Go to a chai stall or into any home kitchen' }, { chai: true, text: 'Make masala chai (F)' },
-        { say: [['Vikas', 'Ahh. Perfect masala chai. Now I am ready for anything.'], ['Mira', 'Good, because Daman needs us. Kaala Naag gang is back at the docks.']] }] },
       { id: 'fort', name: 'Fort Run', desc: 'Parkour race over Moti Daman Fort to the lighthouse', reward: 5000, steps: [
         { goto: { x: fort.x1 + 22, z: (fort.z0 + fort.z1) / 2 }, r: 12, text: 'Go to the east gate of Moti Daman Fort' },
         { say: [['Mira', 'Race you to the lighthouse — over the walls, not around them!']] },

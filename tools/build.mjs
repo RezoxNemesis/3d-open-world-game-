@@ -14,6 +14,8 @@ if (existsSync('assets/avatars')) cpSync('assets/avatars', 'dist/assets/avatars'
 // photo skies (Poly Haven CC0 HDRIs, prepared by tools/blender/prep_skies.py) and Blender-processed models
 if (existsSync('assets/sky')) cpSync('assets/sky', 'dist/assets/sky', { recursive: true });
 if (existsSync('assets/models')) cpSync('assets/models', 'dist/assets/models', { recursive: true });
+// motion-capture locomotion clips (Microsoft Rocketbox animations, MIT; converted by tools/anim)
+if (existsSync('assets/anim')) cpSync('assets/anim', 'dist/assets/anim', { recursive: true });
 // single-file build: embed the 1K textures as data URLs so it still works from one HTML file
 let embed = '';
 if (existsSync('assets/tex/1k')) {
@@ -25,7 +27,7 @@ if (existsSync('assets/tex/1k')) {
 {
   const A = {}, mime = { jpg: 'image/jpeg', json: 'application/json', glb: 'model/gltf-binary' };
   const add = (dir) => { if (!existsSync(dir)) return; for (const f of readdirSync(dir)) { const ext = f.split('.').pop(); if (mime[ext]) A[dir + '/' + f] = 'data:' + mime[ext] + ';base64,' + readFileSync(dir + '/' + f).toString('base64'); } };
-  add('assets/sky'); add('assets/sky/2k'); add('assets/models/1k'); add('assets/models/cars'); add('assets/models/horse');
+  add('assets/sky'); add('assets/sky/2k'); add('assets/models/1k'); add('assets/models/cars'); add('assets/models/horse'); add('assets/models/lod'); add('assets/models/weapons'); add('assets/anim');
   for (const f of ['kit_facades.glb', 'kit_facades_lod.glb']) if (existsSync('assets/models/' + f)) A['assets/models/' + f] = 'data:model/gltf-binary;base64,' + readFileSync('assets/models/' + f).toString('base64');
   if (Object.keys(A).length) embed += '<script>window.__DD_ASSETS=' + JSON.stringify(A) + ';</script>';
 }

@@ -17,4 +17,4 @@ export function detectPlatform() {
   return 'web';
 }
 export function defaultPreset(platform) { return platform === 'desktop' ? 'ultra' : platform === 'web' ? 'high' : 'mobile'; }
-export const FPS_CAPS = [30, 45, 60, 120];
+export const FPS_CAPS = [30, 45, 60, 90, 120];

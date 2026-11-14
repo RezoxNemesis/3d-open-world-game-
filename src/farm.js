@@ -38,7 +38,7 @@ export async function buildFarms(scene, q, H, splat) {
     const md = MD[n], list = items[n]; if (!md || !list.length) continue;
     const [fd, fm] = FAR[n] || [1500, 700];
     md.mat.side = THREE.FrontSide;
-    H.instTiles(scene, md.geo, md.mat, list, 500, q.desktop ? fd : fm, put, { shadow: !n.startsWith('fence') });
+    H.instTiles(scene, md.geo, md.mat, list, 500, q.desktop ? fd : fm, put, { shadow: !n.startsWith('fence'), lod: md.lod ? { geo: md.lod, d: q.desktop ? 140 : 65, tile: 125 } : undefined, tag: n });
     count += list.length;
     const c = COL[n];
     // fences: a chain of small posts-and-rails boxes along each 3 m segment (tight even on diagonal runs; gate gaps stay open)
