@@ -93,7 +93,9 @@ export class Game {
     this.load();
     this.setupPost();
     await progress('Lighting the sky', 0.99);
-    this.sky.bakeEnv(q.desktop ? [0, 5.8, 6.6, 8, 10.5, 13, 15.5, 17.3, 18.3, 19.2, 21.5] : [0, 6.2, 9, 13, 17.4, 18.6, 21.5]);
+    this.sky.waterMats = [TR.sea, TR.lake].filter(Boolean).map((m) => m.material);
+    await this.sky.loadPhotoSky(q);
+    this.sky.bakeEnv(this.sky.photo ? this.sky.photo.keys.map((k) => k.h) : q.desktop ? [0, 5.8, 6.6, 8, 10.5, 13, 15.5, 17.3, 18.3, 19.2, 21.5] : [0, 6.2, 9, 13, 17.4, 18.6, 21.5]);
     this.sky.updateEnv(this.sky.hour);
     this.renderer.shadowMap.autoUpdate = false; this.frameNo = 0;
     this.rig.yaw = this.player.yaw + Math.PI;

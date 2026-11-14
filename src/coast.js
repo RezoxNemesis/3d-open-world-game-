@@ -109,5 +109,17 @@ export function buildCoast(scene, q, H) {
   H.animated.push((t) => {
     for (const S of sets) { S.a.forEach((o, i) => { _m.compose(_p.set(o.x, Math.sin(t * 1.1 + o.p) * 0.18 - 0.35, o.z), _q.setFromEuler(_e.set(Math.sin(t * 0.9 + o.p) * 0.05, o.yaw + Math.sin(t * 0.13 + o.p) * 0.2, Math.cos(t * 1.05 + o.p) * 0.07)), _s.set(1, 1, 1)); S.m.setMatrixAt(i, _m); }); S.m.instanceMatrix.needsUpdate = true; }
   });
+  // photo-scanned rocky shelves in the surf (Devka, Jampore, below the forts) and stones scattered up the beach
+  const MD = H.models || {};
+  if (MD.coast_rocks_01 && MD.coast_rocks_02) {
+    const shelves = [[-4470, 0], [-3330, 1], [-405, 0], [520, 1], [2860, 1], [3960, 0], [-6100, 0], [6200, 1]].map(([z, k]) => ({ x: M.coastX(z) + 6 + rnd() * 6, z, y: -2.05 - rnd() * 0.4, s: 0.85 + rnd() * 0.3, r: rnd() * 6.28, k }));
+    for (const k of [0, 1]) { const md = MD[k ? 'coast_rocks_02' : 'coast_rocks_01'], list = shelves.filter((o) => o.k === k); if (list.length) H.instTiles(scene, md.geo, md.mat, list, 2000, q.desktop ? 3000 : 1500, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(0, o.r, 0)), _s.set(o.s, o.s, o.s)); m.setMatrixAt(i, _m); }); }
+    if (MD.rock_07) {
+      const stones = [];
+      for (const sh of shelves) for (let i = 0; i < 45; i++) { const a = rnd() * 6.28, r = 22 + rnd() * 26, x = sh.x + Math.cos(a) * r, z = sh.z + Math.sin(a) * r; if (x < M.coastX(z) - 8) continue; stones.push({ x, z, y: M.terrainH(x, z) - 0.05, s: 3 + rnd() * 7, r: rnd() * 6.28 }); }
+      for (let z = -4600; z < -3100; z += 6) if (rnd() < 0.5) { const x = M.coastX(z) + 30 + rnd() * 34; stones.push({ x, z, y: M.terrainH(x, z) - 0.04, s: 2 + rnd() * 4, r: rnd() * 6.28 }); }
+      H.instTiles(scene, MD.rock_07.geo, MD.rock_07.mat, stones, 500, q.desktop ? 500 : 220, (m, o, i) => { _m.compose(_p.set(o.x, o.y, o.z), _q.setFromEuler(_e.set(0, o.r, 0)), _s.set(o.s, o.s * 0.8, o.s)); m.setMatrixAt(i, _m); });
+    }
+  }
   return { beached: beached.length, anchored: anchored.length, list: beached };
 }

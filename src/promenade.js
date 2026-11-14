@@ -243,12 +243,22 @@ export function buildPromenade(scene, q, TX, H) {
   // ---------- riprap shore ----------
   const rocks = [];
   for (let z = S.z0 + 1; z < S.z1 - 1; z += 1.1) {
-    if (inStair(z, 1.2) || rnd() < 0.25) continue;
+    if (inStair(z, 1.2) || rnd() < (H.models && H.models.boulder_01 ? 0.5 : 0.25)) continue;
     const a = S.wall1 + 0.6 + rnd() * rnd() * 5.5, P = at(z, a), y = M.terrainH(P.x, P.z);
     rocks.push({ x: P.x, z: P.z, y: y - 0.15, s: (0.45 + rnd() * 0.9) * (1.3 - (a - S.wall1) * 0.1), r: rnd() * 6.28, t: rnd() * 0.5 });
   }
-  const rk = [rockGeo(1), rockGeo(2), rockGeo(3)];
-  rk.forEach((g, i) => H.instTiles(scene, g, rockMat, rocks.filter((_, j) => j % 3 === i), 400, q.desktop ? 900 : 380, (m, r, k) => { _m.compose(_p.set(r.x, r.y, r.z), _q.setFromEuler(_e.set(r.t, r.r, r.t * 0.5)), _s.set(r.s, r.s, r.s)); m.setMatrixAt(k, _m); }));
+  const MD = H.models || {}, put = (m, r, k) => { _m.compose(_p.set(r.x, r.y, r.z), _q.setFromEuler(_e.set(r.t, r.r, r.t * 0.5)), _s.set(r.s, r.s * (r.sy || 1), r.s)); m.setMatrixAt(k, _m); };
+  if (MD.boulder_01) {
+    // photo-scanned boulders (Blender-baked CC0 scans), with a big scanned rock cluster every ~30 m
+    const big = [];
+    for (const r of rocks) { r.s *= 1.15; r.sy = 0.75 + rnd() * 0.35; r.y -= 0.25 * r.s; r.t *= 0.6; }
+    for (let z = S.z0 + 14; z < S.z1 - 10; z += 26 + rnd() * 14) { if (inStair(z, 6)) continue; const P = at(z, S.wall1 + 4.2 + rnd() * 2.5); big.push({ x: P.x, z: P.z, y: M.terrainH(P.x, P.z) - 0.45, s: 0.42 + rnd() * 0.25, r: P.ang + Math.PI / 2 + (rnd() - 0.5) * 0.6, t: 0 }); }
+    H.instTiles(scene, MD.boulder_01.geo, MD.boulder_01.mat, rocks, 300, q.desktop ? 650 : 300, put);
+    if (MD.coast_land_rocks_03) H.instTiles(scene, MD.coast_land_rocks_03.geo, MD.coast_land_rocks_03.mat, big, 400, q.desktop ? 1200 : 500, put);
+  } else {
+    const rk = [rockGeo(1), rockGeo(2), rockGeo(3)];
+    rk.forEach((g, i) => H.instTiles(scene, g, rockMat, rocks.filter((_, j) => j % 3 === i), 400, q.desktop ? 900 : 380, put));
+  }
 
   // ---------- instanced furniture ----------
   const place = (m, p, i) => { _m.compose(_p.set(p.x, p.y, p.z), _q.setFromEuler(_e.set(0, p.ang, 0)), _s.set(1, 1, 1)); m.setMatrixAt(i, _m); };

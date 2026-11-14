@@ -166,6 +166,10 @@ function setupTests(game) {
       game.camOverride = () => ({ pos: new THREE.Vector3(c + 60, M.terrainH(c + 60, z) + 3, z - 30), look: new THREE.Vector3(c - 40, 6, z + 30) }); step(6); },
     beach_boats: () => { const L = game.world.coast.list.filter((b) => b.z < -3000), b = L[Math.floor(L.length / 2)]; at(b.x + 12, b.z - 10, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = 17.7;
       game.camOverride = () => ({ pos: new THREE.Vector3(b.x + 13, M.terrainH(b.x + 13, b.z - 9) + 1.7, b.z - 9), look: new THREE.Vector3(b.x - 30, 1.5, b.z + 12) }); step(6); },
+    shore_rocks: () => { const z = -3360, F = M.seaFrame(z), c = M.coastX(z); at(F.x - 19, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = 12.3;
+      game.camOverride = () => ({ pos: new THREE.Vector3(F.x - 19, F.y + 2.4, z - 20), look: new THREE.Vector3(c - 10, 0, z + 30) }); step(6); },
+    ...Object.fromEntries([6.4, 9.5, 13, 16.6, 17.4, 17.9, 18.4, 22].map((h) => [`tod_${String(h).replace('.', '_')}`, () => { const z = -3925, F = M.seaFrame(z), x = F.x - 14; at(x, z, -0.7); game.weather.rain = 0; game.weather.targetRain = 0; U.uWet.value = 0; game.sky.hour = h;
+      game.camOverride = () => ({ pos: new THREE.Vector3(x + 4, F.y + 2.2, z - 18), look: new THREE.Vector3(x - 14, F.y + 3.5, z + 12) }); step(6); }])),
     look_noon: () => { at(-2238, -1170, Math.PI * 0.85); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 11.5; game.rig.zoom = 1.6; game.rig.pitch = 0.02; step(6); game.rig.zoom = 1; },
     look_golden: () => { const z = -3900; at(M.coastX(z) + 150, z, -Math.PI / 2); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 17.9; game.rig.zoom = 1.7; game.rig.pitch = 0.0; step(6); game.rig.zoom = 1; },
     look_twilight: () => { const z = -3600; at(M.coastRoadX(z) - 6, z, -Math.PI / 2 - 0.5); game.weather.rain = 0; game.weather.targetRain = 0; game.sky.hour = 18.75; game.rig.zoom = 1.8; game.rig.pitch = -0.05; step(6); game.rig.zoom = 1; },

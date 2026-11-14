@@ -8,12 +8,31 @@ export class SkySystem {
     // art-directed sky (matches the reference look): deep-blue days, orange golden hour with a visible sun disc,
     // pink/purple twilight, navy night. Palettes are computed on the CPU so water/windows/fog share them.
     this.skyMat = new THREE.ShaderMaterial({
-      uniforms: { uZ: { value: new THREE.Color() }, uH: { value: new THREE.Color() }, uH2: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() }, uDisc: { value: new THREE.Color() }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uGround: { value: new THREE.Color() } },
+      uniforms: { uZ: { value: new THREE.Color() }, uH: { value: new THREE.Color() }, uH2: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() }, uDisc: { value: new THREE.Color() }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uGround: { value: new THREE.Color() },
+        uPA: { value: null }, uPB: { value: null }, uPO: { value: null }, uRot: { value: new THREE.Vector3() }, uSc: { value: new THREE.Vector3(1, 1, 1) }, uMix: { value: 0 }, uOver: { value: 0 }, uPhoto: { value: 0 }, uElMin: { value: -6 } },
       side: THREE.BackSide, depthWrite: false, fog: false,
       vertexShader: 'varying vec3 vD; void main(){ vD = position; vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position = p.xyww; }',
-      fragmentShader: `uniform vec3 uZ, uH, uH2, uGlow, uDisc, uSun, uGround; varying vec3 vD;
+      fragmentShader: `uniform vec3 uZ, uH, uH2, uGlow, uDisc, uSun, uGround, uRot, uSc; uniform sampler2D uPA, uPB, uPO; uniform float uMix, uOver, uPhoto, uElMin; varying vec3 vD;
+      // photo sky: CC0 HDRIs stored Reinhard+gamma encoded (x = L/(1-L), L = c^2.2), upper hemisphere only
+      vec3 photo(sampler2D t, float rot, vec3 d){
+        float az = atan(d.x, d.z) - rot, el = degrees(asin(clamp(d.y, -1., 1.)));
+        vec2 uv = vec2(fract(az/6.2831853), (max(el, uElMin) - uElMin)/(90. - uElMin));
+        vec3 L = pow(texture2D(t, uv).rgb, vec3(2.2)); return L/max(1. - L, 0.004);
+      }
       void main(){
         vec3 d = normalize(vD); float h = d.y;
+        if (uPhoto > 0.5) {
+          vec3 c = mix(photo(uPA, uRot.x, d)*uSc.x, photo(uPB, uRot.y, d)*uSc.y, uMix);
+          if (uOver > 0.001) c = mix(c, photo(uPO, uRot.z, d)*uSc.z, uOver);
+          c = mix(c, mix(c, uGround, 0.6), smoothstep(-0.02, -0.1, h));
+          float sd = max(dot(d, normalize(uSun)), 0.0);
+          c += uGlow*(pow(sd, 40.0)*0.25 + pow(sd, 400.0)*1.2)*(1. - uOver);
+          c += uDisc*smoothstep(0.99955, 0.99975, sd)*28.0*(1. - uOver*0.9);
+          gl_FragColor = vec4(c, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          return;
+        }
         vec2 sh = normalize(uSun.xz + 1e-4), dh = normalize(d.xz + 1e-4);
         float toward = dot(sh, dh)*0.5 + 0.5;                             // 1 facing the sun, 0 away
         vec3 hor = mix(uH2, uH, pow(toward, 1.6));                         // horizon warmer toward the sun
@@ -29,15 +48,15 @@ export class SkySystem {
       }` });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(45000, 48, 24), this.skyMat); this.sky.renderOrder = -2; this.sky.frustumCulled = false; scene.add(this.sky);
     this.nightMat = new THREE.ShaderMaterial({
-      uniforms: { uNight: U.uNight, uMoon: { value: new THREE.Vector3() }, uTime: U.uTime, uMoonK: { value: 1 } }, side: THREE.BackSide, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending, fog: false,
+      uniforms: { uNight: U.uNight, uMoon: { value: new THREE.Vector3() }, uTime: U.uTime, uMoonK: { value: 1 }, uStars: { value: 1 } }, side: THREE.BackSide, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending, fog: false,
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position = p.xyww; }',
-      fragmentShader: `uniform float uNight, uTime, uMoonK; uniform vec3 uMoon; varying vec3 vD; ${NOISE}
+      fragmentShader: `uniform float uNight, uTime, uMoonK, uStars; uniform vec3 uMoon; varying vec3 vD; ${NOISE}
       void main(){
         vec3 d = normalize(vD);
-        vec3 col = mix(vec3(0.012,0.02,0.045), vec3(0.002,0.004,0.014), clamp(d.y*1.5,0.,1.));
+        vec3 col = mix(vec3(0.012,0.02,0.045), vec3(0.002,0.004,0.014), clamp(d.y*1.5,0.,1.))*uStars;
         vec3 c = d*220.; vec3 i = floor(c); float h = h31(i);
         float star = step(0.9965, h) * smoothstep(0.42, 0.0, length(fract(c)-0.5)) * (0.6+0.4*sin(uTime*3.+h*100.));
-        col += vec3(0.9,0.95,1.)*star*1.6*smoothstep(0.,0.15,d.y);
+        col += vec3(0.9,0.95,1.)*star*1.6*uStars*smoothstep(0.,0.15,d.y);
         float mw = smoothstep(0.35, 0.0, abs(dot(d, normalize(vec3(0.4,0.6,0.7))) )) * fbm2(d.xz*6.)*0.06;
         col += vec3(0.5,0.55,0.7)*mw;
         // big cinematic moon (~5 deg wide) with maria, limb darkening and a soft halo
@@ -100,6 +119,32 @@ export class SkySystem {
     this.envT = -1e9; this.env = null;
     this.hour = 16.8; this.sunDir = new THREE.Vector3(); this.moonDir = new THREE.Vector3();
   }
+  // photo sky keyframes (assets/sky): each HDRI is placed at the hour where our sun has the same elevation
+  async loadPhotoSky(q) {
+    try {
+      const meta = await (await fetch('assets/sky/skies.json')).json(), res = q.desktop ? '4k' : '2k', loader = new THREE.TextureLoader();
+      const elev = (h) => { const th = (h - 6) / 12 * Math.PI, x = Math.cos(th), y = Math.sin(th) * 0.93, z = 0.727; return Math.asin(y / Math.hypot(x, y, z)) * 180 / Math.PI; };
+      const solve = (el, a, b) => { for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((elev(m) - el) * (elev(a) - el) <= 0) b = m; else a = m; } return (a + b) / 2; };
+      const K = meta.keys, hours = { night: 21.2, dawn: 5.45, sunrise: solve(K.sunrise.sunEl, 5.5, 12), morning: solve(K.morning.sunEl, 5.5, 12), noon: 12.6,
+        afternoon: solve(K.afternoon.sunEl, 12, 18.5), golden: solve(K.golden.sunEl, 12, 18.5), sunset: solve(K.sunset.sunEl, 12, 18.5) };
+      hours.dusk = hours.sunset + 0.75; hours.bluehour = hours.dusk + 0.55;
+      const load = (k) => new Promise((ok, bad) => loader.load(`assets/sky/${res}/${k}.jpg`, (t) => { t.colorSpace = THREE.NoColorSpace; t.generateMipmaps = false; t.minFilter = t.magFilter = THREE.LinearFilter; t.wrapS = THREE.RepeatWrapping; ok(t); }, undefined, bad));
+      const keys = [];
+      for (const k of Object.keys(hours)) keys.push({ k, h: hours[k], tex: await load(k), ...K[k] });
+      keys.sort((a, b) => a.h - b.h);
+      this.photo = { keys, over: { k: 'overcast', tex: await load('overcast'), ...K.overcast }, elMin: meta.elMin };
+      this.skyMat.uniforms.uPhoto.value = 1;
+      // the sea and lake reflect the same photo sky
+      for (const mat of this.waterMats || []) for (const k of ['uPA', 'uPB', 'uPO', 'uRot', 'uSc', 'uMix', 'uOver', 'uPhoto', 'uElMin']) mat.uniforms[k] = this.skyMat.uniforms[k]; this.skyMat.uniforms.uElMin.value = meta.elMin; this.clouds.visible = false; this.nightMat.uniforms.uStars.value = 0.25;
+    } catch (e) { console.warn('photo sky unavailable, using the procedural sky', e); this.photo = null; }
+  }
+  photoBlend(hour) {
+    const ks = this.photo.keys, n = ks.length; let i = n - 1;
+    for (let j = 0; j < n; j++) if (ks[j].h <= hour) i = j;
+    const A = ks[i], B = ks[(i + 1) % n], hb = B.h + (B.h <= A.h ? 24 : 0), hh = hour + (hour < A.h ? 24 : 0), span = hb - A.h;
+    const t = smooth(A.h + span * 0.2, hb - span * 0.2, hh);
+    return { A, B, t };
+  }
   setShadowQuality(size, range) {
     this.sun.shadow.mapSize.set(size, size);
     const c = this.sun.shadow.camera; c.left = c.bottom = -range; c.right = c.top = range; c.near = 10; c.far = 2400; c.updateProjectionMatrix();
@@ -109,7 +154,7 @@ export class SkySystem {
   update(dt, focus, t, timeScale, baking = false) {
     this.hour = (this.hour + dt * timeScale / 3600 + 24) % 24;
     const th = (this.hour - 6) / 12 * Math.PI;
-    this.sunDir.set(Math.cos(th), Math.sin(th) * 0.93, 0.36).normalize();
+    this.sunDir.set(Math.cos(th), Math.sin(th) * 0.93, 0.727).normalize();
     // the moon rides a low arc (max ~30 deg) so it hangs big over the skyline instead of straight overhead
     this.moonDir.set(-this.sunDir.x, -this.sunDir.y * 0.5, 0.8).normalize();
     const sy = this.sunDir.y;
@@ -128,6 +173,16 @@ export class SkySystem {
     m.uGlow.value.copy(C(1.0, 0.85, 0.6).lerp(C(1.0, 0.45, 0.15), golden)).multiplyScalar(smooth(-0.12, 0.05, sy) * (0.5 + 0.55 * golden));
     m.uDisc.value.copy(C(1.0, 0.95, 0.85).lerp(C(1.0, 0.55, 0.25), golden)).multiplyScalar(smooth(-0.03, 0.02, sy));
     m.uGround.value.copy(C(0.32, 0.36, 0.38)).multiplyScalar(lerp(0.08, 1, day));
+    if (this.photo) {
+      const { A, B, t } = this.photoBlend(this.hour), O = this.photo.over, over = clamp(U.uRain.value * 1.6, 0, 1), sAz = Math.atan2(this.sunDir.x, this.sunDir.z);
+      const rotOf = (k) => (k.night ? Math.atan2(this.moonDir.x, this.moonDir.z) : sAz) - k.sunU * Math.PI * 2;
+      m.uPA.value = A.tex; m.uPB.value = B.tex; m.uPO.value = O.tex; m.uMix.value = t; m.uOver.value = over;
+      m.uRot.value.set(rotOf(A), rotOf(B), rotOf(O)); m.uSc.value.set(1, 1, smooth(-0.1, 0.25, sy) * 0.9 + 0.04);
+      const pc = (key) => C(...A[key]).lerp(C(...B[key]), t).lerp(C(...O[key]).multiplyScalar(m.uSc.value.z), over);
+      zen.copy(pc('zenith')); horS.copy(pc('horS')); horA.copy(pc('horA'));
+      m.uZ.value.copy(zen); m.uH.value.copy(horS); m.uH2.value.copy(horA);
+      m.uGlow.value.multiplyScalar(0.45);
+    }
     const hor = horS.clone().lerp(horA, 0.5);
     U.uZenith.value.copy(zen); U.uHorizon.value.copy(hor);
     // clearer, bluer air than before: aerial perspective tinted by the sky instead of grey

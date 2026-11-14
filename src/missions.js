@@ -90,7 +90,7 @@ export class Missions {
   starts() { if (this.cur) return []; const out = []; for (const m of this.list) { if (this.done.has(m.id)) continue; const p = this.startAt(m); if (p) out.push({ m, x: p.x, z: p.z }); } return out; }
   updateStarts(dt) {
     const g = this.game, P = g.playerPos(), list = this.starts();
-    if (!this.startMeshes) { this.startMeshes = new Map(); this.startMat = markerMat(0xffd54f, 0.7); this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }); }
+    if (!this.startMeshes) { this.startMeshes = new Map(); this.startMat = markerMat(0xffd54f, 0.42); this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }); }
     const live = new Set();
     for (const st of list) {
       live.add(st.m.id); let o = this.startMeshes.get(st.m.id);

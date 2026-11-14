@@ -4,6 +4,7 @@ import * as M from './mapdata.js';
 import { buildEstates } from './estates.js';
 import { buildPromenade } from './promenade.js';
 import { buildCoast } from './coast.js';
+import { loadModels } from './models.js';
 import { addGlow, buildGlows } from './glow.js';
 import { U, NOISE, patch } from './shaders.js';
 import { R, rr, ri, pick, lerp, clamp, fbm, smooth, hexRGB } from './util.js';
@@ -1282,14 +1283,16 @@ export async function buildWorld(scene, q, progress, renderer) {
   await progress('Building forts and landmarks', 0.88);
   buildLandmarks(scene, mats);
   buildEstates(scene, q, mats, TX, regLod, addCol);
-  world.promenade = buildPromenade(scene, q, TX, { regLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [] });
+  const MD = await loadModels(q, ['boulder_01', 'coast_land_rocks_03', 'rock_07', 'coast_rocks_01', 'coast_rocks_02']);
+  world.models = MD;
+  world.promenade = buildPromenade(scene, q, TX, { regLod, instTiles, addCol, labels: world.labels, animated: world.animated, pillars: [], models: MD });
   buildPoles(scene, q);
   world.labels.push({ name: 'Jampore Villa Colony', x: M.L.villas.x, z: M.L.villas.z });
   { const p = M.estates.find((e) => e.name); if (p) world.labels.push({ name: 'Sagar Mahal (palace estate)', x: p.cx, z: p.cz }); }
   buildNature(scene, mats);
   buildBuildings(scene, q);
   buildBoats(scene);
-  world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated });
+  world.coast = buildCoast(scene, q, { instTiles, addCol, animated: world.animated, models: world.models });
   await progress('Growing the jungle', 0.93);
   buildTrees(scene, q, renderer);
   buildStreetLights(scene, q);

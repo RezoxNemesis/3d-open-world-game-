@@ -181,11 +181,15 @@ export function terrainMaterial(TX, splat, q) {
       float snow = smoothstep(880., 1020., vWP.y + nn*60.) * uSeason.w * (1. - smoothstep(0.45, 0.65, slope));
       col = mix(col, vec3(0.92,0.94,0.98), snow);
       gWet = uWet * (1. - rk*0.5);
-      col *= mix(1.0, 0.6, gWet * (1. - kS*0.4));
+      // wet sand at the waterline: the swash zone stays dark and glossy and mirrors the sky (sunset sheen on the beach)
+      float shore = smoothstep(0.75, 0.05, vWP.y + (nn - 0.5)*0.25) * step(-0.6, vWP.y) * (kS + kU*0.5);
+      col *= mix(1.0, 0.58, shore);
+      gWet = max(gWet, shore*0.95);
+      col *= mix(1.0, 0.6, gWet * (1. - kS*0.4) * (1. - shore));
       gWN = normalize(mix(vWN, nrm + vWN*(1.-gNear), gNear > 0.0 ? 1.0 : 0.0));
       gWN = normalize(mix(gWN, vWN, snow));
       diffuseColor.rgb = col;`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.32, gWet*0.85);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.12, gWet*0.9);')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (vWP.y < -0.35) {
           vec2 cq = vWP.xz*0.55; float ct = uTime*0.9; float cc = 0.;
@@ -261,9 +265,17 @@ export function updateTerrain(cam, q, force = false) {
 // ---------- water ----------
 export function waterMaterial(level, hTex) {
   return new THREE.ShaderMaterial({
-    transparent: true, side: THREE.DoubleSide, uniforms: { ...U, uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level } },
+    transparent: true, side: THREE.DoubleSide, uniforms: { ...U, uHeight: { value: hTex }, uHN: { value: M.N }, uHalf: { value: M.HALF }, uLevel: { value: level },
+      // photo-sky reflection (the sky system swaps in its own uniform objects once the photos are loaded)
+      uPA: { value: null }, uPB: { value: null }, uPO: { value: null }, uRot: { value: new THREE.Vector3() }, uSc: { value: new THREE.Vector3(1, 1, 1) }, uMix: { value: 0 }, uOver: { value: 0 }, uPhoto: { value: 0 }, uElMin: { value: -6 } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
     fragmentShader: `uniform float uTime,uNight,uFogDensity,uLevel,uRain; uniform vec3 uSunDir,uSunColor,uZenith,uHorizon,uFogColor,uAmbient; varying vec3 vW;
+    uniform sampler2D uPA, uPB, uPO; uniform vec3 uRot, uSc; uniform float uMix, uOver, uPhoto, uElMin;
+    vec3 photo(sampler2D t, float rot, vec3 d){
+      float az = atan(d.x, d.z) - rot, el = degrees(asin(clamp(d.y, -1., 1.)));
+      vec2 uv = vec2(fract(az/6.2831853), (max(el, uElMin) - uElMin)/(90. - uElMin));
+      vec3 L = pow(texture2D(t, uv).rgb, vec3(2.2)); return L/max(1. - L, 0.004);
+    }
     ${NOISE}
     ${HEIGHT_GLSL}
     float murky0(float m){ return 1. - m*0.6; }
@@ -296,6 +308,7 @@ export function waterMaterial(level, hTex) {
       float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
       vec3 Rf = reflect(-V, n);
       vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
+      if (uPhoto > 0.5) { vec3 rd = vec3(Rf.x, max(Rf.y, 0.02), Rf.z); sky = mix(photo(uPA, uRot.x, rd)*uSc.x, photo(uPB, uRot.y, rd)*uSc.y, uMix); if (uOver > 0.001) sky = mix(sky, photo(uPO, uRot.z, rd)*uSc.z, uOver); sky += vec3(0.01,0.016,0.03)*uNight; }
       vec3 moonD = normalize(vec3(-uSunDir.x, -uSunDir.y*0.5, 0.8));
       float murky = (uLevel > 1. || (p.x > -2900. && p.x < 6100.)) ? 1. : 0.;
       vec3 deep = mix(vec3(0.012,0.12,0.19), vec3(0.05,0.1,0.07), murky), shal = mix(vec3(0.05,0.5,0.47), vec3(0.2,0.24,0.14), murky);

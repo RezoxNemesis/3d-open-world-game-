@@ -11,6 +11,9 @@ writeFileSync('dist/index.html', html.replace('<!--GAME-->', '<script src="game.
 if (existsSync('assets/tex')) cpSync('assets/tex', 'dist/assets/tex', { recursive: true });
 // realistic hero avatars (Microsoft Rocketbox, MIT): dist/assets/avatars/<name>/{model.fbx, *.jpg}
 if (existsSync('assets/avatars')) cpSync('assets/avatars', 'dist/assets/avatars', { recursive: true });
+// photo skies (Poly Haven CC0 HDRIs, prepared by tools/blender/prep_skies.py) and Blender-processed models
+if (existsSync('assets/sky')) cpSync('assets/sky', 'dist/assets/sky', { recursive: true });
+if (existsSync('assets/models')) cpSync('assets/models', 'dist/assets/models', { recursive: true });
 // single-file build: embed the 1K textures as data URLs so it still works from one HTML file
 let embed = '';
 if (existsSync('assets/tex/1k')) {

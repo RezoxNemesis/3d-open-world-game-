@@ -28,7 +28,7 @@ function scaleSkin(top, top2, belly, glow) {
   }, 'scaleskin' + top);
   return m;
 }
-const beaconMat = (c) => beaconMaterial(c, 0.3);
+const beaconMat = (c) => beaconMaterial(c, 0.2);
 function sphereHit(origin, dir, maxT, c, r) {
   const vx = c.x - origin.x, vy = c.y - origin.y, vz = c.z - origin.z, t = vx * dir.x + vy * dir.y + vz * dir.z;
   if (t < 0 || t > maxT) return -1;
