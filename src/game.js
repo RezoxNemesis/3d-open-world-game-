@@ -7,6 +7,8 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GUNS } from './aimrig.js';
 import { Upscaler, UPSCALE_MODES } from './upscale.js';
+import { ATMO } from './atmo.js';
+import { Rift } from './rift.js';
 import { Benchmark, showBenchResults } from './bench.js';
 import * as M from './mapdata.js';
 import { buildWorld, world, updateWorld, updateTrees, updateWorldLOD } from './world.js';
@@ -30,7 +32,7 @@ import { NPCs } from './npc.js';
 import { Interiors } from './interiors.js';
 import { Weather, SEASONS } from './weather.js';
 import { Missions } from './missions.js';
-import { initFx, updateFx, burst, explosion, tracer, setWeb, fx, initRain, updateRain } from './fx.js';
+import { initFx, updateFx, burst, explosion, emit, tracer, setWeb, fx, initRain, updateRain } from './fx.js';
 import { audio, initAudio, sfx, setMood, say, updateAmbience, setVolumes } from './audio.js';
 import { input, pollInput, endFrame } from './input.js';
 import { clamp, lerp, damp, dampAngle, angDiff, nextFrame } from './util.js';
@@ -42,6 +44,7 @@ export const TOOLS = [
   { id: 'flash', name: 'Flash Speed', power: 'flash', unlockLine: 'The Naag Mani... I can feel lightning in my legs!' },
   { id: 'slam', name: 'Thunder Slam', power: 'slam', unlockLine: 'The Makara pearl. Watch this — the ground will shake.' },
   { id: 'fly', name: 'Flight', power: 'flight', unlockLine: 'The Rakshasa crown... we can fly!' },
+  { id: 'blink', name: 'Rift Step', power: 'blink', unlockLine: 'The shard opens a door wherever I look. One step, and I am there.' },
 ];
 const BLACK = new THREE.Color(0);
 function angDiffG(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
@@ -56,7 +59,7 @@ export class Game {
     this.renderer = renderer; this.q = q; this.presetKey = presetKey; this.hud = hud; hud.game = this;
     this.scene = new THREE.Scene(); this.cam = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.4, q.far);
     this.rig = new CameraRig(this.cam); this.time = 0; this.paused = false; this.money = 2500; this.timeScale = 60; this.fpsOn = false;
-    this.vehicles = []; this.missiles = []; this.threats = []; this.powersUnlocked = new Set(); this.world = world; this.camMode = 'foot'; this.fps = 60;
+    this.vehicles = []; this.missiles = []; this.threats = []; this.powersUnlocked = new Set(); this.choices = {}; this.world = world; this.camMode = 'foot'; this.fps = 60;
   }
   async init(progress) {
     const S = this.scene, q = this.q;
@@ -109,6 +112,8 @@ export class Game {
     await this.sky.loadPhotoSky(q);
     this.sky.bakeEnv(this.sky.photo ? this.sky.photo.keys.map((k) => k.h) : q.desktop ? [0, 5.8, 6.6, 8, 10.5, 13, 15.5, 17.3, 18.3, 19.2, 21.5] : [0, 6.2, 9, 13, 17.4, 18.6, 21.5]);
     this.sky.updateEnv(this.sky.hour);
+    this.rift = new Rift(this);
+    { const rm = this.missions.list.find((m) => m.rift); if (rm && !this.missions.done.has('rift') && !this.missions.locked(rm)) this.rift.omen(this.missions.riftSite, true); }
     await progress('Warming up the graphics', 0.995);
     await this.precompile();
     this.renderer.shadowMap.autoUpdate = false; this.frameNo = 0;
@@ -133,6 +138,7 @@ export class Game {
   addVehicle(kind, key, color, x, z, ang) { const v = new Vehicle(this, kind, key, color, x, z, ang); this.vehicles.push(v); return v; }
   setupPost() {
     const q = this.q, r = this.renderer;
+    ATMO.linear = !!(q.bloom || q.ao);     // with post-processing the scene is drawn into a linear buffer
     if (!q.bloom && !q.ao) { this.composer = null; return; }
     const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: q.msaa });
     this.composer = new EffectComposer(r, rt);
@@ -279,7 +285,7 @@ export class Game {
       else { const foe = this.nearestFoe(sh, 45); if (foe) { sh.yaw = Math.atan2(foe.pos.x - sh.pos.x, foe.pos.z - sh.pos.z); dir = new V3(foe.pos.x, foe.pos.y + 1.2, foe.pos.z).sub(hand).normalize(); } else { dir = this.rig.forward.clone(); dir.y = Math.max(dir.y, -0.2); dir.normalize(); sh.yaw = Math.atan2(dir.x, dir.z); } }
     } else dir = c.aimDir ? c.aimDir.clone() : sh.forward();
     dir.x += (Math.random() - 0.5) * W.spread; dir.y += (Math.random() - 0.5) * W.spread; dir.z += (Math.random() - 0.5) * W.spread; dir.normalize();
-    const end = this.rayHit(hand, dir, W.range, sh.team === 'hero' ? 'hero' : 'foe', W.dmg * (sh === this.player ? 1 : 0.55), sh);
+    const end = this.rayHit(hand, dir, W.range, sh.team === 'hero' ? 'hero' : 'foe', W.dmg * (sh === this.player ? 1 : 0.55) * (sh.team === 'hero' && this.choices.rift === 'lab' ? 1.6 : 1), sh);
     burst('muzzle', hand.x, hand.y, hand.z, 1); tracer(hand, end); sfx(W.sound, 1, this.camDist(hand));
     this.addThreat(hand, 70);
     if (sh.team === 'hero' && !this.interior.active) { setPanic(hand.x, hand.z, 120); if (densityAt(hand.x, hand.z) > 0.3) this.npcs.crime(1); }
@@ -493,6 +499,19 @@ export class Game {
     } else if (power === 'flight') {
       if (p.state === 'fly') { p.state = 'air'; p.usedFlip = true; return; }
       if (['ground', 'air', 'glide', 'chute', 'web', 'swim'].includes(p.state)) { if (p.state === 'ground' || p.state === 'swim') p.vel.y = 9; p.state = 'fly'; p.chute.visible = false; p.anchor = null; sfx('whoosh', 1); burst('dust', p.pos.x, p.pos.y, p.pos.z, 20, 1.2); }
+    } else if (power === 'blink') {
+      // Rift Step: a jump of up to 20 m in the direction you face, landing with a shockwave
+      if ((p.blinkCd || 0) > this.time) { this.hud.toast('Rift Step recharging', 0.8, '#9e9e9e'); return; }
+      if (p.vehicle || p.mount || this.inside || !['ground', 'air', 'glide', 'fly'].includes(p.state)) return;
+      const f = p.forward(), y0 = p.pos.y;
+      const blocked = (x, z) => { for (const i of M.collidersNear(x, z)) { const c = M.colliders[i]; if (x > c.x0 - 0.6 && x < c.x1 + 0.6 && z > c.z0 - 0.6 && z < c.z1 + 0.6 && y0 < (c.y1 ?? 1e9)) return true; } return false; };
+      let d = 20; while (d > 3 && blocked(p.pos.x + f.x * d, p.pos.z + f.z * d)) d -= 1.5;
+      if (d <= 3) { this.hud.toast('No room to step through', 0.8, '#9e9e9e'); return; }
+      for (let k = 0; k < 14; k++) emit(0, p.pos.x + (Math.random() - 0.5), y0 + Math.random() * 1.8, p.pos.z + (Math.random() - 0.5), f.x * 14, 1, f.z * 14, 0.5, 0.3, 2.6, 0.5, 3.2);
+      const x = p.pos.x + f.x * d, z = p.pos.z + f.z * d, gy = M.groundAt(x, z, y0 + 2);
+      p.pos.set(x, p.state === 'ground' ? gy : Math.max(gy, y0), z); p.vel.multiplyScalar(0.3); p.inv = Math.max(p.inv || 0, 0.4); p.blinkCd = this.time + 2.5;
+      sfx('riftclose', 0.45); this.shake(0.25); burst('spark', x, p.pos.y + 1, z, 26, 1.4);
+      for (const e of this.npcs.enemies) if (e.alive && e.pos.distanceTo(p.pos) < 4.5) e.damage(35, p, 9, true);
     } else if (power === 'slam') {
       if (p.state === 'slam' || (p.slamCd || 0) > this.time) return;
       p.slamUp = p.state === 'ground'; p.state = 'slam'; p.slamT = 0; p.chute.visible = false; p.anchor = null; sfx('whoosh', 1);
@@ -710,6 +729,7 @@ export class Game {
     // systems
     const P = this.playerPos();
     this.npcs.update(dt);
+    this.rift.update(dt);
     for (const a of this.animals) a.update(dt, P);
     for (const b of this.bosses) b.update(dt);
     this.interior.update(dt);
@@ -722,6 +742,7 @@ export class Game {
     // sky / weather / world
     this.sky.update(dt, P, this.time, this.timeScale);
     this.weather.update(dt, this.sky, this.sky.hour);
+    this.rift.tint(this.sky, this.scene);
     if (this.inside) { this.sky.sun.intensity = 0; this.sky.sun.shadow.intensity = 0; const cave = this.interior.type === 'cave'; this.sky.hemi.intensity = cave ? 1.6 : 0.7; if (cave) { this.sky.hemi.color.setRGB(0.25, 0.35, 0.5); this.sky.hemi.groundColor.setRGB(0.1, 0.08, 0.12); } else { this.sky.hemi.color.setRGB(1, 0.92, 0.8); this.sky.hemi.groundColor.setRGB(0.5, 0.42, 0.35); } this.scene.environmentIntensity = 0.3; this.scene.background = BLACK; } else this.scene.background = null;
     this.renderer.toneMappingExposure = this.sky.exposure * (this.inside ? 1.2 : 1);
     if (!this.inside) { const L = this.interior.lights[0], n = U.uNight.value; if (n > 0.3) { const pp = this.playerPos(); L.color.setRGB(1, 0.85, 0.65); L.position.set(pp.x + 1.5, pp.y + 7, pp.z + 1.5); L.intensity = 90 * n; L.distance = 30; } else if (L.intensity > 0) { L.intensity = 0; L.position.set(0, -2000, 0); } }
@@ -786,7 +807,7 @@ export class Game {
     updateAmbience(dt, { ocean: inside ? 0 : clamp(1 - coastD / 450, 0, 1) * clamp(1 - alt / 300, 0, 1), wind: inside ? 0 : clamp((p.vel.length() - 8) / 30, 0, 1) + (v && v.kind !== 'car' ? 0.3 : 0) + clamp(alt / 400, 0, 0.6), rain: inside ? this.weather.rain * 0.3 : this.weather.rain, crowd: inside ? 0 : clamp(densityAt(P.x, P.z), 0, 1) * clamp(1 - alt / 60, 0, 1), falls: inside ? 0 : clamp(1 - fallsD / 400, 0, 1), traffic: inside ? 0 : M.zoneAt(P.x, P.z) === 'rural' ? 0.15 : 0.6, birds: inside ? 0 : (1 - night) * (M.isJungle(P.x, P.z) ? 1 : 0.4), crickets: inside ? 0 : night * 0.8, horns: inside ? 0 : M.zoneAt(P.x, P.z) === 'nani' || M.zoneAt(P.x, P.z) === 'moti' ? 1 : 0 });
     let mood;
     const fighting = this.npcs.enemies.some((e) => e.alive && e.ai && e.ai.alert && e.pos.distanceTo(P) < 45) || this.npcs.wanted >= 2;
-    if (this.bosses.some((b) => b.active)) mood = 'boss'; else if (fighting) mood = 'combat'; else if (inside) mood = 'interior';
+    if (this.bosses.some((b) => b.active)) mood = 'boss'; else if (this.rift.active && this.rift.dark > 0.2) mood = 'rift'; else if (fighting) mood = 'combat'; else if (inside) mood = 'interior';
     else if (v && (v.kind === 'car' || v.kind === 'boat')) mood = 'drive'; else if (v || p.state === 'glide' || p.state === 'web') mood = 'fly';
     else if (M.isJungle(P.x, P.z) || P.x > 6500) mood = 'jungle';
     else { const h = this.sky.hour; mood = h >= 5 && h < 9 ? 'morning' : h < 16 ? 'day' : h < 19.5 ? 'evening' : 'night'; }
@@ -802,13 +823,13 @@ export class Game {
   save() {
     try {
       const p = this.player, P = this.playerPos();
-      localStorage.setItem('damanduo.save', JSON.stringify({ money: this.money, done: [...this.missions.done], season: this.weather.season, hour: this.sky.hour, pos: this.inside ? null : [P.x, P.z], hero: 'vikas', chests: this.uw ? [...this.uw.found] : [], powers: [...this.powersUnlocked], tools: [this.vikas.toolId, this.mira.toolId], music: audio.musicVol, voices: audio.voiceOn, sens: input.sens }));
+      localStorage.setItem('damanduo.save', JSON.stringify({ money: this.money, choices: this.choices, done: [...this.missions.done], season: this.weather.season, hour: this.sky.hour, pos: this.inside ? null : [P.x, P.z], hero: 'vikas', chests: this.uw ? [...this.uw.found] : [], powers: [...this.powersUnlocked], tools: [this.vikas.toolId, this.mira.toolId], music: audio.musicVol, voices: audio.voiceOn, sens: input.sens }));
     } catch (e) {}
   }
   load() {
     let s = null; try { s = JSON.parse(localStorage.getItem('damanduo.save') || 'null'); } catch (e) {}
     if (!s || this.newGame) return;
-    this.money = s.money ?? this.money; for (const d of s.done || []) this.missions.done.add(d);
+    this.money = s.money ?? this.money; for (const d of s.done || []) this.missions.done.add(d); if (s.choices) this.choices = { ...s.choices };
     if (s.season) this.weather.setSeason(s.season); if (s.hour !== undefined) this.sky.hour = s.hour;
     if (s.pos) { const [x, z] = s.pos; if (Math.abs(x) < M.HALF && Math.abs(z) < M.HALF && M.terrainH(x, z) > 0.5) { this.vikas.pos.set(x, M.groundAt(x, z), z); this.mira.pos.set(x + 1.5, M.groundAt(x + 1.5, z), z); } }
     if (s.chests && this.uw) this.uw.restore(s.chests);

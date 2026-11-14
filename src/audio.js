@@ -64,7 +64,7 @@ function playBuf(buf, when, gain, bus, rate = 1, toRev = 0) {
 }
 
 // ---------- generative music ----------
-const RAGA = { bilawal: [0, 2, 4, 5, 7, 9, 11], yaman: [0, 2, 4, 6, 7, 9, 11], bhairav: [0, 1, 4, 5, 7, 8, 11], malkauns: [0, 3, 5, 8, 10], kafi: [0, 2, 3, 5, 7, 9, 10], bhairavi: [0, 1, 3, 5, 7, 8, 10], desh: [0, 2, 5, 7, 9, 11] };
+const RAGA = { bilawal: [0, 2, 4, 5, 7, 9, 11], yaman: [0, 2, 4, 6, 7, 9, 11], bhairav: [0, 1, 4, 5, 7, 8, 11], malkauns: [0, 3, 5, 8, 10], kafi: [0, 2, 3, 5, 7, 9, 10], bhairavi: [0, 1, 3, 5, 7, 8, 10], desh: [0, 2, 5, 7, 9, 11], todi: [0, 1, 3, 6, 7, 8, 11] };
 const SA = 146.83;
 const MOODS = {
   title: { raga: 'yaman', bpm: 72, perc: 'tabla', lead: 'sitar', density: 0.5, drone: 1, pad: 0.3 },
@@ -77,6 +77,7 @@ const MOODS = {
   fly: { raga: 'yaman', bpm: 100, perc: 'electro', lead: 'flute', density: 0.45, drone: 0.4, pad: 0.8, bass: 1 },
   combat: { raga: 'kafi', bpm: 138, perc: 'dhol', lead: 'sitar', density: 0.7, drone: 0.5, pad: 0.6, bass: 1 },
   boss: { raga: 'bhairavi', bpm: 120, perc: 'dhol', lead: 'flute', density: 0.6, drone: 0.8, pad: 1, bass: 1 },
+  rift: { raga: 'todi', bpm: 104, perc: 'dhol', lead: 'flute', density: 0.5, drone: 1, pad: 1, bass: 1 },
   interior: { raga: 'desh', bpm: 70, perc: 'tabla', lead: 'sitar', density: 0.35, drone: 0.6, pad: 0 },
 };
 const M = { step: 0, next: 0, deg: 0, phrase: [], cur: null, drone: null, pad: null };
@@ -191,6 +192,10 @@ export function sfx(name, vol = 1, dist = 0) {
     case 'trumpet': tone(t, 1.3, 330, 520, 0.4 * v, 'sawtooth'); break;
     case 'hoof': noise(t, 0.05, 600, 200, 0.3 * v, 'lowpass'); break;
     case 'missile': noise(t, 1.0, 900, 3000, 0.4 * v, 'bandpass'); break;
+    case 'rift': noise(t, 3.2, 90, 900, 1.1 * v, 'lowpass', 3); tone(t, 3.0, 38, 110, 0.9 * v, 'sawtooth'); tone(t + 0.4, 2.4, 1400, 240, 0.12 * v, 'triangle'); break;
+    case 'riftclose': tone(t, 1.1, 320, 30, 0.8 * v, 'sawtooth'); noise(t, 0.9, 3200, 80, 0.8 * v, 'lowpass', 2); tone(t + 0.9, 0.5, 60, 28, 1.0 * v); break;
+    case 'shade': tone(t, 0.7, 520, 150, 0.22 * v, 'sawtooth'); noise(t, 0.6, 2600, 700, 0.25 * v, 'bandpass', 6); break;
+    case 'choice': [0, 7, 12].forEach((k, i) => tone(t + i * 0.09, 0.6, 330 * Math.pow(2, k / 12), 330 * Math.pow(2, k / 12), 0.14 * v, 'sine')); break;
     case 'door': tone(t, 0.25, 180, 120, 0.3 * v, 'triangle'); noise(t, 0.2, 400, 200, 0.2 * v, 'lowpass'); break;
   }
 }

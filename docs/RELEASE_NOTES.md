@@ -1,3 +1,23 @@
+## Daman Duo — v1.13 "Outbreak" update
+
+**The portal outbreak**
+- **The sky tears open.** Once you have finished any three missions, a rift appears in the sky over Moti Daman: a churning violet tear with lightning under it, and the sky bruises dark around it. You can see it from town.
+- **New mission: The Sky Tears Open.** Three anchors pin the rift to the ground. Stand inside an anchor ring until it breaks while shades keep stepping out of the gates beside them. When the second anchor falls, a Shade Lord comes through. Break all three and the rift collapses.
+- **Shades:** tall horned figures of dark smoke-skin with burning eyes and a glowing heart. They fight hand to hand and are faster than gangsters.
+- **New music and sounds** for the rift: a dark raga (Todi) with dhol, the tear opening, anchors breaking, and the shades.
+
+**Your choices**
+- **Missions can now end in a choice,** shown as a card: tap an option or press 1 to 4. The choice is saved and changes the game afterwards.
+- **The rift shard** (after the outbreak):
+  - *Shatter it:* the rifts end and the town pays its guardians ₹50,000.
+  - *Keep it:* a new power, **Rift Step**, jumps you up to 20 m in the direction you face and knocks down anything where you land. But the shard pulls small rifts open around you from time to time (seal them for ₹3,000 each).
+  - *Give it to Arjun for the Navy lab:* ₹20,000 and rift-forged rounds: your pistol and rifle hit 60% harder.
+- **The gang boss** (after Kaala Naag Gang): hand him to the police (₹5,000, and wanted stars fade twice as fast from then on) or take his cash and let him run (₹20,000, but the gang ambushes you in town).
+
+**A better-looking world**
+- **Air and distance.** A new atmosphere model: haze that is thickest near the ground and thins with height, so far hills and the far side of town go pale and melt into the sky instead of ending sharply. Towards the sun the haze takes the colour of the sky around it, which shows most at sunrise and sunset. The sea uses the same haze.
+- **The town is no longer bare earth.** The ground between buildings is now a patchwork of concrete yards, paved courts, gardens and packed earth with kerbs between the plots. From the air the town reads as built-up land; on foot you walk over slabs, paving and grass.
+
 ## Daman Duo — v1.12 "Motion and stability" update
 
 **Movement**
