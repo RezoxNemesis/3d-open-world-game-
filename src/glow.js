@@ -69,7 +69,7 @@ export function buildGlows(scene, q) {
         }`,
       fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vC; varying float vK; varying vec3 vW; ${NOISE}
         void main(){
-          float across = exp(-vUv.x*vUv.x*3.5), along = smoothstep(0.0, 0.18, vUv.y)*pow(1.0 - vUv.y, 1.6);
+          float across = exp(-vUv.x*vUv.x*3.5), along = smoothstep(0.0, 0.18, vUv.y)*pow(max(1.0 - vUv.y, 0.0), 1.6);
           float rip = 0.65 + 0.7*vn(vW.xz*vec2(2.2, 0.6) + uTime*vec2(0.0, 0.8));   // rain ripples break the streak up
           gl_FragColor = vec4(vC*across*along*rip*vK*0.9, 1.0);
           #include <tonemapping_fragment>

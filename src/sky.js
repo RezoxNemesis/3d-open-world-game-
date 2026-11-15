@@ -36,7 +36,7 @@ export class SkySystem {
         }
         vec2 sh = normalize(uSun.xz + 1e-4), dh = normalize(d.xz + 1e-4);
         float toward = dot(sh, dh)*0.5 + 0.5;                             // 1 facing the sun, 0 away
-        vec3 hor = mix(uH2, uH, pow(toward, 1.6));                         // horizon warmer toward the sun
+        vec3 hor = mix(uH2, uH, pow(clamp(toward, 0.0, 1.0), 1.6));                         // horizon warmer toward the sun
         float t = pow(1.0 - clamp(h, 0.0, 1.0), 4.0);
         vec3 col = mix(uZ, hor, t);
         col = mix(col, mix(hor, uGround, 0.6), smoothstep(0.0, -0.08, h)); // below the horizon: haze into ground tone
@@ -91,7 +91,7 @@ export class SkySystem {
         vec3 lit = uSunColor*1.25 + uZenith*0.35 + vec3(0.05);
         vec3 shade = mix(uAmbient*0.85 + uHorizon*0.3, uHorizon*0.75, 0.35);
         vec3 col = mix(lit, shade, clamp(occ*0.85 + core*0.25, 0.0, 1.0));
-        col += uSunColor*pow(1.0 - core, 4.0)*0.6*sunUp;                // silver lining on thin edges
+        col += uSunColor*pow(clamp(1.0 - core, 0.0, 1.0), 4.0)*0.6*sunUp;                // silver lining on thin edges
         // view-dependent forward scattering toward the sun
         vec3 V = normalize(vW - cameraPosition); float fwd = pow(max(dot(V, uSunDir), 0.0), 8.0);
         col += uSunColor*fwd*(1.0 - core)*1.2;

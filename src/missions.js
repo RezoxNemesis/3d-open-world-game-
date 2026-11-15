@@ -4,6 +4,7 @@ import * as M from './mapdata.js';
 import { say, sfx, setMood } from './audio.js';
 import { U } from './shaders.js';
 import { showChoice } from './choice.js';
+import { HDR_GUARD } from './hdrsafe.js';
 
 export class Missions {
   constructor(game) {
@@ -232,6 +233,6 @@ function markerMat(color, k) {
   return new THREE.ShaderMaterial({
     uniforms: { uC: { value: new THREE.Color(color) }, uK: { value: k }, uTime: U.uTime }, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: 'uniform vec3 uC; uniform float uK, uTime; varying vec2 vUv; void main(){ float a = pow(1.0 - vUv.y, 2.4)*uK*(0.82 + 0.18*sin(uTime*3.0 - vUv.y*9.0)); gl_FragColor = vec4(uC*a, 1.0); }',
+    fragmentShader: 'uniform vec3 uC; uniform float uK, uTime; varying vec2 vUv; void main(){ float a = pow(max(1.0 - vUv.y, 0.0), 2.4)*uK*(0.82 + 0.18*sin(uTime*3.0 - vUv.y*9.0)); gl_FragColor = vec4(uC*a, 1.0); ' + HDR_GUARD + ' }',   // max(): interpolation can push vUv.y a hair past 1, and pow() of a negative is NaN on real GPUs
   });
 }

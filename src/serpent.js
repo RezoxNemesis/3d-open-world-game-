@@ -124,7 +124,7 @@ export class Serpent {
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.55, 0.22, sDome);')
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // oil-slick iridescence on the scales + glowing runes that brighten with rage
-        vec3 Vv = normalize(vViewPosition); float fr = pow(1.0 - abs(dot(normal, Vv)), 3.0);
+        vec3 Vv = normalize(vViewPosition); float fr = pow(max(1.0 - abs(dot(normal, Vv)), 0.0), 3.0);
         totalEmissiveRadiance += (0.5 + 0.5*cos(6.2831*(fr*1.5 + vec3(0.0,0.33,0.67) + vSUv.y*0.02)))*fr*sDome*0.12*(1.-belly);
         totalEmissiveRadiance += vec3(0.6,0.1,1.0)*rune*(1.2 + uRage*3.0);`);
     }, 'serpent');

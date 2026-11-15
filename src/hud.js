@@ -6,6 +6,19 @@ import { audio } from './audio.js';
 
 const $ = (tag, attrs = {}, parent) => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'text') e.textContent = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (parent) parent.appendChild(e); return e; };
 const TIPS = ['Chai is how Vikas unwinds: make a cup at any stall or home kitchen to heal and stay relaxed for a while.', 'Hold WEB in the air to swing between buildings and trees.', 'Climb any wall: run into it and keep pushing, or jump onto it.', 'Jump off the Daman Sky Tower and open your parachute with CHUTE.', 'Bosses are marked ☠ on the map — tap one on the map, or use Menu → Bosses → FIGHT.', 'Jampore Villa Colony is full of mansions you can walk into.', 'Kaala Naag sleeps beneath Naag Sarovar on the plateau…', 'Fighter jets wait at Daman Airport. Missiles lock on to big targets.', 'Horses graze on Jampore beach and at the Jungle Camp.', 'Monsoon brings storms; winter brings fog and mustard fields.'];
+// the keys for each activity (keyboard and mouse). A third entry is a condition: the row shows only when it is true.
+const GUIDES = {
+  foot: ['ON FOOT', [['W A S D', 'Move'], ['Mouse', 'Look around'], ['Shift', 'Sprint (tap: dodge roll)'], ['Space', 'Jump · hold in the air to glide'], ['LMB', 'Punch / use weapon'], ['RMB', 'Aim'], ['Tab', 'Next weapon (1 2 3 4 pick)'], ['E', 'Kick'], ['R', 'Web swing', 'web'], ['F', 'Enter car / talk / use'], ['M', 'Map'], ['Esc', 'Menu']]],
+  car: ['DRIVING', [['W', 'Accelerate'], ['S', 'Brake, then reverse'], ['A D', 'Steer'], ['Space', 'Handbrake: hold in a turn to drift'], ['Shift', 'Nitro boost', 'nitro'], ['B', 'Brake only (no reverse)'], ['H', 'Horn'], ['V', 'Change view'], ['F', 'Get out']]],
+  bike: ['RIDING', [['W', 'Accelerate'], ['S', 'Brake, then reverse'], ['A D', 'Steer (the bike leans by itself)'], ['Space', 'Rear brake: slide the back wheel'], ['Shift', 'Nitro boost', 'nitro'], ['H', 'Horn'], ['F', 'Get off']]],
+  boat: ['BOAT', [['W S', 'Throttle forward / back'], ['A D', 'Steer'], ['F', 'Leave the boat']]],
+  heli: ['HELICOPTER', [['Space', 'Climb'], ['C / Shift', 'Descend'], ['W A S D', 'Fly forward, back, sideways'], ['Z Y', 'Turn left / right'], ['LMB', 'Guns'], ['F', 'Get out (on the ground)']]],
+  plane: ['AIRCRAFT', [['Space', 'Throttle up'], ['C', 'Throttle down (air brake)'], ['W S', 'Nose down / up'], ['A D', 'Roll left / right'], ['Z Y', 'Rudder'], ['Shift', 'Afterburner at full throttle', 'fighter'], ['LMB', 'Guns', 'fighter'], ['E', 'Missile', 'fighter'], ['F', 'Get out (on the ground)']]],
+  horse: ['HORSE', [['W A S D', 'Ride'], ['Shift', 'Gallop'], ['Space', 'Jump'], ['F', 'Dismount']]],
+  swing: ['WEB SWING', [['R', 'Hold to swing · let go to launch'], ['W A S D', 'Steer the swing'], ['Space', 'Let go and jump higher'], ['Shift', 'Pull in: swing faster']]],
+  fly: ['FLYING', [['W A S D', 'Fly'], ['Space', 'Up'], ['C', 'Down'], ['Shift', 'Fast'], ['F', 'Land']]],
+  swim: ['SWIMMING', [['W A S D', 'Swim'], ['C', 'Dive'], ['Space', 'Surface'], ['Shift', 'Fast stroke']]],
+};
 export class HUD {
   constructor(game) {
     this.game = game; this.root = $('div', { id: 'hud', class: 'ui' }, document.body); this.root.style.display = 'none';
@@ -19,6 +32,11 @@ export class HUD {
     this.promptEl = $('div', { id: 'prompt' }, this.root); this.promptEl.onclick = () => { touchApi.down('interact'); setTimeout(() => touchApi.up('interact'), 80); };
     this.obj = $('div', { id: 'objective' }, this.root); this.sub = $('div', { id: 'subtitle' }, this.root); this.toastEl = $('div', { id: 'toast' }, this.root);
     this.speedo = $('div', { id: 'speedo' }, this.root); this.cross = $('div', { id: 'cross' }, this.root);
+    // controls guide: a card of the keys for what you are doing now (on foot, driving, flying, swinging ...). It appears
+    // whenever that changes and fades after a while; K pins it open or hides it.
+    this.guideEl = $('div', { id: 'guide' }, this.root); this.guideHint = $('div', { id: 'guidehint', html: '<kbd>K</kbd>controls' }, this.root);
+    this.guideMode = ''; this.guideT = 0; this.guidePin = false; try { this.guidePin = localStorage.getItem('damanduo.guide') === '1'; } catch (e) {}
+    addEventListener('keydown', (e) => { if (e.code === 'KeyK' && !(e.target && e.target.tagName === 'INPUT')) { const open = this.guidePin || this.guideT > 0; this.guidePin = !open; this.guideT = 0; this.guideSig = ''; try { localStorage.setItem('damanduo.guide', this.guidePin ? '1' : '0'); } catch (err) {} } });
     this.bossEl = $('div', { id: 'boss', html: '<span></span><div class="hp"><div></div></div>' }, this.root);
     this.fps = $('div', { id: 'fps' }, this.root);
     const pb = $('div', { id: 'pausebtn', text: '❚❚' }, this.root); pb.onclick = () => this.openMenu();
@@ -86,6 +104,22 @@ export class HUD {
     this.curMode = '';
   }
   showTouch(on) { this.touch.style.display = on ? 'block' : 'none'; this.touchOn = on; }
+  // mode: foot | car | bike | boat | heli | plane | jet | horse | swing | air | fly | glide | chute | swim | dive | climb | busy
+  guide(mode, o = {}) {
+    if (this.touchOn) { this.guideEl.style.display = this.guideHint.style.display = 'none'; return; }     // touch buttons carry their own labels
+    const G = GUIDES[mode] || GUIDES[{ air: 'foot', busy: 'foot', climb: 'foot', glide: 'foot', chute: 'foot', dive: 'swim', jet: 'plane' }[mode]] || GUIDES.foot;
+    const sig = G[0] + (o.nitro ? 'n' : '') + (o.fighter ? 'f' : '') + (o.web ? 'w' : '');
+    if (sig !== this.guideSig) {
+      if (G[0] !== this.guideMode) { this.guideMode = G[0]; this.guideT = G[0] === 'ON FOOT' ? 14 : 18; }       // a new activity: show its keys for a while
+      this.guideSig = sig;
+      const rows = G[1].filter((r) => !r[2] || o[r[2]]);
+      this.guideEl.innerHTML = `<h4>${G[0]}</h4>` + rows.map(([k, t]) => `<div class="r"><span class="k">${k.split(' ').map((x) => x === '/' || x === '+' ? x : `<kbd>${x}</kbd>`).join('')}</span><span>${t}</span></div>`).join('') + '<div class="f"><kbd>K</kbd> hide / pin this card</div>';
+    }
+    if (this.guideT > 0) this.guideT -= o.dt || 0;
+    const show = this.guidePin || this.guideT > 0;
+    this.guideEl.style.display = show ? 'block' : 'none'; this.guideEl.style.opacity = this.guidePin || this.guideT > 1.2 ? 1 : Math.max(0, this.guideT / 1.2);
+    this.guideHint.style.display = show ? 'none' : 'block';
+  }
   setMode(mode, canAct, canCounter) {
     const pl = this.game.player, tool = pl && this.game.toolOf ? this.game.toolOf(pl) : null;
     const key = mode + (canAct ? '+' : '') + (canCounter ? 'C' : '') + (tool ? tool.id : '');

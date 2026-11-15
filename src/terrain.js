@@ -344,7 +344,7 @@ export function waterMaterial(level, hTex) {
         #include <colorspace_fragment>
         return;
       }
-      float fres = 0.02 + 0.98*pow(1. - max(dot(n,V),0.), 5.);
+      float fres = 0.02 + 0.98*pow(clamp(1. - dot(n,V), 0., 1.), 5.);
       vec3 Rf = reflect(-V, n);
       vec3 sky = mix(uHorizon, uZenith, clamp(Rf.y*1.6, 0., 1.)) + vec3(0.025,0.04,0.08)*uNight;
       if (uPhoto > 0.5) { vec3 rd = vec3(Rf.x, max(Rf.y, 0.02), Rf.z); sky = mix(photo(uPA, uRot.x, rd)*uSc.x, photo(uPB, uRot.y, rd)*uSc.y, uMix); if (uOver > 0.001) sky = mix(sky, photo(uPO, uRot.z, rd)*uSc.z, uOver); sky += vec3(0.01,0.016,0.03)*uNight; }

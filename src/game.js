@@ -760,6 +760,7 @@ export class Game {
     else if (p.state === 'glide' || p.state === 'chute' || (p.state === 'air' && p.pos.y - M.groundAt(p.pos.x, p.pos.z) > 15)) { speed = p.pos.y - M.groundAt(p.pos.x, p.pos.z); unit = 'M ALTITUDE'; }
     const mode = v ? (v.kind === 'car' ? 'car' : v.kind === 'boat' ? 'boat' : v.kind === 'heli' ? 'heli' : v.kind === 'jet' ? 'jet' : 'plane') : p.mount ? 'horse' : p.busy ? 'busy' : p.state === 'swim' ? 'swim' : p.state === 'dive' ? 'dive' : p.state === 'glide' ? 'glide' : p.state === 'chute' ? 'chute' : p.state === 'climb' ? 'climb' : p.state === 'fly' ? 'fly' : p.state === 'air' || p.state === 'web' || p.state === 'slam' ? 'air' : 'foot';
     this.hud.setMode(mode, !!act, !!(mode === 'foot' && this.counterTarget(p)));
+    this.hud.guide(p.state === 'web' ? 'swing' : v && v.spec && v.spec.bike ? 'bike' : mode, { nitro: !!(v && v.spec && v.spec.nitro), fighter: !!(v && v.fighter), web: !!p.powers, dt });
     this.hud.update(dt, {
       hour: this.sky.hour, season: SEASONS[this.weather.season].name, rain: this.weather.rain, money: this.money, weaponName: v || p.mount ? '' : (() => { const t = this.toolOf(p); return t.id === 'pistol' || t.id === 'rifle' ? `${W.name}  ${p.clip[W.id]}/${p.ammo[W.id]}` : t.name + (t.power === 'flash' && p.flash > 0 ? ` ${Math.ceil(p.flash)}s` : ''); })(),
       speed, speedUnit: unit, aim: ctl.aim && !v && p.weapon > 0, prompt: act ? act.label : null, objective: this.missions.objective, fps: this.fps, fpsOn: this.fpsOn, res: this.gov && this.gov.enabled ? Math.round(this.gov.scale * 100) : 0,
@@ -774,7 +775,7 @@ export class Game {
     let mode = 'foot', focus = p.pos.clone(), opts = {};
     if (v) {
       focus = v.pos.clone();
-      if (v.kind === 'car') { mode = 'car'; opts = { followYaw: Math.abs(v.speed) > 1.5 ? v.yaw + (v.speed < -1 ? Math.PI : 0) : undefined, followK: clamp(2.5 + Math.abs(v.speed) * 0.08, 2.5, 5), followDelay: 0.45, followPitch: 0.16, len: v.len, speedFov: clamp(Math.abs(v.speed) / 4, 0, 18) }; }
+      if (v.kind === 'car') { mode = 'car'; opts = { followYaw: Math.abs(v.speed) > 1.5 ? v.yaw + (v.speed < -1 ? Math.PI : 0) : undefined, followK: clamp(2.5 + Math.abs(v.speed) * 0.08, 2.5, 5), followDelay: 0.45, followPitch: 0.13, len: v.len, speedFov: clamp(Math.abs(v.speed) / 6, 0, 11) }; }
       else if (v.kind === 'boat') { mode = 'boat'; opts = { followYaw: v.yaw, followPitch: 0.2, followDelay: 0.5, followK: 2.5 }; }
       else if (v.kind === 'heli') { mode = 'heli'; opts = { followYaw: Math.hypot(v.vel.x, v.vel.z) > 6 ? Math.atan2(v.vel.x, v.vel.z) : undefined, followK: 1, followPitch: 0.25 }; }
       else { mode = 'plane'; const f = new V3(0, 0, 1).applyQuaternion(v.q); opts = { followYaw: Math.atan2(f.x, f.z), followK: 5, followPitch: clamp(-Math.asin(f.y) + 0.15, -1, 1.2), len: v.len, speedFov: clamp(v.speed / 15, 0, 15), noCollide: v.pos.y - M.groundAt(v.pos.x, v.pos.z) > 40 }; if (this.rig.idle > 0.5) this.rig.idle = 2; }

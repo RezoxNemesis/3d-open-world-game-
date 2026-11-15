@@ -7,6 +7,7 @@
 // <fog_fragment> all pick it up. The three extra uniforms are shared typed arrays (three clones Vector/Color uniform
 // values per material but passes typed arrays by reference), so they are written once per frame for the whole scene.
 import * as THREE from 'three';
+import { HDR_GUARD } from './hdrsafe.js';
 
 export const ATMO = {
   air: new Float32Array([0, 1 / 260]),        // x = haze density at sea level (per metre), y = 1 / scale height
@@ -62,6 +63,7 @@ export function installAtmosphere() {
 	#ifdef FOG_EXP2
 		vec4 ddF = ddFog( vFogRay, fogColor, fogDensity );
 		gl_FragColor.rgb = mix( gl_FragColor.rgb, ddF.rgb, ddF.a );
+		${HDR_GUARD}
 	#else
 		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
 		gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
