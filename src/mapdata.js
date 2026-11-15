@@ -423,6 +423,11 @@ function hashEdges() {
 }
 export function markSidewalks() { for (const e of edges) e.side = !!e.sea || !e.elev && ['nani', 'moti', 'devka', 'jampore'].includes(e.zone) && (e.type === 'street' || e.type === 'major' || e.type === 'link'); }
 export function edgesNear(x, z) { return edgeHash.get(Math.floor(x / EH) * 100000 + Math.floor(z / EH)) || []; }
+// is (x, z) on tarmac: a road (to its kerb) or the airport runway and taxiway?
+export function pavedAt(x, z) {
+  const a = L.airport; if (a && x > a.runX0 - 15 && x < a.runX1 + 15 && (Math.abs(z - a.runZ) < 25 || Math.abs(z - a.runZ - 120) < 14)) return true;
+  const r = nearestRoad(x, z); return !!r && r.d < (edges[r.e].w || 9) * 0.5 + 1.2;
+}
 export function nearestRoad(x, z) {
   let best = null, bd = 1e9;
   for (let r = 0; r <= 2 && !best; r++) for (let gx = -r; gx <= r; gx++) for (let gz = -r; gz <= r; gz++) {

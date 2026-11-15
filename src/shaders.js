@@ -1,5 +1,6 @@
 // Shared GLSL snippets + global uniforms
 import * as THREE from 'three';
+import { HDR_GUARD } from './hdrsafe.js';
 import { injectFade, markFadeable } from './fade.js';
 export const U = {
   uTime: { value: 0 }, uNight: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
@@ -30,10 +31,12 @@ export function beaconMaterial(color, opacity = 0.22, near = 260) {
     vertexShader: 'varying vec3 vN, vW; varying float vY; varying vec2 vC; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vC = (modelMatrix*vec4(0.,0.,0.,1.)).xz; vN = normalize(mat3(modelMatrix)*normal); vY = uv.y; gl_Position = projectionMatrix*viewMatrix*w; }',
     fragmentShader: `uniform vec3 uC; uniform float uO, uNear, uTime; varying vec3 vN, vW; varying float vY; varying vec2 vC;
       void main(){
-        vec3 V = normalize(cameraPosition - vW); float edge = pow(abs(dot(normalize(vec3(vN.x, 0., vN.z)), normalize(vec3(V.x, 0., V.z)))), 1.6);
+        // (no normalize() of the flattened vectors: on a cap, or looking straight down, they are zero-length and normalize gives NaN)
+        vec3 V = cameraPosition - vW; float edge = pow(min(abs(dot(vN.xz, V.xz))/max(length(vN.xz)*length(V.xz), 1e-4), 1.0), 1.6);
         float d = length(cameraPosition.xz - vC);
-        float a = uO*edge*pow(1.0 - vY, 1.3)*smoothstep(uNear*0.5, uNear*1.6, d)*(0.85 + 0.15*sin(uTime*1.5 + vY*20.0));
+        float a = uO*edge*pow(max(1.0 - vY, 0.0), 1.3)*smoothstep(uNear*0.5, uNear*1.6, d)*(0.85 + 0.15*sin(uTime*1.5 + vY*20.0));
         gl_FragColor = vec4(uC*a*2.2, 1.0);
+        ${HDR_GUARD}
       }`,
   });
 }

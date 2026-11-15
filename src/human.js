@@ -466,7 +466,14 @@ export const Pose = {
   hover(t) { const b = S(t * 2) * 0.06; return { spine: [0.05, 0, 0], armL: [0.1, 0, 0.5 + b], foreL: [-0.4, 0, 0], armR: [0.1, 0, -0.5 - b], foreR: [-0.4, 0, 0], thighL: [-0.15 + b, 0, 0.05], shinL: [0.35, 0, 0], thighR: [0.1 - b, 0, -0.05], shinR: [0.2, 0, 0], hipY: 0 }; },
   slam(t) { return { spine: [0.6, 0, 0], chest: [0.3, 0, 0], armL: [-2.8 + t * 2.5, 0, 0.3], foreL: [-0.3, 0, 0], armR: [-2.8 + t * 2.5, 0, -0.3], foreR: [-0.3, 0, 0], thighL: [-1.4, 0, 0.1], shinL: [1.8, 0, 0], thighR: [-1.2, 0, -0.1], shinR: [1.6, 0, 0], hipY: -0.3 }; },
   chute(t) { return { armL: [-2.6, 0, 0.35], foreL: [-0.6, 0, 0], armR: [-2.6, 0, -0.35], foreR: [-0.6, 0, 0], thighL: [-0.3 + S(t * 2) * 0.1, 0, 0.05], shinL: [0.3, 0, 0], thighR: [-0.2 - S(t * 2) * 0.1, 0, -0.05], shinR: [0.4, 0, 0] }; },
-  web(t, swing) { return { armR: [-2.9, 0, -0.15], foreR: [-0.1, 0, 0], armL: [-0.6 + swing * 0.5, 0, 0.6], foreL: [-1.2, 0, 0], spine: [-0.2 + swing * 0.3, 0, 0], thighL: [-0.6 - swing * 0.6, 0, 0.1], shinL: [1.2, 0, 0], thighR: [-0.2 + swing * 0.4, 0, -0.1], shinR: [0.5, 0, 0], neck: [-0.3, 0, 0] }; },
+  // one arm up the web, the body laid back along the arc, legs trailing on the way down and tucking through the bottom
+  web(t, swing, left) {
+    const P = { armR: [-2.95, 0, -0.12], foreR: [-0.08, 0, 0], armL: [-0.5 + swing * 0.6, 0, 0.55], foreL: [-1.1, 0, 0], spine: [-0.26 + swing * 0.34, 0, 0.06], chest: [-0.1 + swing * 0.1, 0, 0],
+      thighL: [-0.75 - swing * 0.65, 0, 0.1], shinL: [1.35 - swing * 0.3, 0, 0], thighR: [-0.15 + swing * 0.5, 0, -0.1], shinR: [0.55 + swing * 0.25, 0, 0], neck: [-0.32, 0, 0] };
+    if (!left) return P;
+    const m = (v) => [v[0], -v[1], -v[2]];
+    return { armL: m(P.armR), foreL: m(P.foreR), armR: m(P.armL), foreR: m(P.foreL), spine: m(P.spine), chest: m(P.chest), thighR: m(P.thighL), shinR: m(P.shinL), thighL: m(P.thighR), shinL: m(P.shinR), neck: P.neck };
+  },
   // aiming stance + recoil (since = seconds since the last shot): rifle shouldered with the off hand under the barrel,
   // pistol held two-handed (isosceles); each shot kicks the arms up and the chest back, settling in ~0.2 s
   aim(pitch, rifle, since = 9) {

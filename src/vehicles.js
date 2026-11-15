@@ -168,8 +168,11 @@ export class Vehicle {
     let thr = 0, brk = 0, rev = 0;
     if (vf > 0.6) { thr = gasIn; brk = brkIn; } else if (vf < -0.6) { rev = brkIn; brk = gasIn; } else { thr = gasIn; rev = gasIn > 0 ? 0 : brkIn; }
     const bike = !!S.bike, mass = S.mass || 1.3;
+    // surface: off the tarmac a car is slower, looser and kicks up dust (low sports cars suffer most, the Bison least)
+    if (this.driver) { this.surfT = (this.surfT || 0) - dt; if (this.surfT <= 0) { this.surfT = 0.15; this.paved = M.pavedAt(this.pos.x, this.pos.z); } } else this.paved = true;
+    const offK = this.offK = damp(this.offK || 0, this.paved === false ? 1 : 0, 3, dt), offS = offK * (S.offroad ?? (S.top > 62 ? 0.5 : bike ? 0.3 : 0.34));
     if (!this.airborne) {
-      const top = S.top * (nitro ? 1.22 : 1), acc = S.acc * (nitro ? 1.7 : 1);
+      const top = S.top * (nitro ? 1.22 : 1) * (1 - offS), acc = S.acc * (nitro ? 1.7 : 1) * (1 - offS * 0.55);
       // engine: strong pull at low speed tapering to the top speed; traction-limited launch
       if (thr > 0) vf += Math.min(acc * 1.25, acc * (1.15 - Math.pow(Math.max(0, vf) / top, 1.8))) * thr * dt;
       if (rev > 0) vf = Math.max(-Math.min(14, top * 0.25), vf - acc * 0.55 * rev * dt);
@@ -177,7 +180,7 @@ export class Vehicle {
       const bd = (bike ? 9.5 : 11.5) * brk + (hb ? 6.5 : 0);
       if (bd > 0) vf -= Math.sign(vf) * Math.min(Math.abs(vf), bd * dt);
       // rolling resistance + air drag + engine braking off-throttle
-      const drag = 0.25 + 0.00045 * vf * vf * (bike ? 1.2 : 1) / mass + (thr || rev ? 0 : 1.1);
+      const drag = 0.25 + 0.00045 * vf * vf * (bike ? 1.2 : 1) / mass + (thr || rev ? 0 : 1.1) + offS * (1.4 + Math.max(0, Math.abs(vf) - top) * 0.6);
       vf -= Math.sign(vf) * Math.min(Math.abs(vf), drag * dt);
       // slopes pull the car downhill (handbrake / brake held at rest keeps it parked)
       if (!(Math.abs(vf) < 0.4 && (brk || hb || (!thr && !rev)))) vf -= 9.8 * Math.sin(-(this.slope || 0)) * dt * 0.85;
@@ -190,13 +193,14 @@ export class Vehicle {
       // yaw from the steering geometry, capped by tyre grip (understeer instead of snapping at speed)
       const wb = bike ? 1.45 : this.wheelBase || 2.6;
       let yawRate = (vf * Math.tan(this.steer)) / wb;
-      const aLat = 9.8 * S.grip * (bike ? 1.1 : 1.05) * (hb ? 1.6 : 1);
+      const aLat = 9.8 * S.grip * (bike ? 1.1 : 1.05) * (hb ? 1.6 : 1) * (1 - offK * 0.28);
       const cap = aLat / Math.max(2, Math.abs(vf));
       yawRate = clamp(yawRate, -cap, cap) * (hb && Math.abs(vf) > 6 ? 1.3 : 1);
       this.yawRate = damp(this.yawRate || 0, yawRate, bike ? 10 : 14, dt);
       this.yaw += this.yawRate * dt;
       // sideways slip dies away fast with grip; the handbrake lets the tail slide (drift)
-      const grip = (hb ? 1.2 : bike ? 11 : 10) * S.grip;
+      const grip = (hb ? 1.2 : bike ? 11 : 10) * S.grip * (1 - offK * 0.45);
+      if (offK > 0.5 && Math.abs(vf) > 9 && Math.random() < 0.35) burst('dust', this.pos.x - f.x * this.len * 0.45, this.pos.y + 0.2, this.pos.z - f.z * this.len * 0.45, 1, 0.9);
       vr *= Math.exp(-grip * dt);
       if (hb && Math.abs(vf) > 8) vr += this.yawRate * Math.abs(vf) * 0.06 * dt * 10;
       if (Math.abs(vr) > 5 && Math.random() < 0.5) burst('dust', this.pos.x - f.x * this.len * 0.4, this.pos.y + 0.2, this.pos.z - f.z * this.len * 0.4, 1, 0.8);

@@ -1,3 +1,19 @@
+## Daman Duo — v1.14 "Fixes from the first PC session"
+
+**The black screen**
+- **Fixed: large black rectangles covering the screen on PC.** They came from the way bloom handles a pixel that is out of range (a sun glint on car paint, an explosion flash, a marker beam). One such pixel was smeared into a black block about 1300 × 1000 pixels on a 1080p screen, which flickered as you moved and stayed after an explosion. The picture is now kept in range at three points, so a bad pixel can never spread again. Phones were not affected because they do not use bloom.
+- Several shaders that could produce such pixels on real graphics cards were corrected (mission marker beams, zone lights, water, clouds).
+
+**Driving**
+- **Controls card.** When you get into a car, onto a bike, a boat, a horse, a helicopter or a plane, a card on the right lists the keys for it: accelerate, brake, steer, handbrake drift, nitro, horn, view, get out. It fades after a while. Press **K** to pin it open or hide it. There is a card for walking and one for web swinging too.
+- **Grass and dirt are not tarmac any more.** Off the road a car is slower, slides more and throws up dust: a hypercar that reaches 378 km/h on the runway tops out near 190 km/h on grass.
+- **The chase camera sits closer and lower** behind the car and widens less at speed, so the car no longer shrinks to a dot.
+
+**Web swinging**
+- **Hold R and you keep swinging.** Each web goes to a building ahead of you on alternating sides of the street, the line is reeled in so the bottom of the arc clears the ground, you gain speed on the way down, and you are thrown forward at the top. Let go between a third and two thirds of the way up for the longest launch.
+- **Web zip:** where the buildings are too low to swing from, the web pulls you straight to the next roof edge and pops you over it.
+- In a test run through the town the chain held 8 swings in 16 seconds at about 97 km/h without touching the ground (before: 2 swings, then a landing).
+
 ## Daman Duo — v1.13 "Outbreak" update
 
 **The portal outbreak**

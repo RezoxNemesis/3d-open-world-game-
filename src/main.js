@@ -4,6 +4,7 @@ import { PRESETS, detectPlatform, defaultPreset, FPS_CAPS } from './quality.js';
 import { Governor, gpuInfo, autoPreset, requestRefresh } from './perf.js';
 import { UPSCALE_MODES } from './upscale.js';
 import { installAtmosphere } from './atmo.js';
+import { installHdrSafety } from './hdrsafe.js';
 import { showChoice } from './choice.js';
 import { Benchmark } from './bench.js';
 import { HUD } from './hud.js';
@@ -13,6 +14,7 @@ import { initAudio, audio, say } from './audio.js';
 import { nextFrame } from './util.js';
 import * as M from './mapdata.js';
 installAtmosphere();   // before any shader is built
+installHdrSafety();
 import { loadAvatar, describe as describeAvatar } from './avatars.js';
 import { world, updateWorldLOD } from './world.js';
 import { crowd } from './crowd.js';
@@ -331,6 +333,19 @@ function setupTests(game) {
   window.__TEST = {
     ready: true, scenarios: Object.keys(S),
     // headless stress test: every stage of the in-game benchmark at a coarse time step; returns per-stage load and memory
+    // HDR robustness: put one over-range pixel source and one NaN source in view and report how much of the frame goes black.
+    // (On the post-processing path a single such pixel used to be smeared by bloom into a screen-sized black rectangle.)
+    hdr: () => {
+      const cv = game.renderer.domElement, c2 = document.createElement('canvas'); c2.width = 160; c2.height = 90; const cx = c2.getContext('2d', { willReadFrequently: true });
+      const black = () => { game.render(); cx.drawImage(cv, 0, 0, 160, 90); const d = cx.getImageData(0, 0, 160, 90).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 8) n++; return +(n / (160 * 90)).toFixed(4); };
+      const p = game.player; at(500, 2450, 0); game.sky.hour = 9; for (let i = 0; i < 10; i++) game.update(1 / 30);
+      const mk = (frag) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.ShaderMaterial({ uniforms: { uZ: { value: 0 } }, vertexShader: 'void main(){ gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.); }', fragmentShader: `uniform float uZ; void main(){ ${frag} }` }));
+        m.position.copy(p.pos).addScaledVector(p.forward(), 9); m.position.y += 2.4; m.frustumCulled = false; game.scene.add(m); return m; };
+      const out = { post: !!game.composer, base: black() };
+      let m = mk('gl_FragColor = vec4(vec3(1e30), 1.);'); out.overRange = black(); game.scene.remove(m);
+      m = mk('gl_FragColor = vec4(vec3(uZ/uZ), 1.);'); out.nan = black(); game.scene.remove(m);
+      out.after = black(); return out;
+    },
     bench: (dur = 2, dt = 0.2) => { game.camOverride = null; while (undo.length) undo.pop()(); const b = new Benchmark(game, { dur, warm: dt * 1.5 }); let ms = 16, guard = 0;
       while (!b.done && guard++ < 4000) { const a = performance.now(); b.frame(ms, dt); if (b.done) break; for (let k = 0; k < Math.max(1, Math.round(dt * 30)); k++) game.update(1 / 30); game.render(); ms = performance.now() - a; }
       const mem = game.renderer.info.memory; return { results: b.results, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0, geos: mem.geometries, texs: mem.textures, programs: game.renderer.info.programs.length }; },

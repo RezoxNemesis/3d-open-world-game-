@@ -117,7 +117,7 @@ export class Character {
   revive(x, z) { this.hp = this.maxHp; this.state = 'ground'; this.pos.set(x, M.groundAt(x, z), z); this.vel.set(0, 0, 0); this.stun = 0; this.inv = 2; this.setVisible(true); }
   // ---------------- main update ----------------
   update(dt, c) {
-    this.t += dt; this.inv = Math.max(0, this.inv - dt); this.stun = Math.max(0, this.stun - dt); this.webCd = Math.max(0, this.webCd - dt); this.comboT = Math.max(0, this.comboT - dt);
+    this.t += dt; this.webChain = this.state === 'web' ? 1.5 : Math.max(0, (this.webChain || 0) - dt); this.inv = Math.max(0, this.inv - dt); this.stun = Math.max(0, this.stun - dt); this.webCd = Math.max(0, this.webCd - dt); this.comboT = Math.max(0, this.comboT - dt);
     if (this.state === 'seated') { this.chute.visible = false; this.animate(dt, c); return; }
     const g = this.groundY(), wl = this.waterY();
     if (this.state === 'dead') { this.vel.multiplyScalar(Math.exp(-4 * dt)); this.pos.addScaledVector(this.vel, dt); this.pos.y = Math.max(g, this.pos.y + this.vel.y * dt); this.animate(dt, c); this.sync(); return; }
@@ -153,7 +153,7 @@ export class Character {
           if (mag > 0.3) { this.vel.x += dir.x * 1.5; this.vel.z += dir.z * 1.5; }
         }
         if (canAct && c.sprint && wall && mag > 0.5 && this.powers && this.wallTop(wall) - this.pos.y > 2.0 && dir.x * -wall.nx + dir.z * -wall.nz > 0.6) this.startClimb(wall);
-        if (canAct && c.webPress && this.powers && this.webCd <= 0) { this.vel.y = this.jumpV * 1.35; this.state = 'air'; this.usedFlip = false; this.airT = 0; this.webAuto = 0.22; sfx('whoosh', 0.5); break; }
+        if (canAct && (c.webPress || c.web && this.webChain > 0) && this.powers && this.webCd <= 0) { this.vel.y = this.jumpV * 1.35; this.state = 'air'; this.usedFlip = false; this.airT = 0; this.webAuto = 0.22; sfx('whoosh', 0.5); break; }
         if (canAct && c.roll && this.landT <= 0) { this.state = 'roll'; this.t = 0; this.inv = 0.5; this.vel.x = dir.x * 9; this.vel.z = dir.z * 9; this.yaw = Math.atan2(dir.x, dir.z); if (this === this.game.player && this.game.counterTarget && this.game.counterTarget(this)) { this.game.slowmo(0.6, 0.3); this.game.hud.pop && this.game.hud.pop('PERFECT DODGE', '#80deea'); this.inv = 0.9; } }
         this.landT = Math.max(0, this.landT - dt);
         const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -371,42 +371,92 @@ export class Character {
     if ((c.web || c.webPress) && this.webCd <= 0) { this.state = 'air'; this.vel.set(n.x * 4, 3, n.y * 4); this.startWeb(c); }
   }
   // ---------- web swing ----------
+  // Webs attach to real buildings. The anchor is picked ahead of where you are travelling, well above you, and on
+  // alternating sides of the line of travel, so a held swing weaves down a street from one side to the other.
   findAnchor(c) {
-    const f = c.aimDir ? new THREE.Vector3(c.aimDir.x, 0, c.aimDir.z).normalize() : this.forward();
-    const target = this.pos.clone().addScaledVector(f, 26); target.y += 22;
-    let best = null, bs = -1e9;
+    const hv = Math.hypot(this.vel.x, this.vel.z);
+    const f = hv > 7 ? new THREE.Vector3(this.vel.x / hv, 0, this.vel.z / hv) : c.aimDir ? new THREE.Vector3(c.aimDir.x, 0, c.aimDir.z).normalize() : this.forward();
+    if (c.aimDir && hv > 7) { const a = new THREE.Vector3(c.aimDir.x, 0, c.aimDir.z).normalize(); f.lerp(a, 0.45).normalize(); }      // the camera still steers the route
+    const side = this.webSide = -(this.webSide || 1), rx = -f.z * side, rz = f.x * side;
+    const reach = clamp(20 + hv * 0.5, 20, 38), target = this.pos.clone().addScaledVector(f, reach); target.x += rx * 8; target.z += rz * 8; target.y += 20;
+    let best = null, bs = -1e9, zip = null, zs = -1e9;
     for (let gx = -2; gx <= 2; gx++) for (let gz = -2; gz <= 2; gz++) {
       for (const ci of M.collidersNear(target.x + gx * 40, target.z + gz * 40)) {
-        const cc = M.colliders[ci]; if (cc.y1 < this.pos.y + 7) continue;
-        const ax = clamp(target.x, cc.x0, cc.x1), az = clamp(target.z, cc.z0, cc.z1), ay = Math.min(cc.y1, this.pos.y + 45);
-        const d = Math.hypot(ax - this.pos.x, ay - this.pos.y, az - this.pos.z); if (d > 70 || d < 8) continue;
-        const ahead = (ax - this.pos.x) * f.x + (az - this.pos.z) * f.z; if (ahead < 2) continue;
-        const s = ahead * 1.0 + (ay - this.pos.y) * 0.6 - Math.abs(d - 30) * 0.5;
+        const cc = M.colliders[ci]; if (cc.y1 === undefined) continue;
+        const ax = clamp(target.x, cc.x0, cc.x1), az = clamp(target.z, cc.z0, cc.z1), ay = Math.min(cc.y1, this.pos.y + 46);
+        const d = Math.hypot(ax - this.pos.x, ay - this.pos.y, az - this.pos.z); if (d > 75 || d < 7) continue;
+        const ahead = (ax - this.pos.x) * f.x + (az - this.pos.z) * f.z; if (ahead < 4) continue;
+        // a roof edge ahead that is too low to swing from can still be zipped to
+        if (cc.y1 < this.pos.y + 5) { if (cc.y1 > this.pos.y - 14 && cc.y1 - M.groundAt(ax, az) > 3 && d < 48) { const z = ahead - Math.abs(d - 24) * 0.6 + (cc.y1 - this.pos.y) * 0.5; if (z > zs) { zs = z; zip = new THREE.Vector3(ax, cc.y1 + 0.3, az); } } continue; }
+        const lat = (ax - this.pos.x) * rx + (az - this.pos.z) * rz;
+        const s = ahead * 0.9 + (ay - this.pos.y) * 0.7 - Math.abs(d - 34) * 0.5 + clamp(lat, -6, 12) * 0.5;
         if (s > bs) { bs = s; best = new THREE.Vector3(ax, ay, az); }
       }
     }
-    return best;
+    this.zipNext = !best && !!zip;
+    return best || zip;
   }
   startWeb(c) {
     const a = this.findAnchor(c); if (!a) return false;
-    this.anchor = a; this.ropeL = a.distanceTo(this.pos) * 0.92; this.state = 'web'; this.webCd = 0.25; sfx('web', 0.9);
-    const f = this.forward(); this.vel.x += f.x * 4; this.vel.z += f.z * 4; return true;
+    const dist = a.distanceTo(this.pos), gy = this.groundY();
+    this.anchor = a; this.ropeL = dist; this.state = 'web'; this.webCd = 0.25; this.webT = 0; this.webLow = false; this.zip = this.zipNext; sfx('web', 0.9);
+    this.webHand = this.webHand === 'handR' ? 'handL' : 'handR';
+    if (this.zip) return true;
+    // the rope is reeled in until the bottom of the arc clears the ground by a body length
+    this.ropeTarget = clamp(Math.min(dist * 0.9, a.y - gy - 2.8), 5, dist);
+    // never start a swing from a standstill: a push along the line of travel
+    const hv = Math.hypot(this.vel.x, this.vel.z), f = hv > 3 ? new THREE.Vector3(this.vel.x / hv, 0, this.vel.z / hv) : this.forward();
+    const want = Math.max(hv, 13); this.vel.x = f.x * want; this.vel.z = f.z * want; if (this.vel.y < -16) this.vel.y = -16;
+    this.webDir = f.clone();                                 // the line this swing travels along
+    return true;
   }
   updWeb(dt, c, dir, mag) {
     const a = this.anchor; if (!a) { this.state = 'air'; return; }
-    this.vel.y -= 21 * dt;
-    if (mag > 0.05) { this.vel.x += dir.x * 9 * dt; this.vel.z += dir.z * 9 * dt; }
-    this.ropeL = Math.max(6, this.ropeL - (c.sprint ? 6 : 2.5) * dt);
+    this.webT += dt;
+    if (this.zip) {
+      // web zip: pulled straight to a roof edge, then popped up and over it
+      const to = new THREE.Vector3().subVectors(a, this.pos), L = to.length(); to.multiplyScalar(1 / Math.max(L, 1e-3));
+      const v = Math.min(34, 16 + this.webT * 60); this.vel.copy(to).multiplyScalar(v); this.pos.addScaledVector(this.vel, dt);
+      this.yaw = dampAngle(this.yaw, Math.atan2(to.x, to.z), 10, dt);
+      setWeb(this.h.bones[this.webHand || 'handR'].getWorldPosition(new THREE.Vector3()), a);
+      if (L < 2.6 || this.webT > 2.5 || !c.web && this.webT > 0.25) { this.anchor = null; setWeb(null); this.state = 'air'; this.usedFlip = false; this.airT = 0.2; this.vel.set(to.x * 15, 9.5, to.z * 15); this.webCd = c.web ? 0.3 : 0.2; sfx('whoosh', 0.6); }
+      return;
+    }
+    this.vel.y -= 22 * dt;
+    const rope = new THREE.Vector3().subVectors(this.pos, a), L0 = rope.length() || 1; rope.multiplyScalar(1 / L0);       // anchor -> player
+    // steer and pump along the arc only (never along the rope)
+    if (mag > 0.05) { const st = new THREE.Vector3(dir.x, 0, dir.z); st.addScaledVector(rope, -st.dot(rope)); this.vel.addScaledVector(st, 11 * dt); }
+    const sp = this.vel.length();
+    if (sp > 1 && sp < 36 && this.vel.y < 2) this.vel.addScaledVector(this.vel, (c.sprint ? 9 : 5.5) * dt / sp);      // gain speed on the way down, like a real pendulum being worked
+    // reel in; faster while the bottom of the arc would still scrape the ground, and tuck up if the ground comes close anyway
+    const gNow = this.groundY(), low = a.y - this.ropeL < gNow + 2.8;
+    this.ropeL = Math.max(this.ropeTarget, this.ropeL - (low ? 34 : c.sprint ? 22 : 15) * dt);
+    if (this.pos.y - gNow < 2.2 && a.y - gNow > 6) this.ropeL = Math.max(4, Math.min(this.ropeL, a.y - gNow - 2.4));
     this.pos.addScaledVector(this.vel, dt);
     const d = new THREE.Vector3().subVectors(this.pos, a), L = d.length();
     if (L > this.ropeL) { d.multiplyScalar(1 / L); this.pos.copy(a).addScaledVector(d, this.ropeL); const vr = this.vel.dot(d); if (vr > 0) this.vel.addScaledVector(d, -vr); }
-    const hv = Math.hypot(this.vel.x, this.vel.z); if (hv > 0.5) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 6, dt);
+    const hv = Math.hypot(this.vel.x, this.vel.z); if (hv > 0.5) this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 8, dt);
     this.collide();
-    const hand = this.h.bones.handR.getWorldPosition(new THREE.Vector3()); setWeb(hand, a);
+    const hand = this.h.bones[this.webHand || 'handR'].getWorldPosition(new THREE.Vector3()); setWeb(hand, a);
     const ng = this.groundY();
-    const release = !(c.web) || this.pos.y > a.y - 1.0;
-    if (release) { this.anchor = null; setWeb(null); this.state = 'air'; this.vel.y += 4.5; this.usedFlip = false; this.airT = 0.2; const vv = this.vel.length(); if (vv > 45) this.vel.multiplyScalar(45 / vv); }
-    else if (this.pos.y <= ng) { this.anchor = null; setWeb(null); this.land(ng); }
+    // where we are on the arc: 0 hanging straight down, 1 level with the anchor
+    const up = clamp(1 + d.y / Math.max(L, 1e-3), 0, 2); if (up < 0.25) this.webLow = true;
+    const rising = this.vel.y > 1.5;
+    // let go: the key is released, or the arc is spent (well up the far side, or the swing has stalled)
+    // how far past the anchor we are along the line of travel (in rope lengths), and whether we are still heading that way
+    const f0 = this.webDir || this.forward(), past = ((this.pos.x - a.x) * f0.x + (this.pos.z - a.z) * f0.z) / Math.max(this.ropeL, 1);
+    const heading = hv > 1 ? (this.vel.x * f0.x + this.vel.z * f0.z) / hv : 1;
+    if (this.pos.y < gNow + 1.5) { this.pos.y = gNow + 1.5; if (this.vel.y < 0) this.vel.y *= -0.2; }       // skim the ground, never plough into it
+    const spent = this.webLow && rising && (up > 0.62 || sp < 7) || past > 0.62 && this.vel.y > 0 || past > 0.2 && heading < 0.25 || this.pos.y > a.y - 1.2 || this.webT > 3.4;
+    if (!c.web || spent || c.jump) {
+      this.anchor = null; setWeb(null); this.state = 'air'; this.usedFlip = false; this.airT = 0.2;
+      // a release on the way up throws you forward and up; the sweet spot is between a third and two thirds of the way up
+      const sweet = this.webLow && rising && up > 0.3 && up < 0.72, k = sweet ? 1.16 : 1.04;
+      this.vel.x *= k; this.vel.z *= k; this.vel.y = Math.max(this.vel.y, 0) * (sweet ? 1.12 : 1) + (c.jump ? 8.5 : sweet ? 6.5 : 4.5);
+      const vv = this.vel.length(); if (vv > 48) this.vel.multiplyScalar(48 / vv);
+      this.webCd = c.web ? 0.34 : 0.2;                      // holding the key: a short float, then the next web goes out
+      sfx('whoosh', sweet ? 0.8 : 0.45);
+    } else if (this.pos.y <= ng) { this.anchor = null; setWeb(null); this.land(ng); }
   }
   // ---------- animation ----------
   animate(dt, c) {
@@ -431,7 +481,7 @@ export class Character {
       case 'dive': { const v3 = this.vel.length(); this.ph += dt * (v3 > 0.4 ? 3.2 + v3 : 1.6); P = Pose.swim(this.ph, v3 > 0.5); break; }
       case 'glide': P = Pose.skydive(this.t); break;
       case 'chute': P = Pose.chute(this.t); break;
-      case 'web': { const sw = clamp(this.vel.y / 15, -1, 1); P = Pose.web(this.t, sw); break; }
+      case 'web': { const sw = clamp(this.vel.y / 15, -1, 1); P = Pose.web(this.t, sw, this.webHand === 'handL'); break; }
       case 'fly': P = sp > 4 ? Pose.fly(this.t, sp > 35) : Pose.hover(this.t); break;
       case 'slam': P = Pose.slam(Math.min(1, (this.slamT || 0) / 0.5)); break;
       case 'down': P = Pose.down(Math.min(1, (1.6 - this.downT) * 4)); if (this.downT < 0.5) P = blendPose(P, Pose.idle(0), 1 - this.downT / 0.5); break;
@@ -476,7 +526,7 @@ export class CameraRig {
     const fd = opts.followDelay ?? 1.0;
     if (opts.followYaw !== undefined && this.idle > fd) this.yaw = dampAngle(this.yaw, opts.followYaw + Math.PI, (opts.followK ?? 2.2) * Math.min(1, (this.idle - fd) * 2 + 0.3), dt);
     if (opts.followPitch !== undefined && this.idle > fd) this.pitch = damp(this.pitch, opts.followPitch, 1.5, dt);
-    const cfg = { foot: [4.2, 1.55, 0.42, 62], aim: [2.1, 1.6, 0.62, 48], car: [opts.len ? opts.len * 1.15 + 3 : 7.5, 1.9, 0, 64], heli: [17, 3, 0, 62], plane: [opts.len ? opts.len * 1.6 : 26, 3.5, 0, 65], horse: [5.8, 2.3, 0.3, 62], swim: [4.4, 0.6, 0.3, 62], air: [6, 1.4, 0, 70], interior: [4.2, 1.5, 0.3, 66], boat: [10, 2.6, 0, 62] }[mode] || [4.2, 1.5, 0.4, 62];
+    const cfg = { foot: [4.2, 1.55, 0.42, 62], aim: [2.1, 1.6, 0.62, 48], car: [opts.len ? opts.len * 0.95 + 2.3 : 6.5, 1.65, 0, 62], heli: [17, 3, 0, 62], plane: [opts.len ? opts.len * 1.6 : 26, 3.5, 0, 65], horse: [5.8, 2.3, 0.3, 62], swim: [4.4, 0.6, 0.3, 62], air: [6, 1.4, 0, 70], interior: [4.2, 1.5, 0.3, 66], boat: [10, 2.6, 0, 62] }[mode] || [4.2, 1.5, 0.4, 62];
     this.dist = damp(this.dist, cfg[0] * this.zoom * (opts.zoomK || 1), opts.zoomK ? 9 : 5, dt);
     const fovT = cfg[3] + (opts.speedFov || 0); this.fov = damp(this.fov, fovT, 4, dt);
     if (Math.abs(this.cam.fov - this.fov) > 0.05) { this.cam.fov = this.fov; this.cam.updateProjectionMatrix(); }
